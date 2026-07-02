@@ -1,6 +1,8 @@
 use tauri::State;
 use crate::state::AppState;
-use crate::models::Folder;
+use crate::models::{Folder, FolderId};
+use crate::context_menu::model::MenuModel;
+use crate::context_menu::registry::RegistryInstaller;
 
 #[tauri::command]
 pub fn get_folders(state: State<AppState>) -> Vec<Folder> {
@@ -9,11 +11,19 @@ pub fn get_folders(state: State<AppState>) -> Vec<Folder> {
 
 #[tauri::command]
 pub fn update_folders(state: State<AppState>, folders: Vec<Folder>) -> Result<(), String> {
-    state.service.update_all(folders).map_err(|e| e.to_string())
+    state.service.update_all(folders.clone()).map_err(|e: anyhow::Error| e.to_string())?;
+    let exe_path = state.exe_path.lock().clone();
+    let model = MenuModel::from_folders(&folders);
+    RegistryInstaller::install(&model, &exe_path).map_err(|e: anyhow::Error| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
-pub fn toggle_favorite(state: State<AppState>, id: uuid::Uuid) -> Result<(), String> {
-    let folder_id = crate::models::FolderId(id);
-    state.service.toggle_favorite(folder_id).map_err(|e| e.to_string())
+pub fn toggle_favorite(state: State<AppState>, id: FolderId) -> Result<(), String> {
+    state.service.toggle_favorite(id).map_err(|e: anyhow::Error| e.to_string())?;
+    let exe_path = state.exe_path.lock().clone();
+    let folders = state.service.list().map_err(|e: anyhow::Error| e.to_string())?;
+    let model = MenuModel::from_folders(&folders);
+    RegistryInstaller::install(&model, &exe_path).map_err(|e: anyhow::Error| e.to_string())?;
+    Ok(())
 }

@@ -7,13 +7,12 @@ const { Text } = Typography;
 
 interface FolderListProps {
     folders: Folder[];
-    onRemove: (id: string) => void;
     onRename: (id: string, newName: string) => void;
     onToggleFavorite: (id: string) => void;
     onApply: (folders: Folder[]) => void;
 }
 
-const FolderList: React.FC<FolderListProps> = ({ folders, onRemove, onRename, onToggleFavorite, onApply }) => {
+const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavorite, onApply }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
 

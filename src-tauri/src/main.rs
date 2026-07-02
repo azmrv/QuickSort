@@ -5,10 +5,13 @@ mod folder;
 mod models;
 mod move_engine;
 mod context_menu;
-mod pending;
 mod logging;
+mod pending;
+mod state;
+
 use clap::{Parser, Subcommand};
-use commands::AppState;
+use commands::{folders, move_cmd, settings};
+use state::AppState;
 use parking_lot::Mutex;
 use folder::repository::JsonRepository;
 use folder::service::FolderService;
@@ -47,15 +50,15 @@ fn main() {
             }
             Commands::SelectFolder { file } => {
                 crate::pending::set_pending_file(file.clone());
-                start_tauri(None);
+                start_tauri();
                 return;
             }
         }
     }
-    start_tauri(None);
+    start_tauri();
 }
 
-fn start_tauri(_file_to_move: Option<String>) {
+fn start_tauri() {
     let repo = JsonRepository::new().expect("repo");
     let service = FolderService::new(repo);
     let folders = service.list().unwrap_or_default();
@@ -75,13 +78,13 @@ fn start_tauri(_file_to_move: Option<String>) {
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
-            commands::get_folders,
-            commands::update_folders,
-            commands::toggle_favorite,
-            commands::get_mode,
-            commands::move_file,
-            commands::get_pending_file,
-            commands::check_menu_status,
+            folders::get_folders,
+            folders::update_folders,
+            folders::toggle_favorite,
+            move_cmd::move_file,
+            settings::get_mode,
+            settings::get_pending_file,
+            settings::check_menu_status,
         ])
         .setup(|app| {
             let open = MenuItemBuilder::with_id("open", "Открыть редактор").build(app)?;

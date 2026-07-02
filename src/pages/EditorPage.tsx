@@ -69,10 +69,6 @@ const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
             <AddFolderButton onFolderAdded={handleAddFolder} />
             <FolderList
                 folders={folders}
-                onRemove={(id) => {
-                    const updated = folders.filter((f) => f.id !== id);
-                    setFolders(updated);
-                }}
                 onRename={handleRename}
                 onToggleFavorite={handleToggleFavorite}
                 onApply={handleApply}

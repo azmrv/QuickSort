@@ -1,4 +1,4 @@
-import { Button, message } from 'antd';
+import { Button, App } from 'antd';
 import { CheckOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { Folder } from '../types';
@@ -9,6 +9,8 @@ interface ApplyButtonProps {
 }
 
 const ApplyButton: React.FC<ApplyButtonProps> = ({ folders, onSuccess }) => {
+    const { message } = App.useApp();  // теперь используем контекст
+
     const handleApply = async () => {
         try {
             await invoke('update_folders', { folders });
