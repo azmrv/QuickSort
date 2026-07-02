@@ -1,21 +1,23 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
-mod config;
+mod folder;
+mod models;
+mod move_engine;
 mod context_menu;
-
+mod logging;
 use clap::{Parser, Subcommand};
-use anyhow::Context;
-use commands::{check_menu_status, get_folders, update_folders, AppState};
-use std::sync::Mutex;
+use commands::AppState;
+use parking_lot::Mutex;
+use folder::repository::JsonRepository;
+use folder::service::FolderService;
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder, MenuEvent},
+    menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
-    AppHandle, Manager,
+    Manager,
 };
 
 #[derive(Parser)]
-#[command(name = "QuickSort")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -23,93 +25,93 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Move {
-        #[arg(long)]
-        target: String,
-        #[arg(long)]
-        file: String,
-    },
+    Move { target: String, file: String },
+    SelectFolder { file: String },
 }
 
 fn main() {
+    logging::init();
     let cli = Cli::parse();
 
-    if let Some(Commands::Move { target, file }) = cli.command {
-        if let Err(e) = handle_move(&target, &file) {
-            eprintln!("Ошибка перемещения: {}", e);
+    if let Some(cmd) = &cli.command {
+        match cmd {
+            Commands::Move { target, file } => {
+                if let Err(e) = crate::move_engine::MoveEngine::move_file(
+                    std::path::Path::new(file),
+                    std::path::Path::new(target),
+                ) {
+                    tracing::error!("Move failed: {}", e);
+                }
+                return;
+            }
+            Commands::SelectFolder { file } => {
+                start_tauri(Some(file.clone()));
+                return;
+            }
         }
-        return;
+    }
+    start_tauri(None);
+}
+
+fn start_tauri(_file_to_move: Option<String>) {
+    let repo = JsonRepository::new().expect("repo");
+    let service = FolderService::new(repo);
+    let folders = service.list().unwrap_or_default();
+    let exe_path = std::env::current_exe().unwrap().to_string_lossy().to_string();
+
+    if !folders.is_empty() {
+        let model = context_menu::model::MenuModel::from_folders(&folders);
+        context_menu::registry::RegistryInstaller::install(&model, &exe_path).ok();
     }
 
-    // ---- Инициализация при первом запуске GUI ----
-    let config_path = config::get_config_path();
-    println!("Путь к конфигу: {:?}", config_path);
-    if !config_path.exists() {
-        println!("Файла нет, создаю...");
-        config::save_folders(&[]).expect("Не удалось создать начальный конфиг");
-        println!("Файл создан: {:?}", config_path);
-    }
-
-    let initial_folders = config::load_folders();
-    let exe_path = std::env::current_exe()
-        .expect("Не могу получить путь к exe")
-        .to_string_lossy()
-        .to_string();
-
-    // Всегда синхронизируем меню при старте (пустой список = удалить меню)
-    context_menu::ContextMenuBuilder::new(&exe_path, &initial_folders)
-        .build()
-        .expect("Не удалось обновить контекстное меню при старте");
+    let state = AppState {
+        service,
+        exe_path: Mutex::new(exe_path.clone()),
+    };
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState {
-            folders: Mutex::new(initial_folders),
-            exe_path,
-        })
+        .manage(state)
         .invoke_handler(tauri::generate_handler![
-            get_folders,
-            update_folders,
-            check_menu_status
+            commands::get_folders,
+            commands::update_folders,
+            commands::toggle_favorite,
+            commands::get_mode,
+            commands::move_file,
         ])
         .setup(|app| {
             let open = MenuItemBuilder::with_id("open", "Открыть редактор").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Выход").build(app)?;
-            let menu = MenuBuilder::new(app)
-                .item(&open)
-                .separator()
-                .item(&quit)
-                .build()?;
+            let menu = MenuBuilder::new(app).item(&open).separator().item(&quit).build()?;
 
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
-                .on_menu_event(handle_tray_event)
+                .on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "open" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            context_menu::registry::RegistryInstaller::uninstall().ok();
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
                 .build(app)?;
-
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if let Some(window) = window.app_handle().get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-}
-
-fn handle_tray_event(app: &AppHandle, event: MenuEvent) {
-    match event.id().as_ref() {
-        "open" => {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        }
-        "quit" => app.exit(0),
-        _ => {}
-    }
-}
-
-fn handle_move(target: &str, file: &str) -> anyhow::Result<()> {
-    let source = std::path::Path::new(file);
-    let dest = std::path::Path::new(target)
-        .join(source.file_name().context("Неверное имя файла")?);
-    std::fs::rename(source, &dest)?;
-    Ok(())
 }

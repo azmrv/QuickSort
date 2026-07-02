@@ -14,13 +14,9 @@ const StatusIndicator: React.FC = () => {
         <div style={{ marginBottom: 16 }}>
             Статус контекстного меню:{' '}
             {active ? (
-                <Tag icon={<CheckCircleOutlined />} color="success">
-                    Активно
-                </Tag>
+                <Tag icon={<CheckCircleOutlined />} color="success">Активно</Tag>
             ) : (
-                <Tag icon={<ExclamationCircleOutlined />} color="error">
-                    Неактивно
-                </Tag>
+                <Tag icon={<ExclamationCircleOutlined />} color="error">Неактивно</Tag>
             )}
         </div>
     );

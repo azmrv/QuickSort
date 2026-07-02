@@ -14,12 +14,7 @@ const AddFolderButton: React.FC<AddFolderButtonProps> = ({ onFolderAdded }) => {
             onFolderAdded(name, selected);
         }
     };
-
-    return (
-        <Button type="dashed" icon={<FolderAddOutlined />} onClick={handleClick} block>
-            Добавить папку
-        </Button>
-    );
+    return <Button type="dashed" icon={<FolderAddOutlined />} onClick={handleClick} block>Добавить папку</Button>;
 };
 
 export default AddFolderButton;

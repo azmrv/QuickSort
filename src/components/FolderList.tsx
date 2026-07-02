@@ -1,17 +1,19 @@
-import { List, Button, Typography, Popconfirm, Input } from 'antd';
-import { FolderOpenOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { List, Button, Typography, Popconfirm, Input, Switch } from 'antd';
+import { FolderOpenOutlined, DeleteOutlined, EditOutlined, StarOutlined } from '@ant-design/icons';
 import { useState } from 'react';
-import { TargetFolder } from '../types';
+import { Folder } from '../types';
 
 const { Text } = Typography;
 
 interface FolderListProps {
-    folders: TargetFolder[];
+    folders: Folder[];
     onRemove: (id: string) => void;
     onRename: (id: string, newName: string) => void;
+    onToggleFavorite: (id: string) => void;
+    onApply: (folders: Folder[]) => void;
 }
 
-const FolderList: React.FC<FolderListProps> = ({ folders, onRemove, onRename }) => {
+const FolderList: React.FC<FolderListProps> = ({ folders, onRemove, onRename, onToggleFavorite, onApply }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
 
@@ -27,12 +29,13 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRemove, onRename }) 
         setEditingId(null);
     };
 
+    const handleRemove = (id: string) => {
+        const updated = folders.filter(f => f.id !== id);
+        onApply(updated);
+    };
+
     if (folders.length === 0) {
-        return (
-            <div style={{ textAlign: 'center', padding: '24px', color: '#888' }}>
-                Нет добавленных папок. Нажмите «Добавить папку», чтобы начать.
-            </div>
-        );
+        return <div style={{ textAlign: 'center', padding: '24px', color: '#888' }}>Нет добавленных папок.</div>;
     }
 
     return (
@@ -41,23 +44,18 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRemove, onRename }) 
             renderItem={(folder) => (
                 <List.Item
                     actions={[
+                        <Switch
+                            checked={folder.favorite}
+                            onChange={() => onToggleFavorite(folder.id)}
+                            checkedChildren={<StarOutlined />}
+                            unCheckedChildren={<StarOutlined />}
+                        />,
                         editingId === folder.id ? (
-                            <Button type="link" onClick={confirmEdit} icon={<EditOutlined />}>
-                                Сохранить
-                            </Button>
+                            <Button type="link" onClick={confirmEdit} icon={<EditOutlined />}>Сохранить</Button>
                         ) : (
-                            <Button
-                                type="text"
-                                icon={<EditOutlined />}
-                                onClick={() => startEdit(folder.id, folder.name)}
-                            />
+                            <Button type="text" icon={<EditOutlined />} onClick={() => startEdit(folder.id, folder.name)} />
                         ),
-                        <Popconfirm
-                            title="Удалить эту папку из списка?"
-                            onConfirm={() => onRemove(folder.id)}
-                            okText="Да"
-                            cancelText="Нет"
-                        >
+                        <Popconfirm title="Удалить папку?" onConfirm={() => handleRemove(folder.id)} okText="Да" cancelText="Нет">
                             <Button type="text" danger icon={<DeleteOutlined />} />
                         </Popconfirm>,
                     ]}
@@ -66,13 +64,7 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRemove, onRename }) 
                         avatar={<FolderOpenOutlined style={{ fontSize: '24px', color: '#faad14' }} />}
                         title={
                             editingId === folder.id ? (
-                                <Input
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                    onPressEnter={confirmEdit}
-                                    onBlur={confirmEdit}
-                                    autoFocus
-                                />
+                                <Input value={editValue} onChange={e => setEditValue(e.target.value)} onPressEnter={confirmEdit} onBlur={confirmEdit} autoFocus />
                             ) : (
                                 <Text strong>{folder.name}</Text>
                             )

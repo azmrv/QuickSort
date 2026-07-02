@@ -1,15 +1,14 @@
 import { Button, message } from 'antd';
 import { CheckOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
-import { TargetFolder } from '../types';
+import { Folder } from '../types';
 
 interface ApplyButtonProps {
-    folders: TargetFolder[];
+    folders: Folder[];
     onSuccess?: () => void;
 }
 
 const ApplyButton: React.FC<ApplyButtonProps> = ({ folders, onSuccess }) => {
-    console.log('Отправляю папки:', folders);
     const handleApply = async () => {
         try {
             await invoke('update_folders', { folders });
@@ -21,14 +20,7 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({ folders, onSuccess }) => {
     };
 
     return (
-        <Button
-            type="primary"
-            icon={<CheckOutlined />}
-            onClick={handleApply}
-            block
-            disabled={folders.length === 0}
-            style={{ marginTop: 16 }}
-        >
+        <Button type="primary" icon={<CheckOutlined />} onClick={handleApply} block disabled={folders.length === 0}>
             Применить
         </Button>
     );
