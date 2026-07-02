@@ -24,7 +24,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
 
     const handleAddFolder = (name: string, path: string) => {
         const newFolder: Folder = {
-            id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`,
+            id: crypto.randomUUID(),
             name,
             path,
             favorite: false,
@@ -35,18 +35,15 @@ const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
     };
 
     const handleRename = (id: string, newName: string) => {
-        setFolders(folders.map(f => f.id === id ? { ...f, name: newName } : f));
+        setFolders(folders.map((f) => (f.id === id ? { ...f, name: newName } : f)));
     };
 
     const handleToggleFavorite = async (id: string) => {
-        // Оптимистично переключаем в локальном состоянии
-        setFolders(folders.map(f => f.id === id ? { ...f, favorite: !f.favorite } : f));
+        setFolders(folders.map((f) => (f.id === id ? { ...f, favorite: !f.favorite } : f)));
         try {
             await invoke('toggle_favorite', { id });
-            // После вызова меню обновится на сервере, но локально уже ок
         } catch (err) {
             console.error(err);
-            // Можно откатить состояние, но пока упростим
         }
     };
 
@@ -73,7 +70,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
             <FolderList
                 folders={folders}
                 onRemove={(id) => {
-                    const updated = folders.filter(f => f.id !== id);
+                    const updated = folders.filter((f) => f.id !== id);
                     setFolders(updated);
                 }}
                 onRename={handleRename}

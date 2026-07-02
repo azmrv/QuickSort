@@ -1126,15 +1126,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fs-err"
-version = "3.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73fde052dbfc920003cfd2c8e2c6e6d4cc7c1091538c3a24226cec0665ab08c0"
-dependencies = [
- "autocfg",
-]
-
-[[package]]
 name = "futures-channel"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2731,11 +2722,9 @@ name = "quicksort"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "camino",
  "chrono",
  "clap",
  "directories",
- "fs-err",
  "parking_lot",
  "serde",
  "serde_json",

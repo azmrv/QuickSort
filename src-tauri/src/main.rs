@@ -5,6 +5,7 @@ mod folder;
 mod models;
 mod move_engine;
 mod context_menu;
+mod pending;
 mod logging;
 use clap::{Parser, Subcommand};
 use commands::AppState;
@@ -45,7 +46,8 @@ fn main() {
                 return;
             }
             Commands::SelectFolder { file } => {
-                start_tauri(Some(file.clone()));
+                crate::pending::set_pending_file(file.clone());
+                start_tauri(None);
                 return;
             }
         }
@@ -78,6 +80,8 @@ fn start_tauri(_file_to_move: Option<String>) {
             commands::toggle_favorite,
             commands::get_mode,
             commands::move_file,
+            commands::get_pending_file,
+            commands::check_menu_status,
         ])
         .setup(|app| {
             let open = MenuItemBuilder::with_id("open", "Открыть редактор").build(app)?;

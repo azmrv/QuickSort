@@ -21,7 +21,7 @@ impl MenuModel {
                 target: f.path.to_string_lossy().into(),
             })
             .collect();
-        items.push(MenuItem::More);
+        items.push(MenuItem::More); 
         Self { items }
     }
 }

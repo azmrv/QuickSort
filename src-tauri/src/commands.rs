@@ -15,7 +15,10 @@ pub struct AppState {
 pub fn get_folders(state: State<AppState>) -> Vec<Folder> {
     state.service.list().unwrap_or_default()
 }
-
+#[tauri::command]
+pub fn get_pending_file() -> Option<String> {
+    crate::pending::get_pending_file()
+}
 #[tauri::command]
 pub fn update_folders(state: State<AppState>, folders: Vec<Folder>) -> Result<(), String> {
     state.service.update_all(folders.clone()).map_err(|e| e.to_string())?;
@@ -52,4 +55,11 @@ pub fn move_file(src: String, dest_dir: String) -> Result<String, String> {
     )
         .map(|p| p.to_string_lossy().into())
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn check_menu_status() -> bool {
+    // Проверяем наличие ключа QuickSort в реестре
+    let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+    hkcu.open_subkey(r"Software\Classes\*\shell\QuickSort").is_ok()
 }

@@ -8,9 +8,10 @@ const { Text } = Typography;
 
 interface SelectorPageProps {
     file: string | null;
+    onClose: () => void;
 }
 
-const SelectorPage: React.FC<SelectorPageProps> = ({ file }) => {
+const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
     const [folders, setFolders] = useState<Folder[]>([]);
     const [search, setSearch] = useState('');
 
@@ -18,9 +19,10 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file }) => {
         invoke<Folder[]>('get_folders').then(setFolders).catch(console.error);
     }, []);
 
-    const filtered = folders.filter(f =>
-        f.name.toLowerCase().includes(search.toLowerCase()) ||
-        f.path.toLowerCase().includes(search.toLowerCase())
+    const filtered = folders.filter(
+        (f) =>
+            f.name.toLowerCase().includes(search.toLowerCase()) ||
+            f.path.toLowerCase().includes(search.toLowerCase())
     );
 
     const handleSelect = async (folder: Folder) => {
@@ -31,7 +33,7 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file }) => {
         try {
             await invoke('move_file', { src: file, destDir: folder.path });
             message.success(`Файл перемещён в ${folder.name}`);
-            // В реальном приложении здесь нужно закрыть окно
+            onClose(); // возвращаемся в редактор
         } catch (err) {
             message.error(`Ошибка: ${err}`);
         }
@@ -43,13 +45,16 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file }) => {
             <Input
                 placeholder="Поиск папки..."
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 style={{ margin: '16px 0' }}
             />
             <List
                 dataSource={filtered}
-                renderItem={folder => (
-                    <List.Item onClick={() => handleSelect(folder)} style={{ cursor: 'pointer' }}>
+                renderItem={(folder) => (
+                    <List.Item
+                        onClick={() => handleSelect(folder)}
+                        style={{ cursor: 'pointer' }}
+                    >
                         <List.Item.Meta
                             avatar={<FolderOpenOutlined style={{ fontSize: '24px', color: '#faad14' }} />}
                             title={folder.name}

@@ -1,11 +1,24 @@
 import { useState, useEffect } from 'react';
-import { ConfigProvider, theme, App as AntApp, Button } from 'antd';
+import { invoke } from '@tauri-apps/api/core';
+import { ConfigProvider, theme, App as AntApp } from 'antd';
 import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
 
 function App() {
     const [mode, setMode] = useState<'editor' | 'selector'>('editor');
+    const [selectFile, setSelectFile] = useState<string | null>(null);
     const [isDark, setIsDark] = useState(true);
+
+    useEffect(() => {
+        invoke<string | null>('get_pending_file')
+            .then((file) => {
+                if (file) {
+                    setSelectFile(file);
+                    setMode('selector');
+                }
+            })
+            .catch(console.error);
+    }, []);
 
     useEffect(() => {
         document.body.style.backgroundColor = isDark ? '#141414' : '#ffffff';
@@ -13,20 +26,23 @@ function App() {
     }, [isDark]);
 
     return (
-        <ConfigProvider theme={{
-            algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
-            token: { colorPrimary: '#1677ff' }
-        }}>
+        <ConfigProvider
+            theme={{
+                algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+                token: { colorPrimary: '#1677ff' },
+            }}
+        >
             <AntApp>
-                <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 1000 }}>
-                    <Button onClick={() => setMode(m => m === 'editor' ? 'selector' : 'editor')}>
-                        {mode === 'editor' ? 'Показать Selector' : 'Показать Editor'}
-                    </Button>
-                </div>
                 {mode === 'editor' ? (
                     <EditorPage isDark={isDark} onToggleTheme={setIsDark} />
                 ) : (
-                    <SelectorPage file={null} />
+                    <SelectorPage
+                        file={selectFile}
+                        onClose={() => {
+                            setMode('editor');
+                            setSelectFile(null);
+                        }}
+                    />
                 )}
             </AntApp>
         </ConfigProvider>
