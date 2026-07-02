@@ -18,6 +18,9 @@ impl JsonRepository {
         std::fs::create_dir_all(&dir)?;
         Ok(Self { path: dir.join("folders.json") })
     }
+    pub fn config_path(&self) -> &std::path::Path {
+        &self.path
+    }
 }
 
 impl FolderRepository for JsonRepository {

@@ -9,11 +9,9 @@ pub struct LogEntry {
     pub event: String,
     pub status: String,
 }
-
 pub struct AppState {
     pub service: FolderService<JsonRepository>,
     pub exe_path: Mutex<String>,
+    pub admin_exe_path: String,
     pub logs: Mutex<Vec<LogEntry>>,
 }
-
-

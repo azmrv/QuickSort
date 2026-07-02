@@ -15,7 +15,7 @@ impl MenuModel {
             .iter()
             .filter(|f| f.favorite)
             .enumerate()
-            .map(|(i, f)| MenuItem::Favorite {
+            .map(|(_i, f)| MenuItem::Favorite {
                 name: f.name.clone(),
                 target: f.path.to_string_lossy().into(),
             })

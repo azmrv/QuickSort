@@ -72,6 +72,9 @@ fn start_tauri() {
     let service = FolderService::new(repo);
     let folders = service.list().unwrap_or_default();
     let exe_path = std::env::current_exe().unwrap().to_string_lossy().to_string();
+    let mut admin_exe = std::env::current_exe().unwrap();
+    admin_exe.set_file_name("quicksort-admin.exe");
+    let admin_exe_path = admin_exe.to_string_lossy().to_string();
 
     if !folders.is_empty() {
         let model = context_menu::model::MenuModel::from_folders(&folders);
@@ -81,6 +84,7 @@ fn start_tauri() {
     let state = AppState {
         service,
         exe_path: Mutex::new(exe_path.clone()),
+        admin_exe_path,
         logs: Mutex::new(logs),
     };
 
