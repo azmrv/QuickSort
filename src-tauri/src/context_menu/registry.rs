@@ -1,51 +1,56 @@
 use anyhow::Result;
-use winreg::enums::*;
-use winreg::RegKey;
-use super::model::{MenuModel, MenuItem};
+use win_ctx::{CtxEntry, ActivationType, EntryOptions};
 
 pub struct RegistryInstaller;
 
 impl RegistryInstaller {
-    pub fn install(model: &MenuModel, exe_path: &str) -> Result<()> {
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        Self::install_to(&hkcu, r"Software\Classes\*\shell\QuickSort", model, exe_path)?;
-        Self::install_to(&hkcu, r"Software\Classes\Folder\shell\QuickSort", model, exe_path)?;
-        Ok(())
-    }
+    pub fn install(model: &super::model::MenuModel, exe_path: &str) -> Result<()> {
+        // Удаляем старые ключи (если были)
+        Self::uninstall()?;
 
-    fn install_to(hkcu: &RegKey, base: &str, model: &MenuModel, exe_path: &str) -> Result<()> {
-        // Удаляем старый ключ
-        if let Ok(parent) = hkcu.open_subkey(base) {
-            parent.delete_subkey_all("").ok();
-        }
-        let (key, _) = hkcu.create_subkey(base)?;
-        let (shell, _) = key.create_subkey("shell")?;
+        // Создаём корневое меню для всех файлов и папок
+        let root_files = CtxEntry::new("QuickSort", &ActivationType::File("*".into()))?;
+        let root_folders = CtxEntry::new("QuickSort", &ActivationType::Folder)?;
 
         for item in &model.items {
             match item {
-                MenuItem::Favorite { id, name, target } => {
-                    let (cmd_key, _) = shell.create_subkey(id)?;
-                    cmd_key.set_value("", &name.as_str())?;
-                    let (command, _) = cmd_key.create_subkey("command")?;
-                    command.set_value("", &format!("\"{}\" --move --target \"{}\" --file \"%1\"", exe_path, target))?;
+                super::model::MenuItem::Favorite { name, target, .. } => {
+                    let cmd = format!("\"{}\" move \"{}\" \"%1\"", exe_path, target);
+                    let opts = EntryOptions {
+                        command: Some(cmd),
+                        icon: Some(format!("{},0", exe_path)),
+                        position: None,
+                        separator: None,
+                        extended: false,
+                    };
+                    root_files.new_child_with_options(name, &opts)?;
+                    root_folders.new_child_with_options(name, &opts)?;
                 }
-                MenuItem::More => {
-                    let (cmd_key, _) = shell.create_subkey("zzz_more")?;
-                    cmd_key.set_value("", &"📂 Другие папки...")?;
-                    let (command, _) = cmd_key.create_subkey("command")?;
-                    command.set_value("", &format!("\"{}\" --select-folder --file \"%1\"", exe_path))?;
+                super::model::MenuItem::More => {
+                    let cmd = format!("\"{}\" select-folder \"%1\"", exe_path);
+                    let opts = EntryOptions {
+                        command: Some(cmd),
+                        icon: Some(format!("{},0", exe_path)),
+                        position: None,
+                        separator: None,
+                        extended: false,
+                    };
+                    root_files.new_child_with_options("📂 Другие папки...", &opts)?;
+                    root_folders.new_child_with_options("📂 Другие папки...", &opts)?;
                 }
             }
         }
+
         Ok(())
     }
 
     pub fn uninstall() -> Result<()> {
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        for base in &[r"Software\Classes\*\shell\QuickSort", r"Software\Classes\Folder\shell\QuickSort"] {
-            if let Ok(parent) = hkcu.open_subkey(base) {
-                parent.delete_subkey_all("").ok();
-            }
+        // Удаляем корневые записи, если они существуют (рекурсивно удалят и детей)
+        if let Some(entry) = CtxEntry::get(&["QuickSort"], &ActivationType::File("*".into())) {
+            entry.delete()?;
+        }
+        if let Some(entry) = CtxEntry::get(&["QuickSort"], &ActivationType::Folder) {
+            entry.delete()?;
         }
         Ok(())
     }

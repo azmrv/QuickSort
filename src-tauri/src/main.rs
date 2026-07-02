@@ -8,6 +8,7 @@ mod context_menu;
 mod logging;
 mod pending;
 mod state;
+mod activity_log;
 
 use clap::{Parser, Subcommand};
 use commands::{folders, move_cmd, settings};
@@ -29,8 +30,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Move { target: String, file: String },
-    SelectFolder { file: String },
+    /// Переместить файл (позиционные аргументы: TARGET FILE)
+    Move {
+        target: String,
+        file: String,
+    },
+    /// Открыть окно выбора папки (позиционный аргумент: FILE)
+    SelectFolder {
+        file: String,
+    },
 }
 
 fn main() {
@@ -59,6 +67,7 @@ fn main() {
 }
 
 fn start_tauri() {
+    let logs = activity_log::load_logs();
     let repo = JsonRepository::new().expect("repo");
     let service = FolderService::new(repo);
     let folders = service.list().unwrap_or_default();
@@ -72,6 +81,7 @@ fn start_tauri() {
     let state = AppState {
         service,
         exe_path: Mutex::new(exe_path.clone()),
+        logs: Mutex::new(logs),
     };
 
     tauri::Builder::default()
@@ -85,6 +95,7 @@ fn start_tauri() {
             settings::get_mode,
             settings::get_pending_file,
             settings::check_menu_status,
+            settings::get_logs,
         ])
         .setup(|app| {
             let open = MenuItemBuilder::with_id("open", "Открыть редактор").build(app)?;

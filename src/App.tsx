@@ -1,23 +1,25 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ConfigProvider, theme, App as AntApp } from 'antd';
+import { ConfigProvider, theme, App as AntApp, Tabs } from 'antd';
 import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
+import LogPage from './pages/LogPage';
+import SettingsPage from './pages/SettingsPage';
+import AboutPage from './pages/AboutPage';
 
 function App() {
     const [mode, setMode] = useState<'editor' | 'selector'>('editor');
     const [selectFile, setSelectFile] = useState<string | null>(null);
     const [isDark, setIsDark] = useState(true);
+    const [activeTab, setActiveTab] = useState('folders');
 
     useEffect(() => {
-        invoke<string | null>('get_pending_file')
-            .then((file) => {
-                if (file) {
-                    setSelectFile(file);
-                    setMode('selector');
-                }
-            })
-            .catch(console.error);
+        invoke<string | null>('get_pending_file').then((file) => {
+            if (file) {
+                setSelectFile(file);
+                setMode('selector');
+            }
+        });
     }, []);
 
     useEffect(() => {
@@ -34,15 +36,19 @@ function App() {
         >
             <AntApp>
                 {mode === 'editor' ? (
-                    <EditorPage isDark={isDark} onToggleTheme={setIsDark} />
-                ) : (
-                    <SelectorPage
-                        file={selectFile}
-                        onClose={() => {
-                            setMode('editor');
-                            setSelectFile(null);
-                        }}
+                    <Tabs
+                        activeKey={activeTab}
+                        onChange={setActiveTab}
+                        style={{ maxWidth: 800, margin: '0 auto', padding: 24 }}
+                        items={[
+                            { key: 'folders', label: 'Папки', children: <EditorPage isDark={isDark} onToggleTheme={setIsDark} /> },
+                            { key: 'log', label: 'Лог', children: <LogPage /> },
+                            { key: 'settings', label: 'Настройки', children: <SettingsPage /> },
+                            { key: 'about', label: 'О программе', children: <AboutPage /> },
+                        ]}
                     />
+                ) : (
+                    <SelectorPage file={selectFile} onClose={() => setMode('editor')} />
                 )}
             </AntApp>
         </ConfigProvider>

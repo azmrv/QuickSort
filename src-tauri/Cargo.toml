@@ -5,6 +5,7 @@ description = "QuickSort – быстрая сортировка файлов"
 authors = ["pr0math3us"]
 edition = "2021"
 
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -23,4 +24,4 @@ uuid = { version = "1", features = ["v4", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 parking_lot = "0.12"
-state = "0.6.0"
+win-ctx = "1.4.1"

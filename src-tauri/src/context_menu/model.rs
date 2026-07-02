@@ -5,7 +5,7 @@ pub struct MenuModel {
 }
 
 pub enum MenuItem {
-    Favorite { id: String, name: String, target: String },
+    Favorite { name: String, target: String },
     More,
 }
 
@@ -16,12 +16,11 @@ impl MenuModel {
             .filter(|f| f.favorite)
             .enumerate()
             .map(|(i, f)| MenuItem::Favorite {
-                id: format!("{:03}_{}", i, f.name),
                 name: f.name.clone(),
                 target: f.path.to_string_lossy().into(),
             })
             .collect();
-        items.push(MenuItem::More); 
+        items.push(MenuItem::More);
         Self { items }
     }
 }
