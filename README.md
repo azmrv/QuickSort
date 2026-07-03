@@ -1,85 +1,85 @@
 # QuickSort
 
-**QuickSort** – утилита для Windows 10/11, которая добавляет в контекстное меню Проводника каскадный пункт «QuickSort» со списком ваших избранных папок. Один клик – и файлы мгновенно перемещаются.  
-Больше никаких перетаскиваний, лишних окон и постоянного поиска нужной директории.
+**QuickSort** – a Windows 10/11 utility that adds a cascading "QuickSort" item to the Explorer context menu with your favorite folders. One click – and files are moved instantly.  
+No more dragging, extra windows, or hunting for the right directory.
 
-Tauri + React + Typescript
-
----
-
-## Оглавление
-- [Возможности](#-возможности)
-- [Технологии](#-технологии)
-- [Зависимости](#-зависимости)
-- [Установка и сборка](#-установка-и-сборка)
-- [Использование](#-использование)
-- [Благодарности](#-благодарности)
-- [Лицензия](#-лицензия)
+Tauri + React + TypeScript
 
 ---
 
-## ✨ Возможности
-
-- **Каскадное контекстное меню** – избранные папки отображаются прямо в меню Проводника (без UAC и лишних окон).
-- **Мгновенное перемещение** – при выборе папки файлы сразу переносятся (используется атомарный `rename`).
-- **Окно выбора папки** – для доступа ко всем папкам из конфигурации (кнопка «📂 Другие папки...»).
-- **Редактор папок** – удобный GUI на Tauri + React для управления списком: добавление, переименование, избранное.
-- **Лог событий** – история всех операций (перемещения, изменения конфига) сохраняется локально.
-- **Тёмная тема** – встроенная поддержка светлой и тёмной схем.
-- **Системный трей** – приложение может работать в фоне, не загромождая панель задач.
-
----
-
-## 🛠️ Технологии
-
-- **Rust** – ядро приложения, COM-сервер, CLI-режим, работа с реестром.
-- **Tauri 2** – легковесный GUI-фреймворк (вместо Electron).
-- **React + TypeScript** – фронтенд редактора.
-- **Ant Design** – UI-библиотека (компоненты, иконки, темизация).
-- **Windows COM** – Shell Extension (DLL), загружаемый в Проводник.
-- **win-ctx** – высокоуровневая работа с реестром для контекстного меню.
-- **windows-rs** – официальные биндинги Microsoft к WinAPI.
+## Table of Contents
+- [Features](#-features)
+- [Technologies](#-technologies)
+- [Dependencies](#-dependencies)
+- [Installation and Build](#-installation-and-build)
+- [Usage](#-usage)
+- [Acknowledgments](#-acknowledgments)
+- [License](#-license)
 
 ---
 
-## 📖 Использование
+## ✨ Features
 
-1. Запустите `QuickSort.exe`. В системном трее появится иконка.
-2. В окне редактора добавьте папки (кнопка «Добавить папку»), отметьте избранные звёздочкой и нажмите «Применить».
-3. Теперь в Проводнике при правом клике на любом файле или папке появится меню **QuickSort** с вашими избранными папками.  
-   Выберите папку – файл мгновенно переместится.
-4. Для доступа ко всем папкам (не только избранным) используйте пункт «📂 Другие папки...» – откроется окно выбора.
-5. Все действия записываются во вкладку «Лог». При закрытии окна приложение продолжает работать в трее.
-
----
-
-## 🙏 Благодарности
-
-Этот проект вдохновлён работами многих талантливых разработчиков Rust-сообщества:
-
-- **[PaulDance](https://gist.github.com/PaulDance)** – за превосходный [Gist с примером Shell Extension](https://gist.github.com/PaulDance), который стал основой для нашего COM-сервера.
-- **[ahaoboy](https://github.com/ahaoboy)** – за [rcm-com](https://github.com/ahaoboy/rcm-com) и [windows-contextmenu-manager](https://dev.to/ahaoboy/windows-contextmenu-manager-tauri-and-rust-3l9b), которые помогли разобраться в архитектуре.
-- **[ppound](https://github.com/ppound)** – за [xmp-reader](https://github.com/ppound/xmp-reader), ещё один отличный пример Shell Extension на Rust.
-- **[acdvs](https://github.com/acdvs)** – за библиотеку [winctx-rs](https://github.com/acdvs/winctx-rs), которая облегчила работу с контекстным меню.
-- **[Microsoft](https://github.com/microsoft)** – за [windows-rs](https://github.com/microsoft/windows-rs), открывшую доступ к WinAPI из Rust.
-
-Особая благодарность всем мейнтейнерам крейтов, использованных в проекте.
+- **Cascading context menu** – favorite folders appear directly in the Explorer menu (no UAC or extra windows).
+- **Instant moving** – selecting a folder immediately moves the files (using atomic `rename`).
+- **Folder picker** – access all folders from the configuration (via the “📂 Other folders...” button).
+- **Folder editor** – a convenient Tauri + React GUI to manage the list: add, rename, mark as favorite.
+- **Event log** – a local history of all operations (moves, config changes).
+- **Dark theme** – built‑in support for light and dark color schemes.
+- **System tray** – the app can run in the background, keeping the taskbar clean.
 
 ---
 
-## 📄 Лицензия
+## 🛠️ Technologies
 
-Проект распространяется под лицензией **MIT**.  
-Это учебный проект, но каждый может свободно использовать, модифицировать и распространять его в любых целях.
-
-Полный текст лицензии: [LICENSE](LICENSE)
+- **Rust** – core of the application, COM server, CLI mode, registry handling.
+- **Tauri 2** – lightweight GUI framework (instead of Electron).
+- **React + TypeScript** – editor frontend.
+- **Ant Design** – UI library (components, icons, theming).
+- **Windows COM** – Shell Extension (DLL) loaded by Explorer.
+- **win-ctx** – high‑level registry wrapper for context menus.
+- **windows-rs** – official Microsoft WinAPI bindings for Rust.
 
 ---
 
-**QuickSort** – наводите порядок в файлах так же быстро, как называете папку!  
-Если у вас есть идеи или предложения – создавайте issue или pull request. Вместе сделаем проводник удобнее.
+## 📖 Usage
 
-## 📦 Зависимости
+1. Launch `QuickSort.exe`. An icon appears in the system tray.
+2. In the editor window, add folders (click “Add Folder”), mark favorites with a star, and click “Apply”.
+3. Now, right‑click any file or folder in Explorer and you’ll see the **QuickSort** menu with your favorite folders.  
+   Choose a folder – the file moves instantly.
+4. To access all folders (not just favorites), use “📂 Other folders...” – a picker window opens.
+5. Every action is recorded in the “Log” tab. When you close the window, the app keeps running in the tray.
+
+---
+
+## 🙏 Acknowledgments
+
+This project is inspired by the work of many talented Rust developers:
+
+- **[PaulDance](https://gist.github.com/PaulDance)** – for the excellent [Gist with a Shell Extension example](https://gist.github.com/PaulDance), which became the foundation of our COM server.
+- **[ahaoboy](https://github.com/ahaoboy)** – for [rcm-com](https://github.com/ahaoboy/rcm-com) and [windows-contextmenu-manager](https://dev.to/ahaoboy/windows-contextmenu-manager-tauri-and-rust-3l9b), which helped understand the architecture.
+- **[ppound](https://github.com/ppound)** – for [xmp-reader](https://github.com/ppound/xmp-reader), another excellent Shell Extension example in Rust.
+- **[acdvs](https://github.com/acdvs)** – for the [winctx-rs](https://github.com/acdvs/winctx-rs) library, which simplified context menu handling.
+- **[Microsoft](https://github.com/microsoft)** – for [windows-rs](https://github.com/microsoft/windows-rs), opening WinAPI access from Rust.
+
+Special thanks to all maintainers of the crates used in this project.
+
+---
+
+## 📄 License
+
+This project is distributed under the **MIT** license.  
+It is an educational project, but everyone is free to use, modify, and distribute it for any purpose.
+
+Full license text: [LICENSE](LICENSE)
+
+---
+
+**QuickSort** – tidy up your files as fast as you name a folder!  
+If you have ideas or suggestions, open an issue or pull request. Let’s make Explorer more convenient together.
+
+## 📦 Dependencies
 
 ### Rust (core / Tauri)
 ```toml
@@ -110,7 +110,7 @@ winctx = "1.4"
 "vite": "^7"
 ```
 
-### COM-сервер (context-menu-dll)
+### COM server (context-menu-dll)
 ```toml
 windows = "0.61"
 parking_lot = "0.12"
@@ -118,20 +118,20 @@ log = "0.4"
 simplelog = "0.12"
 ```
 
-Полный список зависимостей смотрите в `src-tauri/Cargo.toml`, `context-menu-dll/Cargo.toml` и `package.json`.
+See the full list of dependencies in `src-tauri/Cargo.toml`, `context-menu-dll/Cargo.toml`, and `package.json`.
 
 ---
 
-## 🔧 Установка и сборка
+## 🔧 Installation and Build
 
-### Предварительные требования
-- Windows 10/11 (64-бит)
+### Prerequisites
+- Windows 10/11 (64‑bit)
 - [Rust](https://rustup.rs) (stable, `x86_64-pc-windows-msvc`)
 - [Node.js](https://nodejs.org) (LTS)
 - [Tauri CLI](https://tauri.app) (`cargo install tauri-cli`)
-- [Visual Studio Build Tools](https://visualstudio.microsoft.com/ru/visual-cpp-build-tools/) (компонент "Разработка классических приложений на C++" с Windows SDK)
+- [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (component “Desktop development with C++” with Windows SDK)
 
-### Сборка
+### Build
 ```bash
 git clone https://github.com/yourname/quicksort.git
 cd quicksort
@@ -139,24 +139,23 @@ npm install
 cargo build --all --release
 ```
 
-### Регистрация COM-сервера (для динамического меню)
-1. Соберите DLL: `cd context-menu-dll && cargo build --release`.
-2. Запустите `register.reg` из корня проекта с правами администратора.
-3. Перезапустите Проводник (`taskkill /f /im explorer.exe && start explorer.exe`).
+### COM server registration (for dynamic menu)
+1. Build the DLL: `cd context-menu-dll && cargo build --release`.
+2. Run `register.reg` from the project root with administrator privileges.
+3. Restart Explorer (`taskkill /f /im explorer.exe && start explorer.exe`).
 
-### Запуск редактора
+### Launch the editor
 ```bash
-npm run tauri dev   # режим разработки
-# или
-cargo run           # только бэкенд (GUI без hot-reload)
+npm run tauri dev   # development mode
+# or
+cargo run           # backend only (GUI without hot‑reload)
 ```
 
-Для продакшн-сборки:
+For production build:
 ```bash
 npm run tauri build
 ```
 
-Готовый установщик будет в `src-tauri/target/release/bundle`.
+The installer will be in `src-tauri/target/release/bundle`.
 
-
-
+---
