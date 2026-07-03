@@ -1,0 +1,39 @@
+// In order to embed an icon in the assembly.
+#include <winuser.h>
+#include <verrsrc.h>
+
+1 RT_MANIFEST "manifest.xml"
+
+IDI_MYAPP_ICON          ICON    "whatever.ico"
+IDI_MYAPP_ICON_SMALL    ICON    "whatever.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     1,2,3,4
+PRODUCTVERSION  1,2,3,4
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0
+FILEOS          VOS__WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        // US English UTF-16.
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "WhateverInc"
+            VALUE "FileDescription", "Sample Shell extension"
+            VALUE "FileVersion", 1.2.3.4
+            VALUE "InternalName", "sample-shellext.dll"
+            VALUE "OriginalFilename", "sample-shellext.dll"
+            VALUE "ProductName", "SampleShellext"
+            VALUE "ProductVersion", 1.2.3.4
+            VALUE "LegalCopyright", "Hello World"
+
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04b0
+    END
+END

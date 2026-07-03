@@ -1,0 +1,21 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CLASSES_ROOT\CLSID\{12345678-9ABC-DEF1-2345-6789ABCDEF42}]
+@="SampleShellExtension"
+"Version"="1.2.3.4"
+
+[HKEY_CLASSES_ROOT\CLSID\{12345678-9ABC-DEF1-2345-6789ABCDEF42}\InprocServer32]
+@="C:\\path\\to\\sample-shellext.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_CLASSES_ROOT\*\shellex\ContextMenuHandlers\SampleShellExtensionVerb]
+@="{12345678-9ABC-DEF1-2345-6789ABCDEF42}"
+
+[HKEY_CLASSES_ROOT\Directory\shellex\ContextMenuHandlers\SampleShellExtensionVerb]
+@="{12345678-9ABC-DEF1-2345-6789ABCDEF42}"
+
+[HKEY_CLASSES_ROOT\Directory\Background\shellex\ContextMenuHandlers\SampleShellExtensionVerb]
+@="{12345678-9ABC-DEF1-2345-6789ABCDEF42}"
+
+[HKEY_CLASSES_ROOT\Drive\shellex\ContextMenuHandlers\SampleShellExtensionVerb]
+@="{12345678-9ABC-DEF1-2345-6789ABCDEF42}"

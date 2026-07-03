@@ -1,25 +1,84 @@
+# ==========================================
+# Dependency Directories & Frontend Locks
+# ==========================================
+node_modules/
+
+# Optional npm, yarn and bun cache directory
+.npm/
+.yarn/
+
+# npm, yarn and bun lock files (Kept ignored per your preference)
+package-lock.json
+yarn.lock
+bun.lockb
+
+# Output of 'npm pack'
+*.tgz
+
+# ==========================================
+# Rust & Tauri Core Build Rules
+# ==========================================
+# Rust compiled folders
+target/
+
+# Tauri compiles its nested Rust code here (Essential additions)
+src-tauri/target/
+/src-tauri/target/
+
+# For Tauri apps (executables), you should ideally track Cargo.lock.
+# If you prefer to ignore it, uncomment the line below:
+# Cargo.lock
+
+# Tauri examples /gen directory
+/examples/**/src-tauri/gen/
+/bench/**/src-tauri/gen/
+
+# Project-specific test files
+streaming_example_test_video.mp4
+
+# ==========================================
+# Environment & Runtime Data
+# ==========================================
+# dotenv environment variables file
+.env
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# ==========================================
 # Logs
+# ==========================================
 logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+debug.log
 
-node_modules
-dist
-dist-ssr
-docs
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
+# ==========================================
+# Editors & IDEs (RustRover, VS Code, etc.)
+# ==========================================
+# JetBrains / RustRover workspace config
 .idea
+*.iml
+
+# VS Code workspace settings files
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# Visual Studio & Sublime
+/.vs
+*.sublime*
+
+# ==========================================
+# System & Miscellaneous Files
+# ==========================================
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+.Thumbs.db
+**/.DS_Store
+TODO.md
+.aider*
