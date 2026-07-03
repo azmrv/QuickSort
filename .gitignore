@@ -1,84 +1,90 @@
 # ==========================================
-# Dependency Directories & Frontend Locks
+# Rust / Cargo
+# ==========================================
+target/
+src-tauri/target/
+*.pdb
+*.rs.bk
+Cargo.lock  # ДЛЯ БИНАРНЫХ ПРИЛОЖЕНИЙ — ХРАНИМ!
+
+# ==========================================
+# Frontend (React + Vite)
 # ==========================================
 node_modules/
-
-# Optional npm, yarn and bun cache directory
 .npm/
 .yarn/
-
-# npm, yarn and bun lock files (Kept ignored per your preference)
-package-lock.json
-yarn.lock
-bun.lockb
-
-# Output of 'npm pack'
+dist/
+dist-ssr/
+build/
 *.tgz
 
 # ==========================================
-# Rust & Tauri Core Build Rules
+# Package lock files (храним для стабильности)
 # ==========================================
-# Rust compiled folders
-target/
+# package-lock.json    # Рекомендуется хранить!
+# yarn.lock            # Рекомендуется хранить!
+# bun.lockb            # Рекомендуется хранить!
 
-# Tauri compiles its nested Rust code here (Essential additions)
-src-tauri/target/
-/src-tauri/target/
-
-# For Tauri apps (executables), you should ideally track Cargo.lock.
-# If you prefer to ignore it, uncomment the line below:
-# Cargo.lock
-
-# Tauri examples /gen directory
-/examples/**/src-tauri/gen/
-/bench/**/src-tauri/gen/
-
-# Project-specific test files
-streaming_example_test_video.mp4
+# ==========================================
+# Logs
+# ==========================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+debug.log
 
 # ==========================================
 # Environment & Runtime Data
 # ==========================================
-# dotenv environment variables file
 .env
-
-# Runtime data
-pids
+.env*.local
+pids/
 *.pid
 *.seed
 *.pid.lock
 
 # ==========================================
-# Logs
+# IDEs (RustRover, VS Code, IntelliJ)
 # ==========================================
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-debug.log
-
-# ==========================================
-# Editors & IDEs (RustRover, VS Code, etc.)
-# ==========================================
-# JetBrains / RustRover workspace config
-.idea
+.idea/
 *.iml
-
-# VS Code workspace settings files
-.vscode/settings.json
-.vscode/launch.json
-.vscode/tasks.json
-
-# Visual Studio & Sublime
-/.vs
-*.sublime*
+.vscode/
+!.vscode/extensions.json
+/.vs/
+*.sublime-*
+*.sw?
 
 # ==========================================
-# System & Miscellaneous Files
+# Operating System files
 # ==========================================
 .DS_Store
-.Thumbs.db
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
 **/.DS_Store
+
+# ==========================================
+# Temporary / backup files
+# ==========================================
+*.tmp
+*.bak
+*.swp
+*~
+
+# ==========================================
+# Project-specific
+# ==========================================
 TODO.md
 .aider*
+streaming_example_test_video.mp4
+
+# ==========================================
+# Tauri generated folders (examples/bench)
+# ==========================================
+/examples/**/src-tauri/gen/
+/bench/**/src-tauri/gen/
