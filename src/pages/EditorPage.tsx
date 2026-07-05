@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Typography, Switch, Space, Button, Popconfirm } from 'antd';
-import { BulbOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Typography, Switch, Space, Button, Popconfirm, message } from 'antd';
+import { BulbOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import FolderList from '../components/FolderList';
 import AddFolderButton from '../components/AddFolderButton';
 import ApplyButton from '../components/ApplyButton';
@@ -56,6 +56,24 @@ const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
         setFolders([]);
     };
 
+    const handleRegisterComServer = async () => {
+        try {
+            const msg = await invoke<string>('register_com_server');
+            message.success(msg);
+        } catch (err) {
+            message.error(`Ошибка регистрации: ${err}`);
+        }
+    };
+
+    const handleUnregisterComServer = async () => {
+        try {
+            const msg = await invoke<string>('unregister_com_server');
+            message.success(msg);
+        } catch (err) {
+            message.error(`Ошибка удаления: ${err}`);
+        }
+    };
+
     return (
         <div style={{ maxWidth: 640, margin: '0 auto', padding: 24, minHeight: '100vh' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -76,12 +94,20 @@ const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
             <div style={{ marginTop: 16 }}>
                 <ApplyButton folders={folders} onSuccess={() => {}} />
             </div>
-            <div style={{ marginTop: 8 }}>
+            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                 <Popconfirm title="Удалить все пункты меню?" onConfirm={handleDeleteMenu} okText="Да" cancelText="Нет">
                     <Button danger icon={<DeleteOutlined />} block disabled={folders.length === 0}>
                         Удалить меню
                     </Button>
                 </Popconfirm>
+            </div>
+            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                <Button icon={<CheckCircleOutlined />} onClick={handleRegisterComServer} block>
+                    Зарегистрировать COM-сервер
+                </Button>
+                <Button icon={<CloseCircleOutlined />} onClick={handleUnregisterComServer} block>
+                    Удалить COM-сервер
+                </Button>
             </div>
         </div>
     );

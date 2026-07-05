@@ -1,3 +1,3 @@
 [workspace]
-members = ["src-tauri", "admin"]
+members = ["src-tauri", "context-menu-dll"]
 resolver = "2"

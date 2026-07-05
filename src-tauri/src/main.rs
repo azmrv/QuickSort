@@ -4,7 +4,6 @@ mod commands;
 mod folder;
 mod models;
 mod move_engine;
-mod context_menu;
 mod logging;
 mod pending;
 mod state;
@@ -70,21 +69,16 @@ fn start_tauri() {
     let logs = activity_log::load_logs();
     let repo = JsonRepository::new().expect("repo");
     let service = FolderService::new(repo);
-    let folders = service.list().unwrap_or_default();
-    let exe_path = std::env::current_exe().unwrap().to_string_lossy().to_string();
-    let mut admin_exe = std::env::current_exe().unwrap();
-    admin_exe.set_file_name("quicksort-admin.exe");
-    let admin_exe_path = admin_exe.to_string_lossy().to_string();
+    let _folders = service.list().unwrap_or_default();
 
-    if !folders.is_empty() {
-        let model = context_menu::model::MenuModel::from_folders(&folders);
-        context_menu::registry::RegistryInstaller::install(&model, &exe_path).ok();
-    }
+    // Меню больше не устанавливаем через реестр — это делает COM-сервер.
+    // if !folders.is_empty() {
+    //     let model = context_menu::model::MenuModel::from_folders(&folders);
+    //     context_menu::registry::RegistryInstaller::install(&model, &exe_path).ok();
+    // }
 
     let state = AppState {
         service,
-        exe_path: Mutex::new(exe_path.clone()),
-        admin_exe_path,
         logs: Mutex::new(logs),
     };
 
@@ -100,6 +94,8 @@ fn start_tauri() {
             settings::get_pending_file,
             settings::check_menu_status,
             settings::get_logs,
+            settings::register_com_server,
+            settings::unregister_com_server,
         ])
         .setup(|app| {
             let open = MenuItemBuilder::with_id("open", "Открыть редактор").build(app)?;
@@ -118,7 +114,7 @@ fn start_tauri() {
                             }
                         }
                         "quit" => {
-                            context_menu::registry::RegistryInstaller::uninstall().ok();
+                            // При выходе из трея удаляем COM-сервер? Нет, пусть остаётся.
                             app.exit(0);
                         }
                         _ => {}
