@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
@@ -11,19 +12,6 @@ impl Default for FolderId {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Folder {
-    pub id: FolderId,
-    pub name: String,
-    pub path: std::path::PathBuf,
-    #[serde(default)]
-    pub favorite: bool,
-    #[serde(default)]
-    pub order: u32,
-    #[serde(default)]
-    pub stats: FolderStats,
-}
-
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FolderStats {
     pub use_count: u64,
@@ -35,3 +23,17 @@ pub struct Config {
     pub version: u32,
     pub folders: Vec<Folder>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Folder {
+    pub id: FolderId,
+    pub name: String,
+    pub path: PathBuf,
+    #[serde(default)]
+    pub favorite: bool,
+    #[serde(default)]
+    pub order: u32,
+    #[serde(default)]
+    pub stats: FolderStats,
+}
+

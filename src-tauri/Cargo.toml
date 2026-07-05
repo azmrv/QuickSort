@@ -5,6 +5,9 @@ description = "QuickSort – быстрая сортировка файлов"
 authors = ["pr0math3us"]
 edition = "2021"
 
+[lib]
+name = "quicksort_lib"
+crate-type = ["lib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

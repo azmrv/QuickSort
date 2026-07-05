@@ -7,19 +7,20 @@ pub trait FolderRepository {
 }
 
 pub struct JsonRepository {
-    path: std::path::PathBuf,
+    pub(in crate::folder) path: std::path::PathBuf,
 }
 
 impl JsonRepository {
+    /// Единый путь: %APPDATA%\QuickSort\folders.json
     pub fn new() -> Result<Self> {
-        let dir = directories::ProjectDirs::from("com", "quicksort", "QuickSort")
-            .map(|d| d.config_dir().to_path_buf())
-            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        let dir = std::env::var("APPDATA")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .join("QuickSort");
         std::fs::create_dir_all(&dir)?;
-        Ok(Self { path: dir.join("folders.json") })
-    }
-    pub fn config_path(&self) -> &std::path::Path {
-        &self.path
+        Ok(Self {
+            path: dir.join("folders.json"),
+        })
     }
 }
 
@@ -29,9 +30,13 @@ impl FolderRepository for JsonRepository {
             let data = std::fs::read_to_string(&self.path)?;
             Ok(serde_json::from_str(&data)?)
         } else {
-            Ok(Config { version: 1, folders: vec![] })
+            Ok(Config {
+                version: 1,
+                folders: vec![],
+            })
         }
     }
+
     fn save(&self, config: &Config) -> Result<()> {
         let json = serde_json::to_string_pretty(config)?;
         std::fs::write(&self.path, json)?;
