@@ -11,7 +11,7 @@ pub struct JsonRepository {
 }
 
 impl JsonRepository {
-    /// Единый путь: %APPDATA%\QuickSort\folders.json
+    /// Создаёт новый репозиторий, хранящий данные в %APPDATA%\QuickSort\folders.json
     pub fn new() -> Result<Self> {
         let dir = std::env::var("APPDATA")
             .map(std::path::PathBuf::from)

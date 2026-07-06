@@ -1,12 +1,26 @@
 mod shellext;
-
-use std::ffi::c_void;
-use windows::core::{GUID, HRESULT, IUnknown, Interface};
-use windows::Win32::Foundation::{CLASS_E_CLASSNOTAVAILABLE, S_FALSE, S_OK, E_POINTER};
+use windows::core::{GUID, HRESULT, Interface};
+use windows::Win32::Foundation::{CLASS_E_CLASSNOTAVAILABLE, S_FALSE, E_POINTER};
 use windows::Win32::System::Com::IClassFactory;
-use shellext::{QuickSortShellExt, QuickSortClassFactory};
+use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_OK};
+use windows::core::w;
+use std::ffi::c_void;
 
-const CLSID_QUICKSORT: GUID = GUID::from_u128(0x12345678_1234_1234_1234_1234567890AB);
+use shellext::QuickSortClassFactory;
+use shellext::INSTANCE_COUNT;
+pub use shellext::CLSID_QUICKSORT;
+
+#[no_mangle]
+pub unsafe extern "system" fn DllMain(
+    _hinst: windows::Win32::Foundation::HINSTANCE,
+    reason: u32,
+    _reserved: *const c_void,
+) -> bool {
+    if reason == 1 { // DLL_PROCESS_ATTACH
+        MessageBoxW(None, w!("DLL_PROCESS_ATTACH"), w!("QuickSort DLL"), MB_OK);
+    }
+    true
+}
 
 #[no_mangle]
 pub unsafe extern "system" fn DllGetClassObject(
@@ -14,6 +28,7 @@ pub unsafe extern "system" fn DllGetClassObject(
     riid: *const GUID,
     ppv: *mut *mut c_void,
 ) -> HRESULT {
+    MessageBoxW(None, w!("DllGetClassObject called!"), w!("QuickSort DLL"), MB_OK);
     if rclsid.is_null() || riid.is_null() || ppv.is_null() {
         return E_POINTER;
     }

@@ -18,7 +18,6 @@ pub fn get_pending_file() -> Option<String> {
 #[tauri::command]
 pub fn check_menu_status() -> bool {
     let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
-    // Проверяем наличие COM-сервера в ContextMenuHandlers
     hkcu.open_subkey(r"Software\Classes\*\shellex\ContextMenuHandlers\QuickSort").is_ok()
 }
 
@@ -29,14 +28,15 @@ pub fn get_logs(state: State<AppState>) -> Vec<LogEntry> {
 
 #[tauri::command]
 pub fn register_com_server(state: State<AppState>) -> Result<String, String> {
-    // Путь к DLL (лежит рядом с exe)
-    let mut dll_path = std::env::current_exe().map_err(|e| e.to_string())?;
-    dll_path.set_file_name("context_menu_dll.dll");
+    // Единый путь к DLL в %APPDATA%\QuickSort
+    let appdata = std::env::var("APPDATA").map_err(|e| e.to_string())?;
+    let dll_path = std::path::PathBuf::from(&appdata)
+        .join("QuickSort")
+        .join("context_menu_dll.dll");
     let dll_path_str = dll_path.to_string_lossy().to_string();
 
     let clsid = "{12345678-1234-1234-1234-1234567890AB}";
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-
 
     // 1. Регистрируем CLSID
     let (clsid_key, _) = hkcu
@@ -70,14 +70,22 @@ pub fn register_com_server(state: State<AppState>) -> Result<String, String> {
         key.set_value("", &clsid)
             .map_err(|e| format!("Не удалось задать CLSID для {}: {}", handler, e))?;
     }
+
+    // 4. Логирование
     let entry = LogEntry {
         timestamp: Utc::now().to_rfc3339(),
         event: "COM-сервер зарегистрирован".into(),
         status: "Успех".into(),
     };
-    state.logs.lock().push(entry.clone());
     activity_log::add_log(&state.logs, entry.event, entry.status);
-    Ok("COM-сервер успешно зарегистрирован. Перезапустите Проводник для применения.".to_string())
+
+    // 5. Автоматический перезапуск Проводника
+    std::process::Command::new("cmd")
+        .args(&["/C", "taskkill /f /im explorer.exe && start explorer.exe"])
+        .spawn()
+        .map_err(|e| format!("Не удалось перезапустить Проводник: {}", e))?;
+
+    Ok("COM-сервер успешно зарегистрирован и Проводник перезапущен.".to_string())
 }
 
 #[tauri::command]
@@ -103,12 +111,14 @@ pub fn unregister_com_server(state: State<AppState>) -> Result<String, String> {
         key.delete_subkey_all("")
             .map_err(|e| format!("Не удалось удалить {}: {}", clsid_path, e))?;
     }
+
+    // Логирование
     let entry = LogEntry {
         timestamp: Utc::now().to_rfc3339(),
         event: "COM-сервер удалён".into(),
         status: "Успех".into(),
     };
-    state.logs.lock().push(entry.clone());
     activity_log::add_log(&state.logs, entry.event, entry.status);
+
     Ok("COM-сервер успешно удалён из реестра.".to_string())
 }

@@ -21,7 +21,7 @@ pub fn update_folders(state: State<AppState>, folders: Vec<Folder>) -> Result<()
         event: format!("Обновлён список папок ({} шт.)", folders.len()),
         status: "Успех".to_string(),
     };
-    state.logs.lock().push(entry.clone());
+    // state.logs.lock().push(entry.clone());
     activity_log::add_log(&state.logs, entry.event, entry.status);
 
     Ok(())
@@ -38,7 +38,7 @@ pub fn toggle_favorite(state: State<AppState>, id: FolderId) -> Result<(), Strin
         event: format!("Переключено избранное для папки {}", id.0),
         status: "Успех".to_string(),
     };
-    state.logs.lock().push(entry.clone());
+    // state.logs.lock().push(entry.clone());
     activity_log::add_log(&state.logs, entry.event, entry.status);
 
     Ok(())
