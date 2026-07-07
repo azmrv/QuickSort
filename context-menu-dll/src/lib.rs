@@ -1,4 +1,6 @@
 mod shellext;
+mod pipe_client;
+
 use windows::core::{GUID, HRESULT, Interface};
 use windows::Win32::Foundation::{CLASS_E_CLASSNOTAVAILABLE, S_FALSE, E_POINTER, S_OK};
 use windows::Win32::System::Com::IClassFactory;
@@ -8,6 +10,8 @@ use std::ffi::c_void;
 use shellext::QuickSortClassFactory;
 use shellext::INSTANCE_COUNT;
 pub use shellext::CLSID_QUICKSORT;
+
+
 
 #[no_mangle]
 pub unsafe extern "system" fn DllMain(

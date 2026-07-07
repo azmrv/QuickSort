@@ -607,6 +607,8 @@ dependencies = [
  "log",
  "parking_lot",
  "quicksort",
+ "serde",
+ "serde_json",
  "simplelog",
  "windows 0.62.2",
  "windows-core 0.62.2",
@@ -2910,6 +2912,7 @@ name = "quicksort-domain"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "uuid",
 ]
 
 [[package]]

@@ -278,11 +278,11 @@ let execute_use_case = Arc::new(ExecuteOperationUseCase::new(
     conflict_resolver.clone(),
 ));
 
-let undo_use_case = Arc::new(UndoOperationUseCase::new(
-    op_repo.clone(),
-    file_system.clone(),
-    clock.clone(),
-));
+// let undo_use_case = Arc::new(UndoOperationUseCase::new(
+//     op_repo.clone(),
+//     file_system.clone(),
+//     clock.clone(),
+// ));
 
 let get_folders_use_case = Arc::new(GetFoldersUseCase::new(config_repo.clone()));
 

@@ -1,6 +1,10 @@
+//! Windows Shell Extension (COM) for QuickSort.
+//!
+//! This DLL is loaded by Explorer.exe and provides a cascading context menu.
+//! It communicates with the main Tauri app via Named Pipe.
+
 use std::cell::RefCell;
 use std::ffi::{CStr, OsString, c_void};
-use std::mem::MaybeUninit;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -8,11 +12,8 @@ use std::{mem, ptr};
 use std::sync::OnceLock;
 
 use parking_lot::Mutex;
-use quicksort::folder::repository::{JsonRepository, FolderRepository};
-use quicksort::models::Folder;
-use quicksort::move_engine::MoveEngine;
-use windows::core::{BOOL, GUID, HRESULT, IUnknown, Interface, PCWSTR, PSTR, PWSTR, Ref as WinRef, Result as WinResult, implement};
-use windows::Win32::Foundation::{CLASS_E_NOAGGREGATION, E_FAIL, E_NOINTERFACE, E_NOTIMPL, E_POINTER, S_OK, HMODULE};
+use windows::core::{BOOL, GUID, HRESULT, IUnknown, Interface, PCWSTR, PSTR, PWSTR, Ref as WinRef, Result as WinResult, implement, w};
+use windows::Win32::Foundation::{CLASS_E_NOAGGREGATION, E_FAIL, E_NOINTERFACE, E_NOTIMPL, E_POINTER, S_OK};
 use windows::Win32::System::Com::{IClassFactory, IClassFactory_Impl, IDataObject, FORMATETC, DVASPECT_CONTENT, TYMED_HGLOBAL, CoTaskMemFree};
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleExW, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT};
 use windows::Win32::System::Memory::GlobalLock;
@@ -25,45 +26,63 @@ use windows::Win32::UI::Shell::{
     IShellExtInit_Impl, SHGDN_FORPARSING, SHGDN_NORMAL, SHGDNF, SHGetDesktopFolder, StrRetToStrW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{HMENU, InsertMenuItemW, MENUITEMINFOW, MFS_ENABLED, MIIM_ID, MIIM_STATE, MIIM_STRING, CreatePopupMenu, InsertMenuW, MF_BYPOSITION, MF_POPUP, MessageBoxW, MB_OK};
-use windows_core::w;
+
+// Import pipe_client module (defined in separate file)
+use crate::pipe_client::{move_to_folder, OverwritePolicy};
+
+// ============================================================================
+// Logging initialization
+// ============================================================================
+
+static LOG_INIT: OnceLock<()> = OnceLock::new();
+
+fn init_logging() {
+    LOG_INIT.get_or_init(|| {
+        let log_dir = match std::env::var("APPDATA") {
+            Ok(appdata) => {
+                let mut p = std::path::PathBuf::from(appdata);
+                p.push("QuickSort");
+                let _ = std::fs::create_dir_all(&p);
+                p.push("quicksort_dll.log");
+                p
+            }
+            Err(_) => std::env::current_exe().unwrap_or_default().with_file_name("quicksort_dll.log"),
+        };
+
+        if let Ok(file) = std::fs::File::create(&log_dir) {
+            let config = simplelog::ConfigBuilder::new().add_filter_allow_str("quicksort").build();
+            let _ = simplelog::WriteLogger::init(simplelog::LevelFilter::Debug, config, file);
+            log::info!("DLL logging started.");
+        }
+    });
+}
+
+// ============================================================================
+// COM class: QuickSortShellExt
+// ============================================================================
 
 pub(crate) static INSTANCE_COUNT: AtomicU32 = AtomicU32::new(0);
 pub const CLSID_QUICKSORT: GUID = GUID::from_u128(0x12345678_1234_1234_1234_1234567890AB);
 
+// Simple folder struct for menu building
+#[derive(Debug, Clone)]
+struct MenuFolder {
+    id: String,
+    name: String,
+    path: String,
+    is_favorite: bool,
+}
+
 #[implement(IShellExtInit, IContextMenu)]
 pub struct QuickSortShellExt {
     item_paths: RefCell<Vec<PathBuf>>,
-    folders: Mutex<Vec<Folder>>,
+    folders: Mutex<Vec<MenuFolder>>,
 }
-
-impl QuickSortShellExt {
-    // pub const CLS_ID: GUID = GUID::from_u128(0x12345678_1234_1234_1234_1234567890AB);
-}
-
-static LOG_INIT: OnceLock<()> = OnceLock::new();
 
 impl Default for QuickSortShellExt {
     fn default() -> Self {
         INSTANCE_COUNT.fetch_add(1, Ordering::SeqCst);
-
-        LOG_INIT.get_or_init(|| {
-            let log_dir = match std::env::var("APPDATA") {
-                Ok(appdata) => {
-                    let mut p = std::path::PathBuf::from(appdata);
-                    p.push("QuickSort");
-                    let _ = std::fs::create_dir_all(&p);
-                    p.push("quicksort_dll.log");
-                    p
-                }
-                Err(_) => std::env::current_exe().unwrap_or_default().with_file_name("quicksort_dll.log"),
-            };
-
-            if let Ok(file) = std::fs::File::create(&log_dir) {
-                let config = simplelog::ConfigBuilder::new().add_filter_allow_str("quicksort").build();
-                let _ = simplelog::WriteLogger::init(simplelog::LevelFilter::Debug, config, file);
-                log::info!("DLL logging started.");
-            }
-        });
+        init_logging();
 
         Self {
             item_paths: Default::default(),
@@ -78,51 +97,55 @@ impl Drop for QuickSortShellExt {
     }
 }
 
-// ------------------- IShellExtInit -------------------
+// ============================================================================
+// IShellExtInit implementation
+// ============================================================================
+
 impl IShellExtInit_Impl for QuickSortShellExt_Impl {
     fn Initialize(
         &self,
-        folder_idl: *const ITEMIDLIST,
+        _folder_idl: *const ITEMIDLIST,
         data_obj: WinRef<'_, IDataObject>,
         _prog_id: HKEY,
     ) -> WinResult<()> {
         let paths = if let Some(data_obj) = data_obj.as_ref() {
             extract_files_from_dataobject(data_obj)?
         } else {
-            if folder_idl.is_null() {
-                return E_POINTER.ok();
-            }
-            vec![itemidlist_to_path(folder_idl)?]
+            return E_POINTER.ok();
         };
         self.this.item_paths.replace(paths);
         Ok(())
     }
 }
 
-// ------------------- Вспомогательные функции -------------------
+// ============================================================================
+// Helper functions for file extraction
+// ============================================================================
+
 unsafe fn dropfiles_to_paths(files: &DROPFILES) -> Vec<PathBuf> {
     let mut res = Vec::new();
     let is_wide = files.fWide.as_bool();
-    let mut str_ptr = unsafe { ptr::from_ref(files).cast::<u8>().add(files.pFiles as usize) };
+    let mut str_ptr = files as *const DROPFILES as *const u8;
+    str_ptr = str_ptr.add(files.pFiles as usize);
 
     loop {
         if is_wide {
-            if unsafe { str_ptr.cast::<u16>().read() } == 0 { break; }
+            if *(str_ptr as *const u16) == 0 { break; }
         } else {
-            if unsafe { str_ptr.read() } == 0 { break; }
+            if *str_ptr == 0 { break; }
         }
 
         let (bytes_shift, path) = if is_wide {
-            let s = PCWSTR(str_ptr.cast::<u16>());
-            let len = unsafe { s.len() };
-            (2 * (len + 1), PathBuf::from(OsString::from_wide(unsafe { s.as_wide() })))
+            let s = PCWSTR(str_ptr as *const u16);
+            let len = s.len();
+            (2 * (len + 1), PathBuf::from(OsString::from_wide(s.as_wide())))
         } else {
-            let s = unsafe { CStr::from_ptr(str_ptr.cast::<i8>()) };
+            let s = CStr::from_ptr(str_ptr as *const i8);
             let bytes = s.to_bytes();
             (bytes.len() + 1, PathBuf::from(String::from_utf8_lossy(bytes).into_owned()))
         };
         res.push(path);
-        str_ptr = unsafe { str_ptr.add(bytes_shift) };
+        str_ptr = str_ptr.add(bytes_shift);
     }
     res
 }
@@ -159,23 +182,10 @@ fn extract_files_from_dataobject(data_obj: &IDataObject) -> WinResult<Vec<PathBu
     Ok(files_list)
 }
 
-fn itemidlist_to_path(item_list: *const ITEMIDLIST) -> WinResult<PathBuf> {
-    let shell_folder = unsafe { SHGetDesktopFolder() }?;
-    let mut name = STRRET { uType: STRRET_WSTR.0 as u32, ..Default::default() };
+// ============================================================================
+// IContextMenu implementation
+// ============================================================================
 
-    unsafe { shell_folder.GetDisplayNameOf(item_list, SHGDNF(SHGDN_NORMAL.0 | SHGDN_FORPARSING.0), &mut name) }?;
-
-    let mut path_ptr = MaybeUninit::<PWSTR>::uninit();
-    unsafe { StrRetToStrW(&mut name as *mut STRRET, None, path_ptr.as_mut_ptr()) }?;
-    let path_ptr = unsafe { path_ptr.assume_init() };
-
-    let path_os = OsString::from_wide(unsafe { path_ptr.as_wide() });
-    unsafe { CoTaskMemFree(Some(path_ptr.as_ptr().cast())) };
-
-    Ok(path_os.into())
-}
-
-// ------------------- IContextMenu -------------------
 impl IContextMenu_Impl for QuickSortShellExt_Impl {
     fn QueryContextMenu(
         &self,
@@ -185,33 +195,28 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         max_cmd_id: u32,
         flags: u32,
     ) -> HRESULT {
-        log::info!("QueryContextMenu called");
-        // или
-        unsafe { MessageBoxW(None, w!("QueryContextMenu called!"), w!("QuickSort"), MB_OK); }
         if flags & CMF_DEFAULTONLY != 0 {
             return S_OK;
         }
 
-        let repo = match JsonRepository::new() {
-            Ok(r) => r,
-            Err(e) => { log::error!("JsonRepository::new failed: {:?}", e); return E_FAIL; }
-        };
-        let config = match repo.load() {
-            Ok(c) => c,
-            Err(e) => { log::error!("load config failed: {:?}", e); return E_FAIL; }
+        let folders = match load_folders_from_json() {
+            Ok(f) => f,
+            Err(e) => {
+                log::error!("Failed to load folders: {}", e);
+                return E_FAIL;
+            }
         };
 
-        let folders = config.folders.clone();
         *self.this.folders.lock() = folders.clone();
 
         unsafe {
             let h_submenu = CreatePopupMenu().unwrap();
             let mut current_id = min_cmd_id;
-            let max_id = max_cmd_id;
 
-            for folder in folders.iter().filter(|f| f.favorite) {
-                if current_id > max_id { break; }
-                let wide_name: Vec<u16> = std::ffi::OsString::from(&folder.name).encode_wide().chain(Some(0)).collect();
+            let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
+            for folder in favorites {
+                if current_id > max_cmd_id { break; }
+                let wide_name: Vec<u16> = OsString::from(&folder.name).encode_wide().chain(Some(0)).collect();
                 let item = MENUITEMINFOW {
                     cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
                     fMask: MIIM_ID | MIIM_STATE | MIIM_STRING,
@@ -225,23 +230,26 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 current_id += 1;
             }
 
-            if current_id <= max_id {
-                let other_text = windows::core::w!("📂 Другие папки...");
+            if current_id <= max_cmd_id {
+                let other_text = w!("📂 Все папки...");
+                let other_wide: Vec<u16> = other_text.as_wide().to_vec();
                 let item = MENUITEMINFOW {
                     cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
                     fMask: MIIM_ID | MIIM_STATE | MIIM_STRING,
                     wID: current_id,
                     fState: MFS_ENABLED,
-                    dwTypeData: PWSTR::from_raw(other_text.as_ptr() as *mut _),
-                    cch: other_text.len() as u32,
+                    dwTypeData: PWSTR::from_raw(other_wide.as_ptr() as *mut _),
+                    cch: other_wide.len() as u32,
                     ..Default::default()
                 };
                 let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &item);
                 current_id += 1;
             }
 
-            let root_text = windows::core::w!("QuickSort");
-            let _ = InsertMenuW(menu, menu_index, MF_BYPOSITION | MF_POPUP, h_submenu.0 as usize, root_text);
+            let root_text = w!("QuickSort");
+            let root_wide: Vec<u16> = root_text.as_wide().to_vec();
+            let root_pwstr = PWSTR::from_raw(root_wide.as_ptr() as *mut _);
+            let _ = InsertMenuW(menu, menu_index, MF_BYPOSITION | MF_POPUP, h_submenu.0 as usize, root_pwstr);
 
             HRESULT((current_id - min_cmd_id) as i32)
         }
@@ -255,15 +263,35 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         let verb = (ici.lpVerb.0 as usize) & 0xFFFF;
 
         let folders = self.this.folders.lock();
-        let favorites: Vec<&Folder> = folders.iter().filter(|f| f.favorite).collect();
+        let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
         let total_fav = favorites.len();
 
+        let sources: Vec<String> = self.this.item_paths.borrow()
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+
+        if sources.is_empty() {
+            log::warn!("No files selected");
+            return E_FAIL.ok();
+        }
+
         if verb < total_fav {
-            let target = &favorites[verb].path;
-            for path in self.this.item_paths.borrow().iter() {
-                if let Err(e) = MoveEngine::move_file(path, target) {
-                    log::error!("Move failed: {:?}", e);
+            let target = &favorites[verb];
+            let sources: Vec<String> = self.this.item_paths.borrow()
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect();
+
+            if let Err(e) = move_to_folder(sources, target.id.clone(), OverwritePolicy::Skip) {
+                log::error!("Failed to move: {}", e);
+                let msg = format!("Failed to move file: {}", e);
+                let wide_msg: Vec<u16> = OsString::from(msg).encode_wide().chain(Some(0)).collect();
+                unsafe {
+                    MessageBoxW(None, PCWSTR(wide_msg.as_ptr()), w!("QuickSort Error"), MB_OK);
                 }
+            } else {
+                log::info!("Move command sent successfully");
             }
         } else if verb == total_fav {
             for path in self.this.item_paths.borrow().iter() {
@@ -272,7 +300,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
 
                 let file_arg = format!("\"{}\"", path.display());
                 let params = format!("select-folder --file {}", file_arg);
-                let params_wide: Vec<u16> = std::ffi::OsString::from(&params)
+                let params_wide: Vec<u16> = OsString::from(&params)
                     .encode_wide()
                     .chain(Some(0))
                     .collect();
@@ -280,9 +308,9 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 unsafe {
                     let _ = windows::Win32::UI::Shell::ShellExecuteW(
                         None,
-                        windows::core::w!("open"),
-                        windows::core::PCWSTR(exe_path_wide.as_ptr()),
-                        windows::core::PCWSTR(params_wide.as_ptr()),
+                        w!("open"),
+                        PCWSTR(exe_path_wide.as_ptr()),
+                        PCWSTR(params_wide.as_ptr()),
                         None,
                         windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
                     );
@@ -308,6 +336,58 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
     }
 }
 
+// ============================================================================
+// Helper: load folders from JSON (temporary, will be replaced)
+// ============================================================================
+
+fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
+    let appdata = std::env::var("APPDATA")
+        .map_err(|_| "APPDATA not set".to_string())?;
+    let mut path = PathBuf::from(appdata);
+    path.push("QuickSort");
+    path.push("folders.json");
+
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read config: {}", e))?;
+
+    #[derive(serde::Deserialize)]
+    struct ConfigFile {
+        folders: Vec<FolderData>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct FolderData {
+        id: String,
+        name: String,
+        path: String,
+        favorite: bool,
+        order: i32,
+    }
+
+    let config: ConfigFile = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse config: {}", e))?;
+
+    let folders = config.folders
+        .into_iter()
+        .map(|f| MenuFolder {
+            id: f.id,
+            name: f.name,
+            path: f.path,
+            is_favorite: f.favorite,
+        })
+        .collect();
+
+    Ok(folders)
+}
+
+// ============================================================================
+// Helper: get path to quicksort.exe
+// ============================================================================
+
 fn get_quicksort_exe_path() -> PathBuf {
     let mut path = [0u16; 260];
     let len = unsafe { GetModuleFileNameW(None, &mut path) };
@@ -321,7 +401,10 @@ fn get_quicksort_exe_path() -> PathBuf {
     }
 }
 
-// ------------------- ClassFactory -------------------
+// ============================================================================
+// ClassFactory
+// ============================================================================
+
 #[implement(IClassFactory)]
 #[derive(Default)]
 pub struct QuickSortClassFactory;

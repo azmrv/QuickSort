@@ -5,6 +5,7 @@ mod value_objects;
 mod entities;
 mod events;
 mod errors;
+mod operation;
 
 pub use value_objects::*;
 pub use entities::*;

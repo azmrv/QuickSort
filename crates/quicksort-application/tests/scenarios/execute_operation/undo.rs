@@ -4,8 +4,8 @@ use std::time::SystemTime;
 use std::sync::Arc;
 
 use quicksort_domain::{OperationType, OperationState, OperationId};
-use quicksort_application::{UndoOperation, OperationCommand, OverwritePolicy};
-use quicksort_application::use_cases::{ExecuteOperationUseCase, UndoOperationUseCase};
+use quicksort_application::{ OperationCommand, OverwritePolicy};
+use quicksort_application::use_cases::{ExecuteOperationUseCase};
 use quicksort_application::errors::UseCaseError;
 
 use crate::common::*;
@@ -48,11 +48,11 @@ async fn undo_move_operation() {
     let op_id = result.operation_id;
 
     // Now undo
-    let undo_use_case = UndoOperationUseCase::new(
-        Arc::new(op_repo.clone()),
-        Arc::new(fs.clone()),
-        Arc::new(FrozenClock::new(SystemTime::now())),
-    );
+    // let undo_use_case = UndoOperationUseCase::new(
+    //     Arc::new(op_repo.clone()),
+    //     Arc::new(fs.clone()),
+    //     Arc::new(FrozenClock::new(SystemTime::now())),
+    // );
 
     let undo_result = undo_use_case.undo(op_id.clone()).await.unwrap();
 

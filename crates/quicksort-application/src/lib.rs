@@ -19,7 +19,7 @@ pub use errors::UseCaseError;
 pub use dtos::{OperationCommand, OperationResult, OverwritePolicy};
 pub use ports::inbound::{
     ExecuteOperation,
-    UndoOperation,
+    // UndoOperation,
     GetFolders,
     ManageFolders,
     ApplicationFacade,

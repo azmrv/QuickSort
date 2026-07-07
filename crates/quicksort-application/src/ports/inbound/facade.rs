@@ -5,7 +5,7 @@ use super::*;
 /// Combined interface for all inbound operations.
 pub trait ApplicationFacade:
     ExecuteOperation
-    + UndoOperation
+    // + UndoOperation
     + GetFolders
     + ManageFolders
     + Send
@@ -16,10 +16,11 @@ pub trait ApplicationFacade:
 // Blanket implementation for any type that implements all required traits.
 impl<T> ApplicationFacade for T where
     T: ExecuteOperation
-        + UndoOperation
+        // + UndoOperation
         + GetFolders
         + ManageFolders
         + Send
         + Sync
 {
+
 }

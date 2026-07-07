@@ -3,6 +3,7 @@
 
 mod operation_command;
 mod operation_result;
+mod pipe_command;
 
 pub use operation_command::{OperationCommand, OverwritePolicy};
 pub use operation_result::OperationResult;

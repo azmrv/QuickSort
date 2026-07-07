@@ -122,3 +122,8 @@ pub fn unregister_com_server(state: State<AppState>) -> Result<String, String> {
 
     Ok("COM-сервер успешно удалён из реестра.".to_string())
 }
+
+#[tauri::command]
+pub async fn undo_operation(state: State<'_, AppState>) -> Result<(), String> {
+    state.facade.undo_last().await.map_err(|e| e.to_string())
+}

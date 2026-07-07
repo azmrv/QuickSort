@@ -12,4 +12,5 @@ pub struct LogEntry {
 pub struct AppState {
     pub service: FolderService<JsonRepository>,
     pub logs: Mutex<Vec<LogEntry>>,
+    // pub facade: ()
 }

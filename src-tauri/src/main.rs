@@ -1,6 +1,3 @@
-//! Main entry point for Tauri application.
-//! This file integrates the legacy code with the new Clean Architecture.
-
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
@@ -11,6 +8,7 @@ mod logging;
 mod pending;
 mod state;
 mod activity_log;
+mod ipc_server;
 
 use clap::{Parser, Subcommand};
 use commands::{folders, move_cmd, settings};
@@ -24,23 +22,20 @@ use tauri::{
     Manager,
 };
 
-
 // ============================================================
 // New architecture imports
 // ============================================================
 use std::sync::Arc;
 use std::path::PathBuf;
 
-use quicksort_application::{ExecuteOperation, UndoOperation, GetFolders, ManageFolders};
+use quicksort_application::{ExecuteOperation, GetFolders, ManageFolders};
 use quicksort_application::dtos::{OperationCommand, OperationResult, OverwritePolicy};
 use quicksort_application::errors::UseCaseError;
-
 use quicksort_application::ports::inbound::ApplicationFacade;
 use quicksort_application::use_cases::{
-    ExecuteOperationUseCase, UndoOperationUseCase,
+    ExecuteOperationUseCase,
     GetFoldersUseCase, ManageFoldersUseCase,
 };
-
 use quicksort_application::ports::outbound::IdGenerator;
 
 use quicksort_infrastructure::{
@@ -50,11 +45,10 @@ use quicksort_infrastructure::{
 use quicksort_infrastructure::repository::InMemoryOperationRepository;
 
 // ============================================================
-// Application facade that holds all use cases and the ID generator
+// Application facade
 // ============================================================
 struct AppFacade {
     execute: Arc<ExecuteOperationUseCase>,
-    undo: Arc<UndoOperationUseCase>,
     get_folders: Arc<GetFoldersUseCase>,
     manage: Arc<ManageFoldersUseCase>,
     id_generator: Arc<dyn IdGenerator>,
@@ -63,11 +57,6 @@ struct AppFacade {
 impl AppFacade {
     async fn execute_operation(&self, command: OperationCommand) -> Result<OperationResult, UseCaseError> {
         ExecuteOperation::execute(&*self.execute, command).await
-    }
-
-    async fn undo_operation(&self, operation_id: String) -> Result<OperationResult, UseCaseError> {
-        let id = quicksort_domain::OperationId::from_string(operation_id);
-        UndoOperation::undo(&*self.undo, id).await
     }
 
     async fn get_folders(&self) -> Result<Vec<quicksort_domain::Folder>, UseCaseError> {
@@ -107,13 +96,12 @@ async fn execute_operation_v2(
     state.execute_operation(command).await.map_err(|e| e.to_string())
 }
 
+// UndoOperation is commented out because it's not yet implemented.
+// Will be added back in future when UndoOperationUseCase is ready.
+/*
 #[tauri::command]
-async fn undo_operation_v2(
-    state: tauri::State<'_, Arc<AppFacade>>,
-    operation_id: String,
-) -> Result<OperationResult, String> {
-    state.undo_operation(operation_id).await.map_err(|e| e.to_string())
-}
+async fn undo_operation_v2(...) { ... }
+*/
 
 #[tauri::command]
 async fn get_folders_v2(
@@ -200,6 +188,7 @@ fn start_tauri() {
     let state = AppState {
         service,
         logs: Mutex::new(logs),
+        // No `facade` field here – we manage it separately
     };
 
     // ============================================================
@@ -226,21 +215,18 @@ fn start_tauri() {
         clock.clone(),
         conflict_resolver.clone(),
     ));
-    let undo_use_case = Arc::new(UndoOperationUseCase::new(
-        operation_repo.clone(),
-        file_system.clone(),
-        clock.clone(),
-    ));
     let get_folders_use_case = Arc::new(GetFoldersUseCase::new(config_repo.clone()));
     let manage_folders_use_case = Arc::new(ManageFoldersUseCase::new(config_repo.clone()));
 
     let app_facade = Arc::new(AppFacade {
-        execute: execute_use_case,
-        undo: undo_use_case,
+        execute: execute_use_case.clone(),
         get_folders: get_folders_use_case,
         manage: manage_folders_use_case,
         id_generator: id_generator.clone(),
     });
+
+    // Start Named Pipe server (for DLL communication)
+    ipc_server::start_pipe_server(execute_use_case);
 
     // ============================================================
     // Tauri builder
@@ -250,7 +236,7 @@ fn start_tauri() {
         .manage(state)
         .manage(app_facade)
         .invoke_handler(tauri::generate_handler![
-            // Legacy commands
+            // Legacy commands – disabled, will be removed later
             // folders::get_folders,
             // folders::update_folders,
             // folders::toggle_favorite,
@@ -261,9 +247,10 @@ fn start_tauri() {
             // settings::get_logs,
             // settings::register_com_server,
             // settings::unregister_com_server,
+
             // New V2 commands
             execute_operation_v2,
-            undo_operation_v2,
+            // undo_operation_v2, // Commented out – Undo not implemented yet
             get_folders_v2,
             add_folder_v2,
             remove_folder_v2,
