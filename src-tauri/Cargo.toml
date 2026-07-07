@@ -25,3 +25,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 parking_lot = "0.12"
 win-ctx = "1.4.1"
 windows = { version = "0.58", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
+quicksort-application = { path = "../crates/quicksort-application" }
+quicksort-infrastructure = { path = "../crates/quicksort-infrastructure" }
+quicksort-domain = { path = "../crates/quicksort-domain" }
+dirs = "5"

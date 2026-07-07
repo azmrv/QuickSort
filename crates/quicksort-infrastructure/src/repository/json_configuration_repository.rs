@@ -1,9 +1,12 @@
+//! JSON-based implementation of ConfigurationRepository.
+//! Stores folders in a JSON file at the given path.
+
 use std::fs;
 use std::path::PathBuf;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use quicksort_domain::{Folder, FolderId};
+use quicksort_domain::{Folder, FolderId, WindowsPath};
 use quicksort_application::ports::outbound::ConfigurationRepository;
 use quicksort_application::errors::UseCaseError;
 
@@ -22,6 +25,7 @@ struct FolderData {
     sort_order: i32,
 }
 
+/// Repository that stores folder configuration in a JSON file.
 pub struct JsonConfigurationRepository {
     path: PathBuf,
 }
@@ -39,13 +43,21 @@ impl JsonConfigurationRepository {
             .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
         let config: ConfigFile = serde_json::from_str(&content)
             .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
-        Ok(config.folders.into_iter().map(|f| Folder {
-            id: FolderId::from_string(f.id),
-            name: f.name,
-            path: WindowsPath::new(&f.path).map_err(|e| UseCaseError::RepositoryError(e.to_string()))?,
-            is_favorite: f.is_favorite,
-            sort_order: f.sort_order,
-        }).collect())
+
+        // Convert each folder data to domain Folder, handling potential path validation errors.
+        let mut folders = Vec::with_capacity(config.folders.len());
+        for f in config.folders {
+            let path = WindowsPath::new(&f.path)
+                .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+            folders.push(Folder {
+                id: FolderId::from_string(f.id),
+                name: f.name,
+                path,
+                is_favorite: f.is_favorite,
+                sort_order: f.sort_order,
+            });
+        }
+        Ok(folders)
     }
 
     fn save_to_file(&self, folders: &[Folder]) -> Result<(), UseCaseError> {

@@ -1,3 +1,6 @@
+//! Main entry point for Tauri application.
+//! This file integrates the legacy code with the new Clean Architecture.
+
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
@@ -21,73 +24,80 @@ use tauri::{
     Manager,
 };
 
+
 // ============================================================
-// НОВЫЕ ИМПОРТЫ (новая архитектура)
+// New architecture imports
 // ============================================================
 use std::sync::Arc;
 use std::path::PathBuf;
+
+use quicksort_application::{ExecuteOperation, UndoOperation, GetFolders, ManageFolders};
+use quicksort_application::dtos::{OperationCommand, OperationResult, OverwritePolicy};
+use quicksort_application::errors::UseCaseError;
 
 use quicksort_application::ports::inbound::ApplicationFacade;
 use quicksort_application::use_cases::{
     ExecuteOperationUseCase, UndoOperationUseCase,
     GetFoldersUseCase, ManageFoldersUseCase,
 };
-use quicksort_application::dtos::{OperationCommand, OperationResult, OverwritePolicy};
-use quicksort_application::errors::UseCaseError;
+
+use quicksort_application::ports::outbound::IdGenerator;
+
 use quicksort_infrastructure::{
     JsonConfigurationRepository, StdFileSystem,
     UuidGenerator, SystemClock, DefaultConflictResolver,
 };
-// Для OperationRepository пока сделаем заглушку – позже реализуем
-use quicksort_infrastructure::repository::InMemoryOperationRepository; // временно
+use quicksort_infrastructure::repository::InMemoryOperationRepository;
 
 // ============================================================
-// НОВАЯ СТРУКТУРА ФАСАДА
+// Application facade that holds all use cases and the ID generator
 // ============================================================
 struct AppFacade {
     execute: Arc<ExecuteOperationUseCase>,
     undo: Arc<UndoOperationUseCase>,
     get_folders: Arc<GetFoldersUseCase>,
     manage: Arc<ManageFoldersUseCase>,
+    id_generator: Arc<dyn IdGenerator>,
 }
 
 impl AppFacade {
     async fn execute_operation(&self, command: OperationCommand) -> Result<OperationResult, UseCaseError> {
-        self.execute.execute(command).await
+        ExecuteOperation::execute(&*self.execute, command).await
     }
 
     async fn undo_operation(&self, operation_id: String) -> Result<OperationResult, UseCaseError> {
         let id = quicksort_domain::OperationId::from_string(operation_id);
-        self.undo.undo(id).await
+        UndoOperation::undo(&*self.undo, id).await
     }
 
     async fn get_folders(&self) -> Result<Vec<quicksort_domain::Folder>, UseCaseError> {
-        self.get_folders.get_all().await
+        GetFolders::get_all(&*self.get_folders).await
     }
 
     async fn add_folder(&self, name: String, path: String) -> Result<(), UseCaseError> {
-        let id = self.manage.generate_id(); // нужен метод в ManageFoldersUseCase
+        let id = self.id_generator.generate();
         let folder = quicksort_domain::Folder::new(
             quicksort_domain::FolderId::from_string(id),
             name,
-            quicksort_domain::WindowsPath::new(&path).map_err(|_| UseCaseError::InvalidCommand("Invalid path".to_string()))?,
+            quicksort_domain::WindowsPath::new(&path)
+                .map_err(|_| UseCaseError::InvalidCommand("Invalid path".to_string()))?,
         );
-        self.manage.add_folder(folder).await
+        ManageFolders::add_folder(&*self.manage, folder).await
     }
 
     async fn remove_folder(&self, id: String) -> Result<(), UseCaseError> {
         let folder_id = quicksort_domain::FolderId::from_string(id);
-        self.manage.remove_folder(folder_id).await
+        ManageFolders::remove_folder(&*self.manage, folder_id).await
     }
 
     async fn toggle_favorite(&self, id: String, order: i32) -> Result<(), UseCaseError> {
         let folder_id = quicksort_domain::FolderId::from_string(id);
-        self.manage.toggle_favorite(folder_id, order).await
+        ManageFolders::toggle_favorite(&*self.manage, folder_id, order).await
     }
 }
 
 // ============================================================
-// КОМАНДА-ОБЁРТКА ДЛЯ TAURI
+// Tauri command wrappers
 // ============================================================
 #[tauri::command]
 async fn execute_operation_v2(
@@ -139,7 +149,7 @@ async fn toggle_favorite_v2(
 }
 
 // ============================================================
-// СТАРЫЙ КОД (почти без изменений)
+// CLI and legacy code
 // ============================================================
 #[derive(Parser)]
 struct Cli {
@@ -180,7 +190,7 @@ fn main() {
 
 fn start_tauri() {
     // ============================================================
-    // СТАРЫЕ ИНИЦИАЛИЗАЦИИ (пока оставляем)
+    // Legacy state
     // ============================================================
     let logs = activity_log::load_logs();
     let repo = JsonRepository::new().expect("repo");
@@ -193,7 +203,7 @@ fn start_tauri() {
     };
 
     // ============================================================
-    // НОВАЯ ИНИЦИАЛИЗАЦИЯ (инфраструктура + фасад)
+    // New architecture infrastructure
     // ============================================================
     let config_dir = dirs::config_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -202,7 +212,6 @@ fn start_tauri() {
     let config_path = config_dir.join("folders.json");
 
     let config_repo = Arc::new(JsonConfigurationRepository::new(config_path));
-    // Временный репозиторий для истории (InMemory) – позже сделаем JSON
     let operation_repo = Arc::new(InMemoryOperationRepository::new());
     let file_system = Arc::new(StdFileSystem::new());
     let id_generator = Arc::new(UuidGenerator);
@@ -230,28 +239,29 @@ fn start_tauri() {
         undo: undo_use_case,
         get_folders: get_folders_use_case,
         manage: manage_folders_use_case,
+        id_generator: id_generator.clone(),
     });
 
     // ============================================================
-    // ЗАПУСК TAURI С НОВЫМИ КОМАНДАМИ
+    // Tauri builder
     // ============================================================
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(state)          // старый state – пока нужен для старых команд
-        .manage(app_facade)     // новый фасад
+        .manage(state)
+        .manage(app_facade)
         .invoke_handler(tauri::generate_handler![
-            // Старые команды (пока оставляем)
-            folders::get_folders,
-            folders::update_folders,
-            folders::toggle_favorite,
-            move_cmd::move_file,
-            settings::get_mode,
-            settings::get_pending_file,
-            settings::check_menu_status,
-            settings::get_logs,
-            settings::register_com_server,
-            settings::unregister_com_server,
-            // Новые команды (v2)
+            // Legacy commands
+            // folders::get_folders,
+            // folders::update_folders,
+            // folders::toggle_favorite,
+            // move_cmd::move_file,
+            // settings::get_mode,
+            // settings::get_pending_file,
+            // settings::check_menu_status,
+            // settings::get_logs,
+            // settings::register_com_server,
+            // settings::unregister_com_server,
+            // New V2 commands
             execute_operation_v2,
             undo_operation_v2,
             get_folders_v2,

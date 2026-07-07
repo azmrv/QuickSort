@@ -48,24 +48,31 @@ impl ExecuteOperationUseCase {
     ) -> Result<WindowsPath, UseCaseError> {
         let file_name = source.as_str().split('\\').last()
             .ok_or_else(|| UseCaseError::InvalidCommand("Invalid source path".to_string()))?;
-        let mut dest_path = WindowsPath::new(&format!("{}\\{}", target_folder.as_str(), file_name))
-            .map_err(|e| UseCaseError::Internal(e.to_string()))?;
 
-        let exists = self.file_system.exists(&dest_path).await?;
-        if !exists {
-            return Ok(dest_path);
-        }
+        // Build initial destination path
+        let initial_dest = WindowsPath::new(&format!("{}\\{}", target_folder.as_str(), file_name))
+            .map_err(|e| UseCaseError::Internal(e.to_string()))?;
 
         match policy {
             OverwritePolicy::Skip => {
-                Err(UseCaseError::Conflict(format!("File already exists: {}", dest_path.as_str())))
+                if self.file_system.exists(&initial_dest).await? {
+                    Err(UseCaseError::Conflict(format!("File already exists: {}", initial_dest.as_str())))
+                } else {
+                    Ok(initial_dest)
+                }
             }
-            OverwritePolicy::Overwrite => Ok(dest_path),
+            OverwritePolicy::Overwrite => Ok(initial_dest),
             OverwritePolicy::AutoRename => {
+                // Generate unique name with loop
                 let base_name = file_name.trim_end_matches(|c: char| c.is_ascii_digit() || c == '(' || c == ')' || c == ' ');
                 let mut counter = 1;
+                let ext = file_name.split('.').last().map(|s| format!(".{}", s)).unwrap_or_default();
                 loop {
-                    let new_name = format!("{} ({})", base_name, counter);
+                    let new_name = if counter == 1 {
+                        format!("{} (1){}", base_name, ext)
+                    } else {
+                        format!("{} ({}){}", base_name, counter, ext)
+                    };
                     let candidate = WindowsPath::new(&format!("{}\\{}", target_folder.as_str(), new_name))
                         .map_err(|e| UseCaseError::Internal(e.to_string()))?;
                     if !self.file_system.exists(&candidate).await? {
@@ -75,10 +82,52 @@ impl ExecuteOperationUseCase {
                 }
             }
             OverwritePolicy::Ask => {
-                // In production, this would trigger a user prompt via adapter.
-                // For now, fallback to AutoRename.
-                self.resolve_conflict(source, target_folder, OverwritePolicy::AutoRename).await
+                // Fallback to AutoRename (or delegate to ConflictResolver)
+                // For now, just call AutoRename logic (we'll copy the code or use a helper)
+                // To avoid recursion, we'll inline the logic or call a separate async fn.
+                // Let's just call the AutoRename branch directly (but we need to avoid recursion).
+                // Better: extract AutoRename logic into a separate non-recursive async fn.
+                self.resolve_with_auto_rename(source, target_folder).await
             }
+        }
+    }
+
+    async fn resolve_with_auto_rename(
+        &self,
+        source: &WindowsPath,
+        target_folder: &WindowsPath,
+    ) -> Result<WindowsPath, UseCaseError> {
+        // Same AutoRename logic as above (copy-paste or extract).
+        // But we can just call the same logic by using a loop and not recursive.
+        // Actually, we can just call resolve_conflict with AutoRename policy.
+        // But that would be recursive. So we'll just copy the loop.
+        // Alternatively, we can call a helper.
+        // I'll just move the AutoRename code to a separate function.
+        self.auto_rename(source, target_folder).await
+    }
+
+    async fn auto_rename(
+        &self,
+        source: &WindowsPath,
+        target_folder: &WindowsPath,
+    ) -> Result<WindowsPath, UseCaseError> {
+        let file_name = source.as_str().split('\\').last()
+            .ok_or_else(|| UseCaseError::InvalidCommand("Invalid source path".to_string()))?;
+        let base_name = file_name.trim_end_matches(|c: char| c.is_ascii_digit() || c == '(' || c == ')' || c == ' ');
+        let mut counter = 1;
+        let ext = file_name.split('.').last().map(|s| format!(".{}", s)).unwrap_or_default();
+        loop {
+            let new_name = if counter == 1 {
+                format!("{} (1){}", base_name, ext)
+            } else {
+                format!("{} ({}){}", base_name, counter, ext)
+            };
+            let candidate = WindowsPath::new(&format!("{}\\{}", target_folder.as_str(), new_name))
+                .map_err(|e| UseCaseError::Internal(e.to_string()))?;
+            if !self.file_system.exists(&candidate).await? {
+                return Ok(candidate);
+            }
+            counter += 1;
         }
     }
 }

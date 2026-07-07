@@ -1,9 +1,9 @@
 //! Result DTO returned by ExecuteOperation and UndoOperation.
-
+use serde::{Deserialize, Serialize};
 use quicksort_domain::{OperationId, OperationState};
 
 /// Result of a completed or failed operation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationResult {
     pub operation_id: OperationId,
     pub state: OperationState,
@@ -13,3 +13,4 @@ pub struct OperationResult {
     // pub failed_files: Vec<WindowsPath>,
     // pub errors: Vec<String>,
 }
+

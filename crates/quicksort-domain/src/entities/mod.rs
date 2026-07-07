@@ -4,8 +4,9 @@ use crate::value_objects::{FolderId, OperationId, WindowsPath};
 use crate::events::DomainEvent;
 use crate::errors::DomainError;
 use std::time::SystemTime;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Folder {
     pub id: FolderId,
     pub name: String,
@@ -26,7 +27,7 @@ impl Folder {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OperationType {
     Move,
     Copy,
@@ -34,7 +35,7 @@ pub enum OperationType {
     Rename,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OperationState {
     Pending,
     Executing,

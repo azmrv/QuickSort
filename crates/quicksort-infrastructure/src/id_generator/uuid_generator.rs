@@ -5,6 +5,6 @@ pub struct UuidGenerator;
 
 impl IdGenerator for UuidGenerator {
     fn generate(&self) -> String {
-        Uuid::now_v7().to_string()
+        Uuid::new_v4().to_string()
     }
 }

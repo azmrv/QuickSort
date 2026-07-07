@@ -1,8 +1,10 @@
 //! Value objects – immutable, self-validating types.
 
 use crate::errors::DomainError;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WindowsPath(String);
 
 impl WindowsPath {
@@ -24,7 +26,7 @@ impl WindowsPath {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FolderId(pub String);
 
 impl FolderId {
@@ -36,7 +38,7 @@ impl FolderId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct OperationId(pub String);
 
 impl OperationId {
