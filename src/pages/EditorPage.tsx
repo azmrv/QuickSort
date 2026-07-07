@@ -18,42 +18,70 @@ interface EditorPageProps {
 const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
     const [folders, setFolders] = useState<Folder[]>([]);
 
+    // Загрузка папок через новую команду
     useEffect(() => {
-        invoke<Folder[]>('get_folders').then(setFolders).catch(console.error);
+        invoke<Folder[]>('get_folders_v2')
+            .then(setFolders)
+            .catch(console.error);
     }, []);
 
     const handleAddFolder = (name: string, path: string) => {
-        const newFolder: Folder = {
-            id: crypto.randomUUID(),
-            name,
-            path,
-            favorite: false,
-            order: folders.length + 1,
-            stats: { use_count: 0, last_used: null },
-        };
-        setFolders([...folders, newFolder]);
+        // Вызываем новую команду add_folder_v2
+        invoke('add_folder_v2', { name, path })
+            .then(() => {
+                // После успешного добавления перезагружаем список
+                return invoke<Folder[]>('get_folders_v2');
+            })
+            .then(setFolders)
+            .catch(err => message.error(`Ошибка добавления: ${err}`));
     };
 
     const handleRename = (id: string, newName: string) => {
+        // Пока нет отдельной команды rename_folder – обновляем локально
         setFolders(folders.map((f) => (f.id === id ? { ...f, name: newName } : f)));
+        // TODO: вызвать rename_folder_v2, когда будет реализовано
     };
 
     const handleToggleFavorite = async (id: string) => {
-        setFolders(folders.map((f) => (f.id === id ? { ...f, favorite: !f.favorite } : f)));
+        // Находим папку и её текущий порядок
+        const folder = folders.find(f => f.id === id);
+        if (!folder) return;
+        const newOrder = folder.is_favorite ? 0 : folders.filter(f => f.is_favorite).length + 1;
+
+        // Оптимистичное обновление UI
+        setFolders(folders.map((f) =>
+            f.id === id ? { ...f, is_favorite: !f.is_favorite, sort_order: newOrder } : f
+        ));
+
         try {
-            await invoke('toggle_favorite', { id });
+            await invoke('toggle_favorite_v2', { id, order: newOrder });
         } catch (err) {
             console.error(err);
+            // Откатываем при ошибке
+            setFolders(folders);
+            message.error('Ошибка обновления избранного');
         }
     };
 
     const handleApply = async (newFolders: Folder[]) => {
+        // Применяем изменения (переупорядочивание) – можно вызвать update_folders_v2, но его пока нет.
+        // Просто обновляем локальный список.
         setFolders(newFolders);
     };
 
     const handleDeleteMenu = async () => {
-        await invoke('update_folders', { folders: [] });
-        setFolders([]);
+        // Удаляем все папки по одной
+        try {
+            for (const folder of folders) {
+                await invoke('remove_folder_v2', { id: folder.id });
+            }
+            // Перезагружаем список
+            const updated = await invoke<Folder[]>('get_folders_v2');
+            setFolders(updated);
+            message.success('Все папки удалены');
+        } catch (err) {
+            message.error(`Ошибка удаления: ${err}`);
+        }
     };
 
     const handleRegisterComServer = async () => {

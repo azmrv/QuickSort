@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Input, List, Typography, message } from 'antd';
 import { FolderOpenOutlined } from '@ant-design/icons';
-import { Folder } from '../types';
+import { Folder, OperationCommand } from '../types';
 
 const { Text } = Typography;
 
@@ -16,7 +16,9 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
     const [search, setSearch] = useState('');
 
     useEffect(() => {
-        invoke<Folder[]>('get_folders').then(setFolders).catch(console.error);
+        invoke<Folder[]>('get_folders_v2')
+            .then(setFolders)
+            .catch(console.error);
     }, []);
 
     const filtered = folders.filter(
@@ -31,7 +33,14 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
             return;
         }
         try {
-            await invoke('move_file', { src: file, destDir: folder.path });
+            // Формируем команду Move
+            const command: OperationCommand = {
+                operation_type: 'Move',
+                source_paths: [file],
+                target_folder_id: folder.id,
+                overwrite_policy: 'Skip',
+            };
+            await invoke('execute_operation_v2', { command });
             message.success(`Файл перемещён в ${folder.name}`);
             onClose(); // возвращаемся в редактор
         } catch (err) {

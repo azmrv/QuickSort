@@ -44,7 +44,7 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
                 <List.Item
                     actions={[
                         <Switch
-                            checked={folder.favorite}
+                            checked={folder.is_favorite}
                             onChange={() => onToggleFavorite(folder.id)}
                             checkedChildren={<StarOutlined />}
                             unCheckedChildren={<StarOutlined />}
