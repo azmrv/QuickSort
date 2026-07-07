@@ -5,11 +5,11 @@ use std::path::PathBuf;
 
 /// Путь к файлу лога
 fn log_path() -> PathBuf {
-    let dir = directories::ProjectDirs::from("com", "pr0math3us", "QuickSort")
-        .map(|d| d.config_dir().to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("."));
-    std::fs::create_dir_all(&dir).ok();
-    dir.join("activity.json")
+    let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+    let mut path = PathBuf::from(appdata);
+    path.push("QuickSort");
+    std::fs::create_dir_all(&path).ok();
+    path.join("activity.json")
 }
 
 /// Загрузить логи из файла (максимум 500)

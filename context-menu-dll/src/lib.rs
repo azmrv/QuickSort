@@ -1,11 +1,10 @@
 mod shellext;
 use windows::core::{GUID, HRESULT, Interface};
-use windows::Win32::Foundation::{CLASS_E_CLASSNOTAVAILABLE, S_FALSE, E_POINTER};
+use windows::Win32::Foundation::{CLASS_E_CLASSNOTAVAILABLE, S_FALSE, E_POINTER, S_OK};
 use windows::Win32::System::Com::IClassFactory;
 use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_OK};
 use windows::core::w;
 use std::ffi::c_void;
-
 use shellext::QuickSortClassFactory;
 use shellext::INSTANCE_COUNT;
 pub use shellext::CLSID_QUICKSORT;
@@ -24,6 +23,7 @@ pub unsafe extern "system" fn DllMain(
 
 #[no_mangle]
 pub unsafe extern "system" fn DllGetClassObject(
+    
     rclsid: *const GUID,
     riid: *const GUID,
     ppv: *mut *mut c_void,

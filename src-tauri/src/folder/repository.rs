@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use anyhow::Result;
 use crate::models::Config;
 
@@ -7,22 +8,21 @@ pub trait FolderRepository {
 }
 
 pub struct JsonRepository {
-    pub(in crate::folder) path: std::path::PathBuf,
+    pub(in crate::folder) path: PathBuf,
 }
 
 impl JsonRepository {
-    /// Создаёт новый репозиторий, хранящий данные в %APPDATA%\QuickSort\folders.json
     pub fn new() -> Result<Self> {
-        let dir = std::env::var("APPDATA")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| std::path::PathBuf::from("."))
-            .join("QuickSort");
-        std::fs::create_dir_all(&dir)?;
-        Ok(Self {
-            path: dir.join("folders.json"),
-        })
+        let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+        let mut path = PathBuf::from(appdata);
+        path.push("QuickSort");
+        std::fs::create_dir_all(&path)?;
+        Ok(Self { path: path.join("folders.json") })
     }
 }
+
+
+
 
 impl FolderRepository for JsonRepository {
     fn load(&self) -> Result<Config> {

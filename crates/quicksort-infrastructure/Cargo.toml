@@ -1,0 +1,11 @@
+[package]
+name = "quicksort-infrastructure"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+quicksort-domain = { path = "../quicksort-domain" }
+quicksort-application = { path = "../quicksort-application" }
+# We'll add windows, serde, etc. later

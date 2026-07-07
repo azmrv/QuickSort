@@ -8,9 +8,9 @@ use std::{mem, ptr};
 use std::sync::OnceLock;
 
 use parking_lot::Mutex;
-use quicksort_lib::folder::repository::{JsonRepository, FolderRepository};
-use quicksort_lib::models::Folder;
-use quicksort_lib::move_engine::MoveEngine;
+use quicksort::folder::repository::{JsonRepository, FolderRepository};
+use quicksort::models::Folder;
+use quicksort::move_engine::MoveEngine;
 use windows::core::{BOOL, GUID, HRESULT, IUnknown, Interface, PCWSTR, PSTR, PWSTR, Ref as WinRef, Result as WinResult, implement};
 use windows::Win32::Foundation::{CLASS_E_NOAGGREGATION, E_FAIL, E_NOINTERFACE, E_NOTIMPL, E_POINTER, S_OK, HMODULE};
 use windows::Win32::System::Com::{IClassFactory, IClassFactory_Impl, IDataObject, FORMATETC, DVASPECT_CONTENT, TYMED_HGLOBAL, CoTaskMemFree};
@@ -24,10 +24,8 @@ use windows::Win32::UI::Shell::{
     GCS_VALIDATEW, IContextMenu, IContextMenu_Impl, IShellExtInit,
     IShellExtInit_Impl, SHGDN_FORPARSING, SHGDN_NORMAL, SHGDNF, SHGetDesktopFolder, StrRetToStrW,
 };
-use windows::Win32::UI::WindowsAndMessaging::{
-    HMENU, InsertMenuItemW, MENUITEMINFOW, MFS_ENABLED, MIIM_ID, MIIM_STATE, MIIM_STRING,
-    CreatePopupMenu, InsertMenuW, MF_BYPOSITION, MF_POPUP,
-};
+use windows::Win32::UI::WindowsAndMessaging::{HMENU, InsertMenuItemW, MENUITEMINFOW, MFS_ENABLED, MIIM_ID, MIIM_STATE, MIIM_STRING, CreatePopupMenu, InsertMenuW, MF_BYPOSITION, MF_POPUP, MessageBoxW, MB_OK};
+use windows_core::w;
 
 pub(crate) static INSTANCE_COUNT: AtomicU32 = AtomicU32::new(0);
 pub const CLSID_QUICKSORT: GUID = GUID::from_u128(0x12345678_1234_1234_1234_1234567890AB);
@@ -187,6 +185,9 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         max_cmd_id: u32,
         flags: u32,
     ) -> HRESULT {
+        log::info!("QueryContextMenu called");
+        // или
+        unsafe { MessageBoxW(None, w!("QueryContextMenu called!"), w!("QuickSort"), MB_OK); }
         if flags & CMF_DEFAULTONLY != 0 {
             return S_OK;
         }
@@ -336,22 +337,29 @@ impl IClassFactory_Impl for QuickSortClassFactory_Impl {
             return Err(CLASS_E_NOAGGREGATION.into());
         }
 
-        let iface_id = unsafe { *iface_id };
         unsafe { *obj_out = ptr::null_mut(); }
 
-        match iface_id {
+        match unsafe { *iface_id } {
             IUnknown::IID => {
-                unsafe { *obj_out = IUnknown::from(QuickSortShellExt::default()).into_raw(); }
+                unsafe {
+                    *obj_out = IUnknown::from(QuickSortShellExt::default()).into_raw();
+                }
+                Ok(())
             }
             IShellExtInit::IID => {
-                unsafe { *obj_out = IShellExtInit::from(QuickSortShellExt::default()).into_raw(); }
+                unsafe {
+                    *obj_out = IShellExtInit::from(QuickSortShellExt::default()).into_raw();
+                }
+                Ok(())
             }
             IContextMenu::IID => {
-                unsafe { *obj_out = IContextMenu::from(QuickSortShellExt::default()).into_raw(); }
+                unsafe {
+                    *obj_out = IContextMenu::from(QuickSortShellExt::default()).into_raw();
+                }
+                Ok(())
             }
-            _ => return Err(E_NOINTERFACE.into()),
+            _ => Err(E_NOINTERFACE.into()),
         }
-        Ok(())
     }
 
     fn LockServer(&self, lock: BOOL) -> WinResult<()> {

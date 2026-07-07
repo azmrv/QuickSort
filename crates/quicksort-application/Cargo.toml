@@ -1,0 +1,12 @@
+[package]
+name = "quicksort-application"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+quicksort-domain = { path = "../quicksort-domain" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

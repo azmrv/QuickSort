@@ -21,6 +21,126 @@ use tauri::{
     Manager,
 };
 
+// ============================================================
+// НОВЫЕ ИМПОРТЫ (новая архитектура)
+// ============================================================
+use std::sync::Arc;
+use std::path::PathBuf;
+
+use quicksort_application::ports::inbound::ApplicationFacade;
+use quicksort_application::use_cases::{
+    ExecuteOperationUseCase, UndoOperationUseCase,
+    GetFoldersUseCase, ManageFoldersUseCase,
+};
+use quicksort_application::dtos::{OperationCommand, OperationResult, OverwritePolicy};
+use quicksort_application::errors::UseCaseError;
+use quicksort_infrastructure::{
+    JsonConfigurationRepository, StdFileSystem,
+    UuidGenerator, SystemClock, DefaultConflictResolver,
+};
+// Для OperationRepository пока сделаем заглушку – позже реализуем
+use quicksort_infrastructure::repository::InMemoryOperationRepository; // временно
+
+// ============================================================
+// НОВАЯ СТРУКТУРА ФАСАДА
+// ============================================================
+struct AppFacade {
+    execute: Arc<ExecuteOperationUseCase>,
+    undo: Arc<UndoOperationUseCase>,
+    get_folders: Arc<GetFoldersUseCase>,
+    manage: Arc<ManageFoldersUseCase>,
+}
+
+impl AppFacade {
+    async fn execute_operation(&self, command: OperationCommand) -> Result<OperationResult, UseCaseError> {
+        self.execute.execute(command).await
+    }
+
+    async fn undo_operation(&self, operation_id: String) -> Result<OperationResult, UseCaseError> {
+        let id = quicksort_domain::OperationId::from_string(operation_id);
+        self.undo.undo(id).await
+    }
+
+    async fn get_folders(&self) -> Result<Vec<quicksort_domain::Folder>, UseCaseError> {
+        self.get_folders.get_all().await
+    }
+
+    async fn add_folder(&self, name: String, path: String) -> Result<(), UseCaseError> {
+        let id = self.manage.generate_id(); // нужен метод в ManageFoldersUseCase
+        let folder = quicksort_domain::Folder::new(
+            quicksort_domain::FolderId::from_string(id),
+            name,
+            quicksort_domain::WindowsPath::new(&path).map_err(|_| UseCaseError::InvalidCommand("Invalid path".to_string()))?,
+        );
+        self.manage.add_folder(folder).await
+    }
+
+    async fn remove_folder(&self, id: String) -> Result<(), UseCaseError> {
+        let folder_id = quicksort_domain::FolderId::from_string(id);
+        self.manage.remove_folder(folder_id).await
+    }
+
+    async fn toggle_favorite(&self, id: String, order: i32) -> Result<(), UseCaseError> {
+        let folder_id = quicksort_domain::FolderId::from_string(id);
+        self.manage.toggle_favorite(folder_id, order).await
+    }
+}
+
+// ============================================================
+// КОМАНДА-ОБЁРТКА ДЛЯ TAURI
+// ============================================================
+#[tauri::command]
+async fn execute_operation_v2(
+    state: tauri::State<'_, Arc<AppFacade>>,
+    command: OperationCommand,
+) -> Result<OperationResult, String> {
+    state.execute_operation(command).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn undo_operation_v2(
+    state: tauri::State<'_, Arc<AppFacade>>,
+    operation_id: String,
+) -> Result<OperationResult, String> {
+    state.undo_operation(operation_id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_folders_v2(
+    state: tauri::State<'_, Arc<AppFacade>>,
+) -> Result<Vec<quicksort_domain::Folder>, String> {
+    state.get_folders().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn add_folder_v2(
+    state: tauri::State<'_, Arc<AppFacade>>,
+    name: String,
+    path: String,
+) -> Result<(), String> {
+    state.add_folder(name, path).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn remove_folder_v2(
+    state: tauri::State<'_, Arc<AppFacade>>,
+    id: String,
+) -> Result<(), String> {
+    state.remove_folder(id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn toggle_favorite_v2(
+    state: tauri::State<'_, Arc<AppFacade>>,
+    id: String,
+    order: i32,
+) -> Result<(), String> {
+    state.toggle_favorite(id, order).await.map_err(|e| e.to_string())
+}
+
+// ============================================================
+// СТАРЫЙ КОД (почти без изменений)
+// ============================================================
 #[derive(Parser)]
 struct Cli {
     #[command(subcommand)]
@@ -29,15 +149,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Переместить файл (позиционные аргументы: TARGET FILE)
-    Move {
-        target: String,
-        file: String,
-    },
-    /// Открыть окно выбора папки (позиционный аргумент: FILE)
-    SelectFolder {
-        file: String,
-    },
+    Move { target: String, file: String },
+    SelectFolder { file: String },
 }
 
 fn main() {
@@ -66,26 +179,68 @@ fn main() {
 }
 
 fn start_tauri() {
+    // ============================================================
+    // СТАРЫЕ ИНИЦИАЛИЗАЦИИ (пока оставляем)
+    // ============================================================
     let logs = activity_log::load_logs();
     let repo = JsonRepository::new().expect("repo");
     let service = FolderService::new(repo);
     let _folders = service.list().unwrap_or_default();
-
-    // Меню больше не устанавливаем через реестр — это делает COM-сервер.
-    // if !folders.is_empty() {
-    //     let model = context_menu::model::MenuModel::from_folders(&folders);
-    //     context_menu::registry::RegistryInstaller::install(&model, &exe_path).ok();
-    // }
 
     let state = AppState {
         service,
         logs: Mutex::new(logs),
     };
 
+    // ============================================================
+    // НОВАЯ ИНИЦИАЛИЗАЦИЯ (инфраструктура + фасад)
+    // ============================================================
+    let config_dir = dirs::config_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("QuickSort");
+    std::fs::create_dir_all(&config_dir).unwrap_or(());
+    let config_path = config_dir.join("folders.json");
+
+    let config_repo = Arc::new(JsonConfigurationRepository::new(config_path));
+    // Временный репозиторий для истории (InMemory) – позже сделаем JSON
+    let operation_repo = Arc::new(InMemoryOperationRepository::new());
+    let file_system = Arc::new(StdFileSystem::new());
+    let id_generator = Arc::new(UuidGenerator);
+    let clock = Arc::new(SystemClock);
+    let conflict_resolver = Arc::new(DefaultConflictResolver);
+
+    let execute_use_case = Arc::new(ExecuteOperationUseCase::new(
+        config_repo.clone(),
+        operation_repo.clone(),
+        file_system.clone(),
+        id_generator.clone(),
+        clock.clone(),
+        conflict_resolver.clone(),
+    ));
+    let undo_use_case = Arc::new(UndoOperationUseCase::new(
+        operation_repo.clone(),
+        file_system.clone(),
+        clock.clone(),
+    ));
+    let get_folders_use_case = Arc::new(GetFoldersUseCase::new(config_repo.clone()));
+    let manage_folders_use_case = Arc::new(ManageFoldersUseCase::new(config_repo.clone()));
+
+    let app_facade = Arc::new(AppFacade {
+        execute: execute_use_case,
+        undo: undo_use_case,
+        get_folders: get_folders_use_case,
+        manage: manage_folders_use_case,
+    });
+
+    // ============================================================
+    // ЗАПУСК TAURI С НОВЫМИ КОМАНДАМИ
+    // ============================================================
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(state)
+        .manage(state)          // старый state – пока нужен для старых команд
+        .manage(app_facade)     // новый фасад
         .invoke_handler(tauri::generate_handler![
+            // Старые команды (пока оставляем)
             folders::get_folders,
             folders::update_folders,
             folders::toggle_favorite,
@@ -96,6 +251,13 @@ fn start_tauri() {
             settings::get_logs,
             settings::register_com_server,
             settings::unregister_com_server,
+            // Новые команды (v2)
+            execute_operation_v2,
+            undo_operation_v2,
+            get_folders_v2,
+            add_folder_v2,
+            remove_folder_v2,
+            toggle_favorite_v2,
         ])
         .setup(|app| {
             let open = MenuItemBuilder::with_id("open", "Открыть редактор").build(app)?;
@@ -114,7 +276,6 @@ fn start_tauri() {
                             }
                         }
                         "quit" => {
-                            // При выходе из трея удаляем COM-сервер? Нет, пусть остаётся.
                             app.exit(0);
                         }
                         _ => {}

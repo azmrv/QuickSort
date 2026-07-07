@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-quicksort_lib = { package = "quicksort", path = "../src-tauri" }
+quicksort = {path = "../src-tauri" }
 log = "0.4"
 simplelog = "0.12"
 windows = { version = "0.62.2", features = [
