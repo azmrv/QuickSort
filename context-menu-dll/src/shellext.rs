@@ -61,7 +61,7 @@ fn init_logging() {
 // COM class: QuickSortShellExt
 // ============================================================================
 
-pub(crate) static INSTANCE_COUNT: AtomicU32 = AtomicU32::new(0);
+pub static INSTANCE_COUNT: AtomicU32 = AtomicU32::new(0);
 pub const CLSID_QUICKSORT: GUID = GUID::from_u128(0x12345678_1234_1234_1234_1234567890AB);
 
 // Simple folder struct for menu building

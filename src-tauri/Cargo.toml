@@ -29,3 +29,4 @@ quicksort-application = { path = "../crates/quicksort-application" }
 quicksort-infrastructure = { path = "../crates/quicksort-infrastructure" }
 quicksort-domain = { path = "../crates/quicksort-domain" }
 dirs = "5"
+tokio = { workspace = true, features = ["rt", "net", "time", "macros", "io-util"] }

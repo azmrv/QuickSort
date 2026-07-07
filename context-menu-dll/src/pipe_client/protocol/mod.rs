@@ -1,8 +1,8 @@
 //! IPC protocol definitions.
 
-mod header;
-mod envelope;
-mod codec;
+pub(crate) mod header;
+pub(crate) mod envelope;
+pub(crate) mod codec;
 
 pub use header::*;
 pub use envelope::*;

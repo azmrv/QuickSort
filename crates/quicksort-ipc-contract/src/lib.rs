@@ -1,9 +1,12 @@
-//! Serialization codec: converts commands to bytes.
+//! Единый IPC-протокол для QuickSort.
+//! Используется DLL (клиент) и Tauri (сервер).
 
 use serde::{Deserialize, Serialize};
-use crate::pipe_client::error::PipeError;
-use super::envelope::MessageEnvelope;
 
+pub const PROTOCOL_VERSION: u16 = 1;
+pub const MAGIC: u32 = 0x51535452; // "QSTR"
+
+/// Команда от клиента к серверу.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum CommandMessage {
@@ -11,6 +14,7 @@ pub enum CommandMessage {
     Ping,
 }
 
+/// Данные для выполнения операции.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecuteOperationData {
     pub operation_type: OperationType,
@@ -19,7 +23,7 @@ pub struct ExecuteOperationData {
     pub overwrite_policy: OverwritePolicy,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OperationType {
     Move,
     Copy,
@@ -27,7 +31,7 @@ pub enum OperationType {
     Rename,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OverwritePolicy {
     Skip,
     Overwrite,
@@ -35,7 +39,8 @@ pub enum OverwritePolicy {
     Ask,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Ответ сервера клиенту.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseMessage {
     pub status: ResponseStatus,
     pub message: String,
@@ -48,20 +53,4 @@ pub enum ResponseStatus {
     Ok,
     Error,
     Pending,
-}
-
-pub struct Codec;
-
-impl Codec {
-    pub fn encode_command(command: CommandMessage) -> Result<Vec<u8>, PipeError> {
-        let json = serde_json::to_vec(&command)?;
-        let envelope = MessageEnvelope::new(json)?;
-        Ok(envelope.encode())
-    }
-
-    pub fn decode_response(data: &[u8]) -> Result<ResponseMessage, PipeError> {
-        let envelope = MessageEnvelope::decode(data)?;
-        let response: ResponseMessage = serde_json::from_slice(&envelope.payload)?;
-        Ok(response)
-    }
 }

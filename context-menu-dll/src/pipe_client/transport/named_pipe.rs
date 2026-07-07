@@ -14,7 +14,8 @@ use windows::Win32::Storage::FileSystem::{
 };
 use windows::Win32::System::Pipes::WaitNamedPipeW;
 use crate::pipe_client::error::PipeError;
-use super::trait::PipeTransport;
+use crate::pipe_client::protocol::*;  // <-- добавлен импорт
+use super::PipeTransport;
 
 const PIPE_NAME: &str = r"\\.\pipe\quicksort_cmd";
 const CONNECT_TIMEOUT_MS: u32 = 100;

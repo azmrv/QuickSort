@@ -8,26 +8,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 quicksort = {path = "../src-tauri" }
+quicksort-ipc-contract = { path = "../crates/quicksort-ipc-contract" }
 log = "0.4"
 simplelog = "0.12"
-windows = { version = "0.62.2", features = [
-    "Win32_Foundation",
-    "Win32_System_Com",
-    "Win32_System_Com_StructuredStorage",
-    "Win32_System_Memory",
-    "Win32_System_Ole",
-    "Win32_System_Registry",
-    "Win32_System_SystemServices",
-    "Win32_System_LibraryLoader",
-    "Win32_UI_Shell",
-    "Win32_UI_Shell_Common",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_Graphics_Gdi",
-    "Win32_System_Pipes",
-    "Win32_Storage_FileSystem",
-    "Win32_System_IO",
-    "implement",
-] }
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Registry", "Win32_System_SystemServices", "Win32_System_LibraryLoader", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_Security"] }
 windows-implement = "0.60.2"
 windows-core = "0.62.2"
 parking_lot = "0.12"
@@ -35,7 +19,7 @@ anyhow = "1"
 serde_json = "1.0.150"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "1"
-
+bytes = "1.12.0"
 
 
 

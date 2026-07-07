@@ -1,50 +1,66 @@
-mod shellext;
+//! Windows Shell Extension DLL entry points.
+
 mod pipe_client;
+mod shellext;
 
-use windows::core::{GUID, HRESULT, Interface};
-use windows::Win32::Foundation::{CLASS_E_CLASSNOTAVAILABLE, S_FALSE, E_POINTER, S_OK};
-use windows::Win32::System::Com::IClassFactory;
-use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_OK};
-use windows::core::w;
-use std::ffi::c_void;
-use shellext::QuickSortClassFactory;
-use shellext::INSTANCE_COUNT;
-pub use shellext::CLSID_QUICKSORT;
+use std::ptr;
+use std::sync::atomic::Ordering;
+use windows::core::{GUID, HRESULT, IUnknown, Interface};
+use windows::Win32::Foundation::{CLASS_E_CLASSNOTAVAILABLE, E_INVALIDARG, E_POINTER, S_FALSE, S_OK};
 
+use shellext::{CLSID_QUICKSORT, QuickSortClassFactory, INSTANCE_COUNT};
 
-
+/// DllGetClassObject - returns a class factory for the requested CLSID.
 #[no_mangle]
-pub unsafe extern "system" fn DllMain(
-    _hinst: windows::Win32::Foundation::HINSTANCE,
-    reason: u32,
-    _reserved: *const c_void,
-) -> bool {
-    if reason == 1 { // DLL_PROCESS_ATTACH
-        MessageBoxW(None, w!("DLL_PROCESS_ATTACH"), w!("QuickSort DLL"), MB_OK);
-    }
-    true
-}
-
-#[no_mangle]
-pub unsafe extern "system" fn DllGetClassObject(
-    
+pub extern "system" fn DllGetClassObject(
     rclsid: *const GUID,
     riid: *const GUID,
-    ppv: *mut *mut c_void,
+    ppv: *mut *mut core::ffi::c_void,
 ) -> HRESULT {
-    MessageBoxW(None, w!("DllGetClassObject called!"), w!("QuickSort DLL"), MB_OK);
-    if rclsid.is_null() || riid.is_null() || ppv.is_null() {
-        return E_POINTER;
+    if ppv.is_null() {
+        return E_POINTER.into();
     }
-    if *rclsid == CLSID_QUICKSORT {
-        let factory: IClassFactory = QuickSortClassFactory::default().into();
-        factory.query(riid, ppv)
+    unsafe { *ppv = ptr::null_mut(); }
+
+    if rclsid.is_null() || riid.is_null() {
+        return E_INVALIDARG.into();
+    }
+
+    if unsafe { *rclsid } != CLSID_QUICKSORT {
+        return CLASS_E_CLASSNOTAVAILABLE.into();
+    }
+
+    // 1. Create the class factory
+    let factory = QuickSortClassFactory::default();
+
+    // 2. Convert to IUnknown
+    let unknown: IUnknown = factory.into();
+
+    // 3. Query the requested interface using the official method
+    unsafe { unknown.query(riid, ppv) }
+}
+
+/// DllCanUnloadNow - returns S_OK if no instances exist.
+#[no_mangle]
+pub extern "system" fn DllCanUnloadNow() -> HRESULT {
+    let count = INSTANCE_COUNT.load(Ordering::SeqCst);
+    if count == 0 {
+        S_OK
     } else {
-        CLASS_E_CLASSNOTAVAILABLE
+        S_FALSE
     }
 }
 
+/// DllRegisterServer - registers the COM server.
+/// For now, we rely on activation.reg.
 #[no_mangle]
-pub unsafe extern "system" fn DllCanUnloadNow() -> HRESULT {
-    S_FALSE
+pub extern "system" fn DllRegisterServer() -> HRESULT {
+    S_OK
+}
+
+/// DllUnregisterServer - removes the COM server.
+/// For now, we rely on the .reg file.
+#[no_mangle]
+pub extern "system" fn DllUnregisterServer() -> HRESULT {
+    S_OK
 }

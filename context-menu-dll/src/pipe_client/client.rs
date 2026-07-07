@@ -2,8 +2,7 @@
 
 use crate::pipe_client::error::PipeError;
 use crate::pipe_client::protocol::*;
-use crate::pipe_client::transport::{PipeTransport, NamedPipeTransport};
-use std::time::Duration;
+use crate::pipe_client::transport::{NamedPipeTransport, PipeTransport};
 
 pub struct PipeClient<T: PipeTransport> {
     transport: T,
@@ -23,17 +22,12 @@ impl<T: PipeTransport> PipeClient<T> {
         self
     }
 
-    pub fn send_command(&mut self, kind: CommandKind, data: impl Serialize) -> Result<ResponseMessage, PipeError> {
-        let data = serde_json::to_value(data)?;
-        let msg = CommandMessage { command: kind, data };
-        let json = serde_json::to_vec(&msg)?;
-        let envelope = MessageEnvelope::new(json)?;
-        let bytes = envelope.encode();
+    pub fn send_command(&mut self, command: CommandMessage) -> Result<ResponseMessage, PipeError> {
+        let bytes = Codec::encode_command(command)?;
 
         self.transport.connect()?;
         self.transport.send(&bytes)?;
 
-        // Wait for response
         let response_bytes = self.transport.receive()?;
         let response = Codec::decode_response(&response_bytes)?;
 
@@ -67,8 +61,9 @@ pub fn move_to_folder(
         target_folder_id: Some(target_folder_id),
         overwrite_policy,
     };
+    let command = CommandMessage::ExecuteOperation(data);
 
-    let response = client.send_command(CommandKind::ExecuteOperation, data)?;
+    let response = client.send_command(command)?;
 
     if response.status == ResponseStatus::Error {
         return Err(PipeError::OperationFailed(response.message));
@@ -79,7 +74,8 @@ pub fn move_to_folder(
 
 pub fn ping() -> Result<(), PipeError> {
     let mut client = PipeClient::default();
-    let response = client.send_command(CommandKind::Ping, serde_json::json!({}))?;
+    let command = CommandMessage::Ping;
+    let response = client.send_command(command)?;
     if response.status == ResponseStatus::Error {
         return Err(PipeError::OperationFailed(response.message));
     }

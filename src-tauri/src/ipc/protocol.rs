@@ -1,4 +1,4 @@
-//! IPC protocol definitions (v1: length-prefixed JSON).
+//! IPC protocol definitions (temporary copy – will be moved to quicksort-ipc-contract).
 
 use serde::{Deserialize, Serialize};
 
@@ -38,4 +38,10 @@ pub enum OverwritePolicy {
     Overwrite,
     AutoRename,
     Ask,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseMessage {
+    pub success: bool,
+    pub error: Option<String>,
 }

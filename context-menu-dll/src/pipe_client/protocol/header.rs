@@ -2,6 +2,7 @@
 
 use std::io::Cursor;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use crate::pipe_client::PipeError;
 
 pub const MAGIC: u32 = 0x53515254; // "QSRT"
 pub const PROTOCOL_VERSION: u16 = 1;

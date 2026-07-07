@@ -4,6 +4,10 @@ members = [
     "context-menu-dll",
     "crates/quicksort-domain",
     "crates/quicksort-application",
+    "crates/quicksort-ipc-contract",
+    "crates/quicksort-infrastructure",
+    "crates/quicksort-gui",
+    "crates/quicksort-shell-extension"
 ]
 resolver = "2"
 
