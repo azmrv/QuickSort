@@ -42,7 +42,7 @@ pub struct Operation {
 impl Operation {
     pub fn new_move(source: WindowsPath, target: WindowsPath) -> Self {
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: uuid::Uuid::new_v4().to_string(), // TODO: Fix UUID generation for v7/v4
             op_type: OperationType::Move,
             status: OperationStatus::Pending,
             source,
@@ -54,5 +54,45 @@ impl Operation {
         }
     }
 
-    // Аналогично для Copy, Delete, Rename – можно добавить конструкторы
+    pub fn new_copy(source: WindowsPath, target: WindowsPath) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(), // TODO: Fix UUID generation for v7/v4
+            op_type: OperationType::Copy,
+            status: OperationStatus::Pending,
+            source,
+            target: Some(target),
+            old_name: None,
+            new_name: None,
+            timestamp: SystemTime::now(),
+            error: None,
+        }
+    }
+
+    pub fn new_delete(source: WindowsPath) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(), // TODO: Fix UUID generation for v7/v4
+            op_type: OperationType::Delete,
+            status: OperationStatus::Pending,
+            source,
+            target: None,
+            old_name: None,
+            new_name: None,
+            timestamp: SystemTime::now(),
+            error: None,
+        }
+    }
+
+    pub fn new_rename(source: WindowsPath, target: WindowsPath, old_name: String, new_name: String) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(), // TODO: Fix UUID generation for v7/v4
+            op_type: OperationType::Rename,
+            status: OperationStatus::Pending,
+            source,
+            target: Some(target),
+            old_name: Some(old_name),
+            new_name: Some(new_name),
+            timestamp: SystemTime::now(),
+            error: None,
+        }
+    }
 }
