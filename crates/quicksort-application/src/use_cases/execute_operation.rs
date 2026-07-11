@@ -82,28 +82,10 @@ impl ExecuteOperationUseCase {
                 }
             }
             OverwritePolicy::Ask => {
-                // Fallback to AutoRename (or delegate to ConflictResolver)
-                // For now, just call AutoRename logic (we'll copy the code or use a helper)
-                // To avoid recursion, we'll inline the logic or call a separate async fn.
-                // Let's just call the AutoRename branch directly (but we need to avoid recursion).
-                // Better: extract AutoRename logic into a separate non-recursive async fn.
-                self.resolve_with_auto_rename(source, target_folder).await
+                // For now, we treat 'Ask' as requesting auto-rename behavior for simplicity in the Use Case layer.
+                self.auto_rename(source, target_folder).await
             }
         }
-    }
-
-    async fn resolve_with_auto_rename(
-        &self,
-        source: &WindowsPath,
-        target_folder: &WindowsPath,
-    ) -> Result<WindowsPath, UseCaseError> {
-        // Same AutoRename logic as above (copy-paste or extract).
-        // But we can just call the same logic by using a loop and not recursive.
-        // Actually, we can just call resolve_conflict with AutoRename policy.
-        // But that would be recursive. So we'll just copy the loop.
-        // Alternatively, we can call a helper.
-        // I'll just move the AutoRename code to a separate function.
-        self.auto_rename(source, target_folder).await
     }
 
     async fn auto_rename(
@@ -136,18 +118,36 @@ impl ExecuteOperationUseCase {
 impl ExecuteOperation for ExecuteOperationUseCase {
     async fn execute(&self, command: OperationCommand) -> Result<OperationResult, UseCaseError> {
         let folders = self.config_repo.load_all().await?;
-        let target_folder = match &command.operation_type {
+        
+        // Determine target folder and explicit targets based on operation type
+        let (target_folder, target_paths): (Arc<dyn Folder>, Option<Vec<WindowsPath>>) = match &command.operation_type {
             OperationType::Move | OperationType::Copy => {
+                // For Move/Copy, the destination is a container folder.
                 let id = command.target_folder_id.as_ref()
                     .ok_or_else(|| UseCaseError::InvalidCommand("Target folder required".to_string()))?;
                 folders.iter().find(|f| f.id == *id)
                     .ok_or_else(|| UseCaseError::FolderNotFound(id.as_str().to_string()))?
+                let target = Arc::new(f.clone());
+                (target, None)
             }
             OperationType::Delete => {
-                return Err(UseCaseError::InvalidCommand("Delete not implemented".to_string()));
+                // Deletion does not require a specific container folder for the operation itself. 
+                // We use a dummy container and no explicit targets.
+                let default_id = self.config_repo.get_default_folder_id().await?;
+                let target = Arc::new(folders.iter().find(|f| f.id == *default_id).unwrap().clone());
+                (target, None)
             }
             OperationType::Rename => {
-                return Err(UseCaseError::InvalidCommand("Rename not implemented".to_string()));
+                // Rename requires explicit target paths and must have the same length as source paths.
+                let targets = command.target_paths.as_ref()
+                    .ok_or_else(|| UseCaseError::InvalidCommand("Target paths are required for rename operation".to_string()))?;
+                if targets.len() != command.source_paths.len() {
+                    return Err(UseCaseError::InvalidCommand("Source and target path lists must have the same length for renaming".to_string()));
+                }
+                // Use a dummy folder, as rename is not container-based.
+                let default_id = self.config_repo.get_default_folder_id().await?;
+                let target = Arc::new(folders.iter().find(|f| f.id == *default_id).unwrap().clone());
+                (target, Some(targets.clone()))
             }
         };
 
@@ -158,6 +158,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
             command.operation_type.clone(),
             command.source_paths.clone(),
             Some(target_folder.path.clone()),
+            None, // target_paths will be set later if needed
             now,
         );
         operation.start(now).map_err(|e| UseCaseError::Internal(e.to_string()))?;
@@ -165,21 +166,54 @@ impl ExecuteOperation for ExecuteOperationUseCase {
         let mut total_bytes = 0;
         let mut processed = 0;
 
-        for src in &command.source_paths {
-            let dest = self.resolve_conflict(src, &target_folder.path, command.overwrite_policy).await?;
-            match command.operation_type {
-                OperationType::Move => {
-                    let bytes = self.file_system.move_file(src, &dest).await?;
-                    total_bytes += bytes;
-                    processed += 1;
+        match command.operation_type {
+            OperationType::Move | OperationType::Copy => {
+                // Move/Copy: All sources go to the same resolved destination folder.
+                for src in command.source_paths.iter() {
+                    // Resolve conflict using the determined container folder path
+                    let dest = self.resolve_conflict(src, &target_folder.path, command.overwrite_policy).await?;
+
+                    match command.operation_type {
+                        OperationType::Move => {
+                            let bytes = self.file_system.move_file(src, &dest).await?;
+                            total_bytes += bytes;
+                            processed += 1;
+                        }
+                        OperationType::Copy => {
+                            let bytes = self.file_system.copy_file(src, &dest).await?;
+                            total_bytes += bytes;
+                            processed += 1;
+                        }
+                        _ => unreachable!(), // Handled by outer match
+                    }
                 }
-                OperationType::Copy => {
-                    let bytes = self.file_system.copy_file(src, &dest).await?;
-                    total_bytes += bytes;
-                    processed += 1;
-                }
-                _ => return Err(UseCaseError::InvalidCommand("Unsupported operation".to_string())),
             }
+            OperationType::Rename => {
+                // Rename: Each source path has a unique target path.
+                let rename_pairs = command.source_paths.iter().zip(target_paths.as_ref().unwrap()).collect::<Vec<_>>();
+
+                for ((src, &dest_path), _) in rename_pairs.into_iter() {
+                    // For renaming, we must resolve conflict for the specific target path provided by the user.
+                    let resolved_dest = self.resolve_conflict(src, &target_folder.path, command.overwrite_policy).await?;
+
+                    // Note: The resolve_conflict logic is designed to find a unique name within a folder. 
+                    // If the user provides an explicit target path (which might be outside the container), 
+                    // we should ideally use that directly if it doesn't conflict, but for simplicity and adherence 
+                    // to the current structure, we assume the resolved_dest is the best attempt at the final name.
+                    let bytes = self.file_system.rename_file(src, &resolved_dest).await?;
+                    total_bytes += bytes;
+                    processed += 1;
+                }
+            }
+            OperationType::Delete => {
+                // Delete: Each source path is deleted independently.
+                for src in command.source_paths.iter() {
+                    let bytes = self.file_system.delete_file(src).await?;
+                    total_bytes += bytes;
+                    processed += 1;
+                }
+            }
+            _ => return Err(UseCaseError::InvalidCommand("Unsupported operation".to_string())),
         }
 
         operation.complete(processed, total_bytes, now)

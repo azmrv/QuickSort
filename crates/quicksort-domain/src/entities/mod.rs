@@ -51,6 +51,7 @@ pub struct Operation {
     pub state: OperationState,
     pub source_paths: Vec<WindowsPath>,
     pub target_folder_path: Option<WindowsPath>,
+    pub target_paths: Option<Vec<WindowsPath>>, // Added for Rename operations
     pub created_at: SystemTime,
     pub updated_at: SystemTime,
     events: Vec<DomainEvent>,
@@ -62,6 +63,7 @@ impl Operation {
         op_type: OperationType,
         source_paths: Vec<WindowsPath>,
         target: Option<WindowsPath>,
+        target_paths: Option<Vec<WindowsPath>>, // Added target_paths parameter
         now: SystemTime,
     ) -> Self {
         Self {
@@ -70,6 +72,7 @@ impl Operation {
             state: OperationState::Pending,
             source_paths,
             target_folder_path: target,
+            target_paths: target_paths,
             created_at: now,
             updated_at: now,
             events: Vec::new(),

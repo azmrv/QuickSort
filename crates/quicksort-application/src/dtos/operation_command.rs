@@ -8,7 +8,10 @@ use quicksort_domain::{FolderId, WindowsPath, OperationType};
 pub struct OperationCommand {
     pub operation_type: OperationType,
     pub source_paths: Vec<WindowsPath>,
-    pub target_folder_id: Option<FolderId>, // None for Delete or Rename
+    // Target folder ID is used for Move/Copy operations where the destination is a container.
+    pub target_folder_id: Option<FolderId>, 
+    // Explicit list of target paths (required for Rename). If present, overrides target_folder_id.
+    pub target_paths: Option<Vec<WindowsPath>>, 
     pub overwrite_policy: OverwritePolicy,
 }
 
@@ -24,6 +27,3 @@ pub enum OverwritePolicy {
     /// Ask the user (handled by the ConflictResolver port).
     Ask,
 }
-
-
-
