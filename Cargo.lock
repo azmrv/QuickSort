@@ -608,6 +608,7 @@ dependencies = [
  "log",
  "parking_lot",
  "quicksort",
+ "quicksort-ipc-contract",
  "serde",
  "serde_json",
  "simplelog",
@@ -2906,7 +2907,7 @@ dependencies = [
  "async-trait",
  "quicksort-domain",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
 ]
 
@@ -2930,7 +2931,7 @@ dependencies = [
  "quicksort-domain",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-fs",
  "uuid",

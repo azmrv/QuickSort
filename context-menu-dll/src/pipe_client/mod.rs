@@ -1,14 +1,12 @@
 //! IPC client for communicating with the Tauri app.
 
 mod error;
-pub mod protocol;
 pub mod transport;
 pub mod client;
+pub mod win32_transport;
 
 pub use error::PipeError;
-pub use protocol::codec::{OperationType, OverwritePolicy, ResponseMessage, ResponseStatus};
-pub use protocol::envelope::MessageEnvelope;
-pub use protocol::header::{MAGIC, PROTOCOL_VERSION, MAX_MESSAGE_SIZE, MessageHeader};
 pub use transport::named_pipe::NamedPipeTransport;
 pub use transport::pipe_trait::PipeTransport;
 pub use client::{PipeClient, move_to_folder, ping};
+

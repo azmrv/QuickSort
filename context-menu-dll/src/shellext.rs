@@ -11,6 +11,11 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::{mem, ptr};
 use std::sync::OnceLock;
 
+use quicksort_ipc_contract::{
+    CommandMessage, ExecuteOperationData,
+    OperationType, OverwritePolicy,
+};
+
 use parking_lot::Mutex;
 use windows::core::{BOOL, GUID, HRESULT, IUnknown, Interface, PCWSTR, PSTR, PWSTR, Ref as WinRef, Result as WinResult, implement, w};
 use windows::Win32::Foundation::{CLASS_E_NOAGGREGATION, E_FAIL, E_NOINTERFACE, E_NOTIMPL, E_POINTER, S_OK};
@@ -27,8 +32,8 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{HMENU, InsertMenuItemW, MENUITEMINFOW, MFS_ENABLED, MIIM_ID, MIIM_STATE, MIIM_STRING, CreatePopupMenu, InsertMenuW, MF_BYPOSITION, MF_POPUP, MessageBoxW, MB_OK};
 
-// Import pipe_client module (defined in separate file)
-use crate::pipe_client::{move_to_folder, OverwritePolicy};
+
+use crate::pipe_client::send_command;
 
 // ============================================================================
 // Logging initialization
