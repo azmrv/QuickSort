@@ -101,3 +101,11 @@ airules.md
 adr
 opencode
 .omo
+docs/
+.omo/run-continuation/
+.clinerules/
+.omo/
+docs/*
+.omo/run-continuation/*
+.clinerules/*
+.omo/*

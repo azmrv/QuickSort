@@ -2915,7 +2915,10 @@ dependencies = [
 name = "quicksort-domain"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "chrono",
  "serde",
+ "thiserror 1.0.69",
  "uuid",
 ]
 

@@ -1,9 +1,9 @@
 # QuickSort – README (Многоязычный)
 
 - [English](#english)
-- [中文 (Chinese)](#中文)
 - [Español (Spanish)](#español)
 - [Deutsch (German)](#deutsch)
+- [中文 (Chinese)](#中文)
 
 ---
 

@@ -1,23 +1,35 @@
 //! Domain errors – business rule violations.
-use std::fmt;
+use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum DomainError {
+    #[error("Путь пустой")]
     EmptyPath,
+
+    #[error("Неверный путь: {0}")]
     InvalidPath(String),
+
+    #[error("Некорректное имя папки: {0}")]
+    InvalidFolderName(String),
+
+    #[error("Недопустимая целевая директория (корень)")]
     IllegalDirectoryTarget,
+
+    #[error("Неверный переход состояния операции")]
     InvalidStateTransition,
-}
 
-impl fmt::Display for DomainError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            DomainError::EmptyPath => write!(f, "Path is empty"),
-            DomainError::InvalidPath(s) => write!(f, "Invalid path: {}", s),
-            DomainError::IllegalDirectoryTarget => write!(f, "Illegal directory target"),
-            DomainError::InvalidStateTransition => write!(f, "Invalid state transition"),
-        }
-    }
-}
+    #[error("Операция не найдена")]
+    OperationNotFound,
 
-impl std::error::Error for DomainError {}
+    #[error("Папка не найдена")]
+    FolderNotFound,
+
+    #[error("Конфликт: {0}")]
+    Conflict(String),
+
+    #[error("Отказ в доступе: {0}")]
+    PermissionDenied(String),
+
+    #[error("Внутренняя ошибка домена: {0}")]
+    Internal(String),
+}

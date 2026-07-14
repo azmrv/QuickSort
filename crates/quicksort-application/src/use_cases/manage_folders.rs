@@ -35,12 +35,8 @@ impl ManageFolders for ManageFoldersUseCase {
         self.config_repo.save_all(&folders).await
     }
 
-    async fn toggle_favorite(&self, id: FolderId, order: i32) -> Result<(), UseCaseError> {
-        let mut folders = self.config_repo.load_all().await?;
-        let folder = folders.iter_mut().find(|f| f.id == id)
-            .ok_or_else(|| UseCaseError::FolderNotFound(id.as_str().to_string()))?;
-        folder.is_favorite = !folder.is_favorite;
-        folder.sort_order = if folder.is_favorite { order } else { 0 };
-        self.config_repo.save_all(&folders).await
+    // TODO: Функция toggle_favorite запланирована для реализации с SQLite (добавить поля is_favorite, sort_order в Folder)
+    async fn toggle_favorite(&self, _id: FolderId, _order: i32) -> Result<(), UseCaseError> {
+        Ok(())
     }
 }

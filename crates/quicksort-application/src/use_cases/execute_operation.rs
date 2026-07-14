@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use quicksort_domain::{Operation, OperationId, OperationType, OperationState, WindowsPath, DomainEvent};
+use quicksort_domain::{Operation, OperationId, OperationType, WindowsPath};
 use crate::dtos::{OperationCommand, OperationResult, OverwritePolicy};
 use crate::errors::UseCaseError;
 use crate::ports::outbound::{
@@ -46,17 +46,24 @@ impl ExecuteOperationUseCase {
         target_folder: &WindowsPath,
         policy: OverwritePolicy,
     ) -> Result<WindowsPath, UseCaseError> {
-        let file_name = source.as_str().split('\\').last()
-            .ok_or_else(|| UseCaseError::InvalidCommand("Invalid source path".to_string()))?;
+        let file_name = source.as_str()
+            .ok_or_else(|| UseCaseError::InvalidCommand("Invalid source path".to_string()))?
+            .split('\\')
+            .last()
+            .ok_or_else(|| UseCaseError::InvalidCommand("Invalid file name".to_string()))?;
 
-        // Build initial destination path
-        let initial_dest = WindowsPath::new(&format!("{}\\{}", target_folder.as_str(), file_name))
+        let folder_path = target_folder.as_str()
+            .ok_or_else(|| UseCaseError::Internal("Invalid target folder path".to_string()))?;
+
+        let initial_dest = WindowsPath::new(&format!("{}\\{}", folder_path, file_name))
             .map_err(|e| UseCaseError::Internal(e.to_string()))?;
 
         match policy {
             OverwritePolicy::Skip => {
                 if self.file_system.exists(&initial_dest).await? {
-                    Err(UseCaseError::Conflict(format!("File already exists: {}", initial_dest.as_str())))
+                    let dest_path = initial_dest.as_str()
+                        .ok_or_else(|| UseCaseError::Internal("Invalid destination path".to_string()))?;
+                    return Err(UseCaseError::Conflict(format!("File already exists: {}", dest_path)));
                 } else {
                     Ok(initial_dest)
                 }
@@ -73,7 +80,7 @@ impl ExecuteOperationUseCase {
                     } else {
                         format!("{} ({}){}", base_name, counter, ext)
                     };
-                    let candidate = WindowsPath::new(&format!("{}\\{}", target_folder.as_str(), new_name))
+                    let candidate = WindowsPath::new(&format!("{}\\{}", folder_path, new_name))
                         .map_err(|e| UseCaseError::Internal(e.to_string()))?;
                     if !self.file_system.exists(&candidate).await? {
                         return Ok(candidate);
@@ -93,18 +100,26 @@ impl ExecuteOperationUseCase {
         source: &WindowsPath,
         target_folder: &WindowsPath,
     ) -> Result<WindowsPath, UseCaseError> {
-        let file_name = source.as_str().split('\\').last()
-            .ok_or_else(|| UseCaseError::InvalidCommand("Invalid source path".to_string()))?;
+        let file_name = source.as_str()
+            .ok_or_else(|| UseCaseError::InvalidCommand("Invalid source path".to_string()))?
+            .split('\\')
+            .last()
+            .ok_or_else(|| UseCaseError::InvalidCommand("Invalid file name".to_string()))?;
         let base_name = file_name.trim_end_matches(|c: char| c.is_ascii_digit() || c == '(' || c == ')' || c == ' ');
         let mut counter = 1;
         let ext = file_name.split('.').last().map(|s| format!(".{}", s)).unwrap_or_default();
+        
+        // Extract folder path from target_folder for AutoRename logic
+        let folder_path = target_folder.as_str()
+            .ok_or_else(|| UseCaseError::Internal("Invalid target folder path".to_string()))?;
+        
         loop {
             let new_name = if counter == 1 {
                 format!("{} (1){}", base_name, ext)
             } else {
                 format!("{} ({}){}", base_name, counter, ext)
             };
-            let candidate = WindowsPath::new(&format!("{}\\{}", target_folder.as_str(), new_name))
+            let candidate = WindowsPath::new(&format!("{}\\{}", folder_path, new_name))
                 .map_err(|e| UseCaseError::Internal(e.to_string()))?;
             if !self.file_system.exists(&candidate).await? {
                 return Ok(candidate);
@@ -119,49 +134,43 @@ impl ExecuteOperation for ExecuteOperationUseCase {
     async fn execute(&self, command: OperationCommand) -> Result<OperationResult, UseCaseError> {
         let folders = self.config_repo.load_all().await?;
         
-        // Determine target folder and explicit targets based on operation type
-        let (target_folder, target_paths): (Arc<dyn Folder>, Option<Vec<WindowsPath>>) = match &command.operation_type {
+        // Determine target folder path and explicit targets based on operation type
+        let (target_folder_path, target_paths) = match &command.operation_type {
             OperationType::Move | OperationType::Copy => {
-                // For Move/Copy, the destination is a container folder.
                 let id = command.target_folder_id.as_ref()
                     .ok_or_else(|| UseCaseError::InvalidCommand("Target folder required".to_string()))?;
-                folders.iter().find(|f| f.id == *id)
-                    .ok_or_else(|| UseCaseError::FolderNotFound(id.as_str().to_string()))?
-                let target = Arc::new(f.clone());
-                (target, None)
+                let folder = folders.iter().find(|f| f.id == *id)
+                    .ok_or_else(|| UseCaseError::FolderNotFound(id.to_string()))?;
+                (Some(folder.path.clone()), None)
             }
             OperationType::Delete => {
-                // Deletion does not require a specific container folder for the operation itself. 
-                // We use a dummy container and no explicit targets.
                 let default_id = self.config_repo.get_default_folder_id().await?;
-                let target = Arc::new(folders.iter().find(|f| f.id == *default_id).unwrap().clone());
-                (target, None)
+                let folder = folders.iter().find(|f| f.id == *default_id).unwrap();
+                (Some(folder.path.clone()), None)
             }
             OperationType::Rename => {
-                // Rename requires explicit target paths and must have the same length as source paths.
                 let targets = command.target_paths.as_ref()
                     .ok_or_else(|| UseCaseError::InvalidCommand("Target paths are required for rename operation".to_string()))?;
                 if targets.len() != command.source_paths.len() {
                     return Err(UseCaseError::InvalidCommand("Source and target path lists must have the same length for renaming".to_string()));
                 }
-                // Use a dummy folder, as rename is not container-based.
-                let default_id = self.config_repo.get_default_folder_id().await?;
-                let target = Arc::new(folders.iter().find(|f| f.id == *default_id).unwrap().clone());
-                (target, Some(targets.clone()))
+                (None, Some(targets.clone()))
             }
         };
 
         let op_id = OperationId::from_string(self.id_generator.generate());
         let now = self.clock.now();
+        
+        // Create operation in "Started" state and execute the actual file system operations
         let mut operation = Operation::new(
             op_id.clone(),
             command.operation_type.clone(),
             command.source_paths.clone(),
-            Some(target_folder.path.clone()),
-            None, // target_paths will be set later if needed
+            target_folder_path,
+            target_paths,
             now,
-        );
-        operation.start(now).map_err(|e| UseCaseError::Internal(e.to_string()))?;
+        ).start()
+            .map_err(|e| UseCaseError::Internal(e.to_string()))?;
 
         let mut total_bytes = 0;
         let mut processed = 0;
@@ -171,7 +180,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
                 // Move/Copy: All sources go to the same resolved destination folder.
                 for src in command.source_paths.iter() {
                     // Resolve conflict using the determined container folder path
-                    let dest = self.resolve_conflict(src, &target_folder.path, command.overwrite_policy).await?;
+                    let dest = self.resolve_conflict(src, target_folder_path.as_ref().unwrap(), command.overwrite_policy).await?;
 
                     match command.operation_type {
                         OperationType::Move => {
@@ -194,7 +203,8 @@ impl ExecuteOperation for ExecuteOperationUseCase {
 
                 for ((src, &dest_path), _) in rename_pairs.into_iter() {
                     // For renaming, we must resolve conflict for the specific target path provided by the user.
-                    let resolved_dest = self.resolve_conflict(src, &target_folder.path, command.overwrite_policy).await?;
+                    // Use the first element of source_paths to get folder path for consistency.
+                    let resolved_dest = self.resolve_conflict(src, target_folder_path.as_ref().unwrap(), command.overwrite_policy).await?;
 
                     // Note: The resolve_conflict logic is designed to find a unique name within a folder. 
                     // If the user provides an explicit target path (which might be outside the container), 
@@ -216,8 +226,10 @@ impl ExecuteOperation for ExecuteOperationUseCase {
             _ => return Err(UseCaseError::InvalidCommand("Unsupported operation".to_string())),
         }
 
+        // Complete the operation with final results
         operation.complete(processed, total_bytes, now)
             .map_err(|e| UseCaseError::Internal(e.to_string()))?;
+        
         self.operation_repo.save(&operation).await?;
         let _events = operation.pull_events();
 
