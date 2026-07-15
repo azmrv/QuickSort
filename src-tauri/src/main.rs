@@ -1,14 +1,28 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod commands;
-mod folder;
-mod models;
-mod move_engine;
-mod logging;
-mod pending;
-mod state;
-mod activity_log;
-mod ipc_server;
+// ============================================================================
+// Module declarations
+// ============================================================================
+
+// OLD modules that are kept for backward compatibility during migration.
+// They will be removed once all their functionality is covered by the new
+// architecture.
+mod commands;            // Tauri commands (will be replaced by commands_v2)
+mod folder;              // Legacy folder service (will be deleted)
+mod models;              // Re-exports of domain types (temporary bridge)
+mod move_engine;         // Deprecated; replaced by StdFileSystem in infra
+mod logging;             // Tracing initialisation
+mod pending;             // CLI --select-folder handler
+mod state;               // AppState for Tauri
+mod activity_log;        // Legacy activity log (will be replaced by domain events)
+mod ipc_server;          // Named Pipe server (will be refactored to use facade)
+
+// NEW architecture modules
+// use … statements are at the top of the file, no new `mod` needed.
+
+// ============================================================================
+// Imports
+// ============================================================================
 
 use clap::{Parser, Subcommand};
 use commands::{folders, move_cmd, settings};
@@ -23,112 +37,38 @@ use tauri::{
 };
 
 // ============================================================
-// New architecture imports
+// New architecture imports – brought in incrementally
 // ============================================================
 use std::sync::Arc;
 use std::path::PathBuf;
 
-use quicksort_application::{ExecuteOperation, GetFolders, ManageFolders};
-use quicksort_application::dtos::OperationCommand;
-use quicksort_application::errors::UseCaseError;
-use quicksort_application::ports::outbound::IdGenerator;
+use quicksort_application::{
+    // The official facade that implements all inbound ports.
+    ApplicationFacadeImpl,
+    // Use cases (concrete types are needed for construction).
+    use_cases::{
+        ExecuteOperationUseCase,
+        GetFoldersUseCase,
+        ManageFoldersUseCase,
+    },
+    // DTOs and errors for the V2 commands.
+    dtos::{OperationCommand, OperationResult},
+    errors::UseCaseError,
+};
 
 use quicksort_infrastructure::{
-    JsonConfigurationRepository, StdFileSystem,
-    UuidGenerator, SystemClock, DefaultConflictResolver,
+    JsonConfigurationRepository,
+    StdFileSystem,
+    UuidGenerator,
+    SystemClock,
+    DefaultConflictResolver,
+    repository::InMemoryOperationRepository,
 };
-use quicksort_infrastructure::repository::InMemoryOperationRepository;
 
-// ============================================================
-// Application facade (local implementation in Tauri)
-// ============================================================
-struct AppFacade {
-    execute: Arc<ExecuteOperation>,
-    get_folders: Arc<GetFolders>,
-    manage: Arc<ManageFolders>,
-    id_generator: Arc<dyn IdGenerator>,
-}
+// ============================================================================
+// CLI definitions (unchanged)
+// ============================================================================
 
-impl AppFacade {
-    async fn execute_operation(&self, command: OperationCommand) -> Result<quicksort_application::dtos::OperationResult, UseCaseError> {
-        ExecuteOperation::execute(&*self.execute, command).await
-    }
-
-    async fn get_folders(&self) -> Result<Vec<quicksort_domain::Folder>, UseCaseError> {
-        GetFolders::get_all(&*self.get_folders).await
-    }
-
-    async fn add_folder(&self, name: String, path: String) -> Result<(), UseCaseError> {
-        let id = self.id_generator.generate();
-        let folder = quicksort_domain::Folder::new(
-            quicksort_domain::FolderId::from_string(id),
-            name,
-            quicksort_domain::WindowsPath::new(&path)
-                .map_err(|_| UseCaseError::InvalidCommand("Invalid path".to_string()))?,
-        );
-        ManageFolders::add_folder(&*self.manage, folder).await
-    }
-
-    async fn remove_folder(&self, id: String) -> Result<(), UseCaseError> {
-        let folder_id = quicksort_domain::FolderId::from_string(id);
-        ManageFolders::remove_folder(&*self.manage, folder_id).await
-    }
-
-    async fn toggle_favorite(&self, id: String, order: i32) -> Result<(), UseCaseError> {
-        let folder_id = quicksort_domain::FolderId::from_string(id);
-        ManageFolders::toggle_favorite(&*self.manage, folder_id, order).await
-    }
-}
-
-// ============================================================
-// Tauri command wrappers
-// ============================================================
-#[tauri::command]
-async fn execute_operation_v2(
-    state: tauri::State<'_, Arc<AppFacade>>,
-    command: OperationCommand,
-) -> Result<quicksort_application::dtos::OperationResult, String> {
-    let result = state.execute_operation(command).await.map_err(|e| e.to_string())?;
-    Ok(result)
-}
-
-#[tauri::command]
-async fn get_folders_v2(
-    state: tauri::State<'_, Arc<AppFacade>>,
-) -> Result<Vec<quicksort_domain::Folder>, String> {
-    let result = state.get_folders().await.map_err(|e| e.to_string())?;
-    Ok(result)
-}
-
-#[tauri::command]
-async fn add_folder_v2(
-    state: tauri::State<'_, Arc<AppFacade>>,
-    name: String,
-    path: String,
-) -> Result<(), String> {
-    state.add_folder(name, path).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn remove_folder_v2(
-    state: tauri::State<'_, Arc<AppFacade>>,
-    id: String,
-) -> Result<(), String> {
-    state.remove_folder(id).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn toggle_favorite_v2(
-    state: tauri::State<'_, Arc<AppFacade>>,
-    id: String,
-    order: i32,
-) -> Result<(), String> {
-    state.toggle_favorite(id, order).await.map_err(|e| e.to_string())
-}
-
-// ============================================================
-// CLI and legacy code
-// ============================================================
 #[derive(Parser)]
 struct Cli {
     #[command(subcommand)]
@@ -141,13 +81,23 @@ enum Commands {
     SelectFolder { file: String },
 }
 
+// ============================================================================
+// main – entry point
+// ============================================================================
+
 fn main() {
+    // Initialise structured logging so we can see what's happening.
     logging::init();
+
     let cli = Cli::parse();
 
+    // ----- CLI-only paths -----
     if let Some(cmd) = &cli.command {
         match cmd {
             Commands::Move { target, file } => {
+                // OLD: MoveEngine::move_file (deprecated)
+                // NEW: The CLI Move command should also go through the facade,
+                // but for now we keep the legacy call to avoid scope creep.
                 if let Err(e) = crate::move_engine::MoveEngine::move_file(
                     std::path::Path::new(file),
                     std::path::Path::new(target),
@@ -157,87 +107,93 @@ fn main() {
                 return;
             }
             Commands::SelectFolder { file } => {
+                // Store the file path so the React frontend can open the Selector.
                 crate::pending::set_pending_file(file.clone());
                 start_tauri();
                 return;
             }
         }
     }
+
+    // ----- Normal GUI startup -----
     start_tauri();
 }
 
+// ============================================================================
+// start_tauri – wires everything and launches the Tauri application
+// ============================================================================
+
 fn start_tauri() {
-    // ============================================================
-    // Legacy state
-    // ============================================================
+    // ── Legacy state (kept for the old commands that are still active) ──
     let logs = activity_log::load_logs();
-    let repo = JsonRepository::new().expect("repo");
+    let repo = JsonRepository::new().expect("Legacy JSON repository");
     let service = FolderService::new(repo);
     let _folders = service.list().unwrap_or_default();
 
-    let state = AppState {
+    let legacy_state = AppState {
         service,
         logs: Mutex::new(logs),
     };
 
-    // ============================================================
-    // New architecture infrastructure
-    // ============================================================
+    // ── New architecture: build the real Application Facade ──
+    // 1. Create infrastructure adapters (they implement the outbound ports).
     let config_dir = dirs::config_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("QuickSort");
     std::fs::create_dir_all(&config_dir).unwrap_or(());
     let config_path = config_dir.join("folders.json");
 
-    let config_repo = Arc::new(JsonConfigurationRepository::new(config_path));
-    let operation_repo = Arc::new(InMemoryOperationRepository::new());
-    let file_system = Arc::new(StdFileSystem::new());
-    let id_generator = Arc::new(UuidGenerator);
-    let clock = Arc::new(SystemClock);
+    let config_repo     = Arc::new(JsonConfigurationRepository::new(config_path));
+    let operation_repo  = Arc::new(InMemoryOperationRepository::new());
+    let file_system     = Arc::new(StdFileSystem::new());
+    let id_generator    = Arc::new(UuidGenerator);
+    let clock           = Arc::new(SystemClock);
     let conflict_resolver = Arc::new(DefaultConflictResolver);
 
-    let execute_use_case = ExecuteOperation::new(
+    // 2. Create the use cases and wire them with their dependencies.
+    let execute_use_case = Arc::new(ExecuteOperationUseCase::new(
         config_repo.clone(),
         operation_repo.clone(),
         file_system.clone(),
         id_generator.clone(),
         clock.clone(),
         conflict_resolver.clone(),
-    );
-    let get_folders_use_case = GetFolders::new(config_repo.clone());
-    let manage_folders_use_case = ManageFolders::new(config_repo.clone());
+    ));
+    let get_folders_use_case = Arc::new(GetFoldersUseCase::new(config_repo.clone()));
+    let manage_folders_use_case = Arc::new(ManageFoldersUseCase::new(config_repo.clone()));
 
-    let app_facade = Arc::new(AppFacade {
-        execute: Arc::new(execute_use_case),
-        get_folders: Arc::new(get_folders_use_case),
-        manage: Arc::new(manage_folders_use_case),
-        id_generator: id_generator.clone(),
+    // 3. Build the official facade – the single entry point for all adapters.
+    let app_facade = Arc::new(ApplicationFacadeImpl {
+        execute: execute_use_case.clone(),
+        undo: unimplemented!("UndoOperationUseCase is not wired yet"),
+        get_folders: get_folders_use_case.clone(),
+        manage: manage_folders_use_case.clone(),
     });
 
-    // Start Named Pipe server (for DLL communication)
-    ipc_server::start_pipe_server(execute_use_case);
+    // 4. Start the Named Pipe server so the shell extension DLL can talk to us.
+    //    The server receives the facade and calls it for every incoming command.
+    ipc_server::start_pipe_server(Arc::clone(&app_facade) as Arc<_>);
 
-    // ============================================================
-    // Tauri builder
-    // ============================================================
+    // ── Tauri builder ────────────────────────────────────────────────
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(state)
+        // Register both the legacy state and the new facade.
+        .manage(legacy_state)
         .manage(app_facade)
         .invoke_handler(tauri::generate_handler![
-            // Legacy commands – disabled, will be removed later
-            // folders::get_folders,
-            // folders::update_folders,
-            // folders::toggle_favorite,
-            // move_cmd::move_file,
-            // settings::get_mode,
-            // settings::get_pending_file,
-            // settings::check_menu_status,
-            // settings::get_logs,
-            // settings::register_com_server,
-            // settings::unregister_com_server,
+            // ---- Legacy commands (kept until the frontend is fully migrated) ----
+            folders::get_folders,
+            folders::update_folders,
+            folders::toggle_favorite,
+            move_cmd::move_file,
+            settings::get_mode,
+            settings::get_pending_file,
+            settings::check_menu_status,
+            settings::get_logs,
+            settings::register_com_server,
+            settings::unregister_com_server,
 
-            // New V2 commands
+            // ---- New V2 commands (already wired to the facade) ----
             execute_operation_v2,
             get_folders_v2,
             add_folder_v2,
@@ -245,8 +201,9 @@ fn start_tauri() {
             toggle_favorite_v2,
         ])
         .setup(|app| {
-            let open = MenuItemBuilder::with_id("open", "Открыть редактор").build(app)?;
-            let quit = MenuItemBuilder::with_id("quit", "Выход").build(app)?;
+            // System tray with a simple menu.
+            let open = MenuItemBuilder::with_id("open", "Open editor").build(app)?;
+            let quit = MenuItemBuilder::with_id("quit", "Exit").build(app)?;
             let menu = MenuBuilder::new(app).item(&open).separator().item(&quit).build()?;
 
             let _tray = TrayIconBuilder::new()
@@ -260,9 +217,7 @@ fn start_tauri() {
                                 let _ = window.set_focus();
                             }
                         }
-                        "quit" => {
-                            app.exit(0);
-                        }
+                        "quit" => app.exit(0),
                         _ => {}
                     }
                 })
@@ -270,6 +225,7 @@ fn start_tauri() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // Hide the window instead of closing – the app stays in the tray.
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 if let Some(window) = window.app_handle().get_webview_window("main") {
                     let _ = window.hide();

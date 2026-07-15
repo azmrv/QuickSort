@@ -98,7 +98,7 @@ impl ManageFolders for ManageFoldersUseCase {
     // OLD: Russian TODO comment
     // NEW: Translated to English with a reference to the tracking task
     // TODO: TASK-015 – implement toggle_favorite after Folder gains is_favorite field
-    async fn toggle_favorite(&self, _id: FolderId, _order: i32) -> Result<(), UseCaseError> {
+    async fn toggle_favorite(&self, _id: FolderId) -> Result<(), UseCaseError> {
         Ok(())
     }
 }

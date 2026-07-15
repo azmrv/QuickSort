@@ -61,6 +61,11 @@ pub use ports::inbound::{
     ApplicationFacadeImpl,
 };
 
+/// Toggles the favourite status of a folder.
+pub async fn toggle_favorite(&self, id: FolderId) -> Result<(), UseCaseError> {
+    self.manage.toggle_favorite(id).await
+}
+
 // Pipeline is intentionally NOT re-exported – it is an internal mechanism
 // that adapters should not depend on directly.  They should call the facade,
 // which may use the pipeline internally.
@@ -75,3 +80,4 @@ pub use ports::inbound::{
 // - The `pipeline` module is an internal implementation detail of the
 //   Application Layer and should NOT be re-exported.
 // ---------------------------------------------------------------------------
+

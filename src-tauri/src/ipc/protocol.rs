@@ -1,47 +1,35 @@
-//! IPC protocol definitions (temporary copy – will be moved to quicksort-ipc-contract).
+//! IPC protocol definitions – **DEPRECATED**.
+//!
+//! The canonical versions of these types now live in
+//! `quicksort-ipc-contract`.  This file is kept temporarily so that the
+//! existing pipe server can compile while it is being migrated.
+//!
+//! # Migration path
+//! 1. Update `pipe_server::server.rs` to import types from
+//!    `quicksort_ipc_contract` instead of from this module.
+//! 2. Delete this file.
+//!
+//! # Why this was temporarily duplicated
+//! During the transition from a monolithic Tauri crate to a multi-crate
+//! workspace, the IPC protocol types were needed in both the DLL and the
+//! Tauri adapter.  Moving them into a dedicated crate (`quicksort-ipc-contract`)
+//! eliminates the duplication.  Until the server module is fully updated,
+//! this file serves as a bridge.
 
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u32 = 1;
+// Re-export from the canonical crate so that any code importing from here
+// continues to work.  New code should import directly from `quicksort_ipc_contract`.
+pub use quicksort_ipc_contract::{
+    PROTOCOL_VERSION, MAGIC,
+    CommandMessage, ExecuteOperationData, OperationType, OverwritePolicy,
+    ResponseMessage, ResponseStatus,
+};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PipeCommand {
-    pub version: u32,
-    pub action: PipeAction,
-}
+// The old types below are no longer used, but are kept as comments for
+// reference during the migration.
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum PipeAction {
-    ExecuteOperation { command: OperationCommand },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OperationCommand {
-    pub operation_type: OperationType,
-    pub source_paths: Vec<String>,
-    pub target_folder_id: Option<String>,
-    pub overwrite_policy: OverwritePolicy,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum OperationType {
-    Move,
-    Copy,
-    Delete,
-    Rename,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum OverwritePolicy {
-    Skip,
-    Overwrite,
-    AutoRename,
-    Ask,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResponseMessage {
-    pub success: bool,
-    pub error: Option<String>,
-}
+// OLD: pub struct PipeCommand { ... }
+// OLD: pub enum PipeAction { ... }
+// OLD: pub struct OperationCommand { ... }
+// (all replaced by the types in quicksort-ipc-contract)

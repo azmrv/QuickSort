@@ -5,28 +5,100 @@ description = "QuickSort – быстрая сортировка файлов"
 authors = ["pr0math3us"]
 edition = "2021"
 
+# ---------------------------------------------------------------------------
+# Build dependencies – only needed during compilation
+# ---------------------------------------------------------------------------
 [build-dependencies]
+# Generates Tauri-specific code (icons, resources, etc.)
 tauri-build = { version = "2", features = [] }
 
+# ---------------------------------------------------------------------------
+# Runtime dependencies – follow the Dependency Rule:
+#   Domain ← Application ← Infrastructure ← Adapters (this crate)
+#
+# This crate is the Tauri adapter. It MUST depend on:
+#   - `quicksort-application` (for Use Cases and DTOs)
+#   - `quicksort-infrastructure` (to construct concrete implementations)
+#   - `quicksort-domain` is NOT a direct dependency – all domain types
+#     should be accessed through the Application layer.
+# ---------------------------------------------------------------------------
 [dependencies]
+# ========== Tauri framework and plugins ==========
+
+# Tauri v2 core (with tray icon support for system tray)
 tauri = { version = "2", features = ["tray-icon"] }
+
+# Tauri plugin for native file/folder picker dialogs
 tauri-plugin-dialog = "2"
+
+# Tauri plugin for opening URLs and files in the default application
 tauri-plugin-opener = "2"
+
+# ========== Serialization ==========
+
+# JSON serialization / deserialization (used for IPC messages and config files)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# ========== Windows API ==========
+
+# Registry access (registering/unregistering the COM server)
 winreg = "0.56"
+
+# CLI argument parsing
 clap = { version = "4", features = ["derive"] }
+
+# General-purpose error handling
 anyhow = "1"
+
+# Date and time types (used in activity logs)
 chrono = { version = "0.4", features = ["serde"] }
+
+# Project directories (obtaining AppData path) – kept for backward compatibility
 directories = "6"
+
+# UUID generation (for operation IDs)
 uuid = { version = "1", features = ["v4", "serde"] }
+
+# Structured logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Efficient mutex for shared state
 parking_lot = "0.12"
+
+# Windows context menu integration (for registering the COM server)
 win-ctx = "1.4.1"
-windows = { version = "0.58", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
+
+# Low-level Windows API (ShellExecuteW, MessageBoxW, etc.)
+windows = { version = "0.58", features = [
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+] }
+
+# ========== Application layer – main dependency ==========
+
+# Provides Use Cases, DTOs, and the ApplicationFacade.
+# Adapters MUST depend on this crate, NOT on domain directly.
 quicksort-application = { path = "../crates/quicksort-application" }
+
+# ========== Infrastructure layer – for dependency injection ==========
+
+# Provides concrete implementations of ports (JsonConfigurationRepository,
+# StdFileSystem, SystemClock, etc.). These are constructed here and injected
+# into Use Cases.
 quicksort-infrastructure = { path = "../crates/quicksort-infrastructure" }
-quicksort-domain = { path = "../crates/quicksort-domain" }
+
+# OLD: quicksort-domain = { path = "../crates/quicksort-domain" }
+# REMOVED: Adapters must not depend directly on the Domain layer.
+# All domain types (Folder, OperationId, WindowsPath) are accessed
+# through the Application layer's DTOs and port interfaces.
+
+# ========== Miscellaneous ==========
+
+# Directory utilities (for finding config/log paths)
 dirs = "5"
+
+# Async runtime for Tauri commands and pipe server
 tokio = { workspace = true, features = ["rt", "net", "time", "macros", "io-util"] }

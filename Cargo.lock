@@ -2778,7 +2778,6 @@ dependencies = [
  "dirs 5.0.1",
  "parking_lot",
  "quicksort-application",
- "quicksort-domain",
  "quicksort-infrastructure",
  "serde",
  "serde_json",

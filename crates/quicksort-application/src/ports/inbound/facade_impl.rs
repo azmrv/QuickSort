@@ -22,12 +22,7 @@ use async_trait::async_trait;
 
 use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
-use crate::use_cases::{
-    ExecuteOperationUseCase,
-    UndoOperationUseCase,
-    GetFoldersUseCase,
-    ManageFoldersUseCase,
-};
+// Imports for use cases are delegated through the struct fields.
 use super::{ExecuteOperation, GetFolders, ManageFolders, UndoOperation};
 use quicksort_domain::{Folder, FolderId, OperationId};
 
@@ -96,7 +91,7 @@ impl ManageFolders for ApplicationFacadeImpl {
 
     /// Delegates to `ManageFoldersUseCase::toggle_favorite`.
     /// Currently a stub – see TASK-015 for full implementation.
-    async fn toggle_favorite(&self, id: FolderId, order: i32) -> Result<(), UseCaseError> {
-        self.manage_folders.toggle_favorite(id, order).await
+    async fn toggle_favorite(&self, id: FolderId) -> Result<(), UseCaseError> {
+        self.manage_folders.toggle_favorite(id).await
     }
 }
