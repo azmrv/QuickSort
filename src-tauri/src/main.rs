@@ -29,13 +29,8 @@ use std::sync::Arc;
 use std::path::PathBuf;
 
 use quicksort_application::{ExecuteOperation, GetFolders, ManageFolders};
-use quicksort_application::dtos::{OperationCommand, OperationResult, OverwritePolicy};
+use quicksort_application::dtos::OperationCommand;
 use quicksort_application::errors::UseCaseError;
-use quicksort_application::ports::inbound::ApplicationFacade;
-use quicksort_application::use_cases::{
-    ExecuteOperationUseCase,
-    GetFoldersUseCase, ManageFoldersUseCase,
-};
 use quicksort_application::ports::outbound::IdGenerator;
 
 use quicksort_infrastructure::{
@@ -45,17 +40,17 @@ use quicksort_infrastructure::{
 use quicksort_infrastructure::repository::InMemoryOperationRepository;
 
 // ============================================================
-// Application facade
+// Application facade (local implementation in Tauri)
 // ============================================================
 struct AppFacade {
-    execute: Arc<ExecuteOperationUseCase>,
-    get_folders: Arc<GetFoldersUseCase>,
-    manage: Arc<ManageFoldersUseCase>,
+    execute: Arc<ExecuteOperation>,
+    get_folders: Arc<GetFolders>,
+    manage: Arc<ManageFolders>,
     id_generator: Arc<dyn IdGenerator>,
 }
 
 impl AppFacade {
-    async fn execute_operation(&self, command: OperationCommand) -> Result<OperationResult, UseCaseError> {
+    async fn execute_operation(&self, command: OperationCommand) -> Result<quicksort_application::dtos::OperationResult, UseCaseError> {
         ExecuteOperation::execute(&*self.execute, command).await
     }
 
@@ -92,22 +87,17 @@ impl AppFacade {
 async fn execute_operation_v2(
     state: tauri::State<'_, Arc<AppFacade>>,
     command: OperationCommand,
-) -> Result<OperationResult, String> {
-    state.execute_operation(command).await.map_err(|e| e.to_string())
+) -> Result<quicksort_application::dtos::OperationResult, String> {
+    let result = state.execute_operation(command).await.map_err(|e| e.to_string())?;
+    Ok(result)
 }
-
-// UndoOperation is commented out because it's not yet implemented.
-// Will be added back in future when UndoOperationUseCase is ready.
-/*
-#[tauri::command]
-async fn undo_operation_v2(...) { ... }
-*/
 
 #[tauri::command]
 async fn get_folders_v2(
     state: tauri::State<'_, Arc<AppFacade>>,
 ) -> Result<Vec<quicksort_domain::Folder>, String> {
-    state.get_folders().await.map_err(|e| e.to_string())
+    let result = state.get_folders().await.map_err(|e| e.to_string())?;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -188,7 +178,6 @@ fn start_tauri() {
     let state = AppState {
         service,
         logs: Mutex::new(logs),
-        // No `facade` field here – we manage it separately
     };
 
     // ============================================================
@@ -207,21 +196,21 @@ fn start_tauri() {
     let clock = Arc::new(SystemClock);
     let conflict_resolver = Arc::new(DefaultConflictResolver);
 
-    let execute_use_case = Arc::new(ExecuteOperationUseCase::new(
+    let execute_use_case = ExecuteOperation::new(
         config_repo.clone(),
         operation_repo.clone(),
         file_system.clone(),
         id_generator.clone(),
         clock.clone(),
         conflict_resolver.clone(),
-    ));
-    let get_folders_use_case = Arc::new(GetFoldersUseCase::new(config_repo.clone()));
-    let manage_folders_use_case = Arc::new(ManageFoldersUseCase::new(config_repo.clone()));
+    );
+    let get_folders_use_case = GetFolders::new(config_repo.clone());
+    let manage_folders_use_case = ManageFolders::new(config_repo.clone());
 
     let app_facade = Arc::new(AppFacade {
-        execute: execute_use_case.clone(),
-        get_folders: get_folders_use_case,
-        manage: manage_folders_use_case,
+        execute: Arc::new(execute_use_case),
+        get_folders: Arc::new(get_folders_use_case),
+        manage: Arc::new(manage_folders_use_case),
         id_generator: id_generator.clone(),
     });
 
@@ -250,7 +239,6 @@ fn start_tauri() {
 
             // New V2 commands
             execute_operation_v2,
-            // undo_operation_v2, // Commented out – Undo not implemented yet
             get_folders_v2,
             add_folder_v2,
             remove_folder_v2,

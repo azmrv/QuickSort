@@ -3,11 +3,37 @@ name = "quicksort-application"
 version = "0.1.0"
 edition = "2021"
 
+# ---------------------------------------------------------------------------
+# Dependencies – follow the Dependency Rule:
+#   Domain ← Application ← Infrastructure ← Adapters
+# ---------------------------------------------------------------------------
+
 [dependencies]
+# Asynchronous trait support (used by Port interfaces)
 async-trait = { workspace = true }
+
+# Error handling – UseCaseError derives thiserror::Error
 thiserror = { workspace = true }
+
+# Domain layer – the only internal dependency allowed in Application
 quicksort-domain = { path = "../quicksort-domain" }
+
+# Serialization for DTOs (OperationCommand, OperationResult, etc.)
 serde = { version = "1", features = ["derive"] }
+
+# ---------------------------------------------------------------------------
+# Dev-dependencies – only needed for tests
+# ---------------------------------------------------------------------------
+
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt", "macros", "sync", "rt-multi-thread"] }
+# Async runtime for integration tests of Use Cases
+tokio = { workspace = true, features = [
+    "rt",
+    "macros",
+    "sync",
+    "rt-multi-thread",
+] }
+
+# anyhow is used in tests for convenience when constructing test fixtures.
+# It is NOT used in production code (Use Cases return UseCaseError).
 anyhow = "1.0"

@@ -3,11 +3,40 @@ name = "quicksort-domain"
 version = "0.1.0"
 edition = "2021"
 
+# ---------------------------------------------------------------------------
+# Dependencies – follow the Dependency Rule:
+#   Domain ← Application ← Infrastructure ← Adapters
+#
+# The Domain layer is the innermost circle. It MUST NOT depend on any other
+# layer of the project (Application, Infrastructure, Adapters) and MUST NOT
+# depend on frameworks or I/O libraries (Tauri, Windows API, etc.).
+# ---------------------------------------------------------------------------
+
 [dependencies]
+# Serialization / deserialization of domain entities and value objects.
+# The `derive` feature enables #[derive(Serialize, Deserialize)] without
+# manual implementations, keeping domain code concise.
 serde = { version = "1.0", features = ["derive"] }
+
+# Generation of unique identifiers (FolderId, OperationId).
+# `v4` feature: UUID version 4 (random).
+# `serde` feature: enables serde support for uuid::Uuid.
 uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Date and time types.
+# `serde` feature: enables serde support for chrono::DateTime, used for
+# timestamps in domain entities (created_at, updated_at).
 chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling.
+# Domain errors are defined with thiserror for ergonomic Display/Debug.
 thiserror = "1.0"
 
+# ---------------------------------------------------------------------------
+# Dev-dependencies – only needed for tests
+# ---------------------------------------------------------------------------
+
 [dev-dependencies]
+# anyhow is used in tests for convenience when constructing test fixtures.
+# It is NOT used in production domain code – domain uses specific errors.
 anyhow = "1.0"

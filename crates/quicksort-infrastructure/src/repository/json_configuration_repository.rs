@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use quicksort_domain::{Folder, FolderId, WindowsPath};
+use quicksort_domain::{Folder, FolderId, FolderStats, WindowsPath};
 use quicksort_application::ports::outbound::ConfigurationRepository;
-use quicksort_infrastructure::errors::InfrastructureError;
+use quicksort_application::errors::UseCaseError;
 
 #[derive(Serialize, Deserialize)]
 struct ConfigFile {
@@ -22,7 +22,7 @@ struct FolderData {
     name: String,
     path: String,
     is_favorite: bool,
-    sort_order: i32,
+    sort_order: u32,
 }
 
 /// Repository that stores folder configuration in a JSON file.
@@ -35,90 +35,90 @@ impl JsonConfigurationRepository {
         Self { path }
     }
 
-    fn load_from_file(&self) -> Result<Vec<Folder>, InfrastructureError> {
+    fn load_from_file(&self) -> Result<Vec<Folder>, UseCaseError> {
         if !self.path.exists() {
             return Ok(vec![]);
         }
-        let content = fs::read_to_string(&self.path)?;
-        let config: ConfigFile = serde_json::from_str(&content)?;
+        let content = fs::read_to_string(&self.path)
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+        let config: ConfigFile = serde_json::from_str(&content)
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
 
         // Convert each folder data to domain Folder, handling potential path validation errors.
         let mut folders = Vec::with_capacity(config.folders.len());
         for f in config.folders {
             let path = WindowsPath::new(&f.path)
-                .map_err(|e| InfrastructureError::Repository(e.to_string()))?;
-            folders.push(Folder {
-                id: FolderId::from_string(f.id),
-                name: f.name,
-                path,
-                is_favorite: f.is_favorite,
-                sort_order: f.sort_order,
-            });
+                .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+            let id = FolderId::from_string(&f.id)
+                .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+            folders.push(Folder::with_id(id, f.name, path));
         }
         Ok(folders)
     }
 
-    fn save_to_file(&self, folders: &[Folder]) -> Result<(), InfrastructureError> {
+    fn save_to_file(&self, folders: &[Folder]) -> Result<(), UseCaseError> {
         let config = ConfigFile {
             version: 1,
             folders: folders.iter().map(|f| FolderData {
-                id: f.id.as_str().to_string(),
+                id: f.id.to_string(),
                 name: f.name.clone(),
-                path: f.path.as_str().to_string(),
-                is_favorite: f.is_favorite,
-                sort_order: f.sort_order,
+                path: f.path.to_string(),
+                is_favorite: f.favorite,
+                sort_order: f.order,
             }).collect(),
         };
-        let content = serde_json::to_string_pretty(&config)?;
+        let content = serde_json::to_string_pretty(&config)
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
         fs::write(&self.path, content)
-            .map_err(|e| InfrastructureError::Serialization(e.to_string()))?;
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
         Ok(())
     }
 }
 
 #[async_trait]
 impl ConfigurationRepository for JsonConfigurationRepository {
-    async fn load_all(&self) -> Result<Vec<Folder>, InfrastructureError> {
+    async fn load_all(&self) -> Result<Vec<Folder>, UseCaseError> {
         self.load_from_file()
     }
 
-    async fn save_all(&self, folders: &[Folder]) -> Result<(), InfrastructureError> {
+    async fn save_all(&self, folders: &[Folder]) -> Result<(), UseCaseError> {
         self.save_to_file(folders)
     }
 
-    async fn add(&self, folder: Folder) -> Result<(), InfrastructureError> {
+    async fn add(&self, folder: Folder) -> Result<(), UseCaseError> {
         let mut folders = self.load_from_file()?;
         folders.push(folder);
         self.save_to_file(&folders)
     }
 
-    async fn remove(&self, id: &FolderId) -> Result<(), InfrastructureError> {
+    async fn remove(&self, id: &FolderId) -> Result<(), UseCaseError> {
         let mut folders = self.load_from_file()?;
         folders.retain(|f| f.id != *id);
         self.save_to_file(&folders)
     }
 
-    async fn find_by_id(&self, id: &FolderId) -> Result<Option<Folder>, InfrastructureError> {
+    async fn find_by_id(&self, id: &FolderId) -> Result<Option<Folder>, UseCaseError> {
         let folders = self.load_from_file()?;
         Ok(folders.into_iter().find(|f| f.id == *id))
     }
 
-    async fn find_by_path(&self, path: &str) -> Result<Option<Folder>, InfrastructureError> {
+    async fn find_by_path(&self, path: &str) -> Result<Option<Folder>, UseCaseError> {
         let folders = self.load_from_file()?;
-        Ok(folders.into_iter().find(|f| f.path.as_str() == path))
+        Ok(folders.into_iter().find(|f| f.path.to_string() == path))
     }
 
-    /// Возвращает ID папки "Документы" (по умолчанию).
-    /// Если папка не найдена, создаёт новый FolderId для неё.
-    async fn get_default_folder_id(&self) -> Result<FolderId, InfrastructureError> {
-        // Ищем существующую папку "Документы" по пути
-        let documents_path = WindowsPath::new("C:\\Users\\Public\\Documents")?;
+    /// Returns the ID of the default "Documents" folder.
+    /// If not found, creates a new FolderId for it.
+    async fn get_default_folder_id(&self) -> Result<FolderId, UseCaseError> {
+        // Look for an existing "Documents" folder by path
+        let documents_path = WindowsPath::new("C:\\Users\\Public\\Documents")
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
         
-        if let Some(folder) = self.find_by_path(documents_path.as_str())? {
+        if let Some(folder) = self.find_by_path(&documents_path.to_string()).await? {
             return Ok(folder.id);
         }
 
-        // Если не найдено, создаём новый ID (для использования при первой записи)
+        // If not found, create a new ID (for use when first saving)
         Ok(FolderId::new())
     }
 }

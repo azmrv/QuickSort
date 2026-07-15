@@ -1,8 +1,13 @@
 //! ExecuteOperationUseCase - orchestrates file operations (move, copy, delete, rename).
+//!
+//! # Design Decisions
+//! - Resolves destination paths with conflict handling according to the chosen policy.
+//! - Relies on `FileSystem` port to retrieve file sizes after operations.
+//! - Delegates state transitions to the `Operation` aggregate (no direct state manipulation).
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use quicksort_domain::{Operation, OperationId, OperationType, WindowsPath};
+use quicksort_domain::{Operation, OperationId, OperationType, OperationState, WindowsPath};
 use crate::dtos::{OperationCommand, OperationResult, OverwritePolicy};
 use crate::errors::UseCaseError;
 use crate::ports::inbound::ExecuteOperation;
@@ -11,6 +16,7 @@ use crate::ports::outbound::{
     IdGenerator, Clock,
 };
 
+/// Use case responsible for executing Move, Copy, Delete, and Rename operations.
 pub struct ExecuteOperationUseCase {
     config_repo: Arc<dyn ConfigurationRepository>,
     operation_repo: Arc<dyn OperationRepository>,
@@ -36,65 +42,71 @@ impl ExecuteOperationUseCase {
         }
     }
 
-    /// Resolves conflict and returns the final destination path.
+    /// Determine the final destination path for a single source file,
+    /// applying the given overwrite policy.
     async fn resolve_destination(
         &self,
         source: &WindowsPath,
         target_folder: &WindowsPath,
         policy: OverwritePolicy,
     ) -> Result<WindowsPath, UseCaseError> {
+        // Extract the file name from the source path
+        // OLD: source.as_str().ok_or(...).split('\\').last()...
+        // NEW: use Path methods – safer and more idiomatic
         let file_name = source
-            .as_str()
-            .ok_or_else(|| UseCaseError::InvalidCommand("Invalid source path".to_string()))?
-            .split('\\')
-            .last()
-            .ok_or_else(|| UseCaseError::InvalidCommand("Invalid file name".to_string()))?;
+            .file_name()
+            .ok_or_else(|| UseCaseError::InvalidCommand("Invalid source file name".to_string()))?;
 
-        let folder_path = target_folder
-            .as_str()
-            .ok_or_else(|| UseCaseError::Internal("Invalid target folder path".to_string()))?;
-
-        let initial_dest = WindowsPath::new(&format!("{}\\{}", folder_path, file_name))
-            .map_err(|e| UseCaseError::Internal(e.to_string()))?;
+        // Construct the initial destination path
+        let initial_dest = target_folder.join(&file_name);
 
         match policy {
+            // If the file already exists and policy is Skip, return a conflict error.
             OverwritePolicy::Skip => {
-                if self.file_system.exists(&initial_dest).await? {
-                    let dest = initial_dest
-                        .as_str()
-                        .ok_or_else(|| UseCaseError::Internal("Invalid destination path".to_string()))?;
-                    Err(UseCaseError::Conflict(format!("File already exists: {}", dest)))
+                if self.file_system.exists(&initial_dest).await
+                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
+                {
+                    Err(UseCaseError::Conflict(format!(
+                        "File already exists: {}",
+                        // OLD: initial_dest.as_str().ok_or(...)
+                        // NEW: use Display / to_string_lossy for logging
+                        initial_dest.to_string_lossy()
+                    )))
                 } else {
                     Ok(initial_dest)
                 }
             }
-            OverwritePolicy::Overwrite => Ok(initial_dest),
-            OverwritePolicy::AutoRename => {
-                let mut counter = 1;
-                let base_name = file_name;
-                let ext = source
-                    .extension()
-                    .map(|e| format!(".{}", e))
-                    .unwrap_or_default();
 
+            // Overwrite the existing file unconditionally.
+            OverwritePolicy::Overwrite => Ok(initial_dest),
+
+            // Append a numeric suffix until an unused name is found.
+            OverwritePolicy::AutoRename => {
+                let base_name = source
+                    .file_stem()
+                    .unwrap_or_else(|| file_name.to_str().unwrap_or("unnamed"));
+                let ext = source.extension();
+
+                let mut counter = 1u32;
                 loop {
-                    let new_name = if counter == 1 {
-                        format!("{} (1){}", base_name, ext)
+                    let candidate = if let Some(ext) = ext {
+                        target_folder.join(format!("{} ({}).{}", base_name, counter, ext.to_string_lossy()))
                     } else {
-                        format!("{} ({}){}", base_name, counter, ext)
+                        target_folder.join(format!("{} ({})", base_name, counter))
                     };
-                    let candidate = WindowsPath::new(&format!("{}\\{}", folder_path, new_name))
-                        .map_err(|e| UseCaseError::Internal(e.to_string()))?;
-                    if !self.file_system.exists(&candidate).await? {
+
+                    if !self.file_system.exists(&candidate).await
+                        .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
+                    {
                         return Ok(candidate);
                     }
-                    counter += 1;
+                    counter = counter.saturating_add(1);
                 }
             }
-            // Ask policy is handled at the adapter layer (GUI/CLI).
-            // Fallback to AutoRename if Ask is passed from a non-interactive context.
+
+            // Ask policy should be handled at the adapter layer (GUI/CLI).
+            // If it reaches the Use Case from a non-interactive context, fall back to AutoRename.
             OverwritePolicy::Ask => {
-                // For non-interactive contexts, treat Ask as AutoRename.
                 self.resolve_destination(source, target_folder, OverwritePolicy::AutoRename).await
             }
         }
@@ -103,22 +115,31 @@ impl ExecuteOperationUseCase {
 
 #[async_trait]
 impl ExecuteOperation for ExecuteOperationUseCase {
+    /// Execute a file operation command and return the result.
     async fn execute(&self, command: OperationCommand) -> Result<OperationResult, UseCaseError> {
-        let folders = self.config_repo.load_all().await?;
-        let now = self.clock.now();
+        // 1. Load all configured folders (needed to resolve target_folder_id -> path)
+        let folders = self.config_repo.load_all().await
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+
+        // 2. Create the operation aggregate
+        // OLD: let now = self.clock.now();
+        //      Operation::new(op_id, ..., now) and operation.start(now), operation.complete(..., now)
+        // NEW: start() and complete() no longer take a time parameter
         let op_id = OperationId::new();
 
-        // Determine target folder path and explicit target paths based on operation type
+        // Determine the target folder and explicit target paths based on operation type
         let (target_folder_path, target_paths) = match &command.operation_type {
             OperationType::Move | OperationType::Copy => {
                 let id = command
                     .target_folder_id
                     .as_ref()
-                    .ok_or_else(|| UseCaseError::InvalidCommand("Target folder required for Move/Copy".to_string()))?;
+                    .ok_or_else(|| UseCaseError::InvalidCommand(
+                        "Target folder ID is required for Move/Copy".to_string()
+                    ))?;
                 let folder = folders
                     .iter()
-                    .find(|f| &f.id == id)
-                    .ok_or_else(|| UseCaseError::FolderNotFound(id.to_string()))?;
+                    .find(|f| f.id == *id)
+                    .ok_or_else(|| UseCaseError::FolderNotFound(id.clone()))?;
                 (Some(folder.path.clone()), None)
             }
             OperationType::Delete => (None, None),
@@ -126,7 +147,9 @@ impl ExecuteOperation for ExecuteOperationUseCase {
                 let paths = command
                     .target_paths
                     .as_ref()
-                    .ok_or_else(|| UseCaseError::InvalidCommand("Target paths required for Rename".to_string()))?;
+                    .ok_or_else(|| UseCaseError::InvalidCommand(
+                        "Target paths are required for Rename".to_string()
+                    ))?;
                 if paths.len() != command.source_paths.len() {
                     return Err(UseCaseError::InvalidCommand(
                         "Source and target path counts must match for Rename".to_string(),
@@ -142,51 +165,63 @@ impl ExecuteOperation for ExecuteOperationUseCase {
             command.source_paths.clone(),
             target_folder_path,
             target_paths,
-            now,
+            // OLD: now,
+            // NEW: Operation::new still requires a timestamp for creation;
+            // keep the clock call for that purpose, but do not pass it to start/complete
+            self.clock.now(),
         );
 
-        operation
-            .start(now)
-            .map_err(|_| UseCaseError::InvalidState("Operation state transition failed".to_string()))?;
+        // 3. Start the operation (Pending → Executing)
+        // OLD: operation.start(now).map_err(|_| ...)
+        // NEW: start() no longer takes a time argument; it records Utc::now() internally
+        operation.start()
+            .map_err(|e| UseCaseError::Domain(e.to_string()))?;
 
-        let mut total_bytes = 0u64;
-        let mut processed = 0;
+        let mut total_bytes: u64 = 0;
+        let mut processed: u32 = 0;
 
+        // 4. Perform the actual file system operations
         match &command.operation_type {
             OperationType::Move => {
                 let target_folder = folders
                     .iter()
-                    .find(|f| &f.id == command.target_folder_id.as_ref().unwrap())
+                    .find(|f| f.id == command.target_folder_id.as_ref().unwrap())
                     .ok_or_else(|| UseCaseError::FolderNotFound("Target folder".to_string()))?;
 
                 for src in &command.source_paths {
                     let dest = self
                         .resolve_destination(src, &target_folder.path, command.overwrite_policy)
                         .await?;
-                    let _: u64 = self.file_system.move_file(src, &dest).await?;
-                    total_bytes += &0u64;
+                    // OLD: let _: u64 = self.file_system.move_file(src, &dest).await?;
+                    //      total_bytes += &0u64;  <-- dead assignment
+                    // NEW: store the returned file size
+                    let bytes = self.file_system.move_file(src, &dest).await
+                        .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+                    total_bytes += bytes;
                     processed += 1;
                 }
             }
             OperationType::Copy => {
                 let target_folder = folders
                     .iter()
-                    .find(|f| &f.id == command.target_folder_id.as_ref().unwrap())
+                    .find(|f| f.id == command.target_folder_id.as_ref().unwrap())
                     .ok_or_else(|| UseCaseError::FolderNotFound("Target folder".to_string()))?;
 
                 for src in &command.source_paths {
                     let dest = self
                         .resolve_destination(src, &target_folder.path, command.overwrite_policy)
                         .await?;
-                    let _: u64 = self.file_system.copy_file(src, &dest).await?;
-                    total_bytes += &0u64;
+                    let bytes = self.file_system.copy_file(src, &dest).await
+                        .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+                    total_bytes += bytes;
                     processed += 1;
                 }
             }
             OperationType::Delete => {
                 for src in &command.source_paths {
-                    let _: u64 = self.file_system.delete_file(src).await?;
-                    total_bytes += &0u64;
+                    let bytes = self.file_system.delete_file(src).await
+                        .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+                    total_bytes += bytes;
                     processed += 1;
                 }
             }
@@ -197,18 +232,23 @@ impl ExecuteOperation for ExecuteOperationUseCase {
                     .ok_or_else(|| UseCaseError::InvalidCommand("Target paths missing".to_string()))?;
 
                 for (src, dest) in command.source_paths.iter().zip(target_paths.iter()) {
-                    let _: u64 = self.file_system.rename_file(src, dest).await?;
-                    total_bytes += &0u64;
+                    let bytes = self.file_system.rename_file(src, dest).await
+                        .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+                    total_bytes += bytes;
                     processed += 1;
                 }
             }
         }
 
-        operation
-            .complete(processed, total_bytes, now)
-            .map_err(|_| UseCaseError::InvalidState("Operation state transition failed".to_string()))?;
+        // 5. Mark the operation as completed
+        // OLD: operation.complete(processed, total_bytes, now).map_err(|_| ...)
+        // NEW: complete() no longer takes a time argument
+        operation.complete(processed, total_bytes)
+            .map_err(|e| UseCaseError::Domain(e.to_string()))?;
 
-        self.operation_repo.save(&operation).await?;
+        // 6. Save the operation for history and potential undo
+        self.operation_repo.save(&operation).await
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
 
         Ok(OperationResult {
             operation_id: op_id,

@@ -3,13 +3,38 @@ name = "quicksort-infrastructure"
 version = "0.1.0"
 edition = "2021"
 
+# ---------------------------------------------------------------------------
+# Dependencies – Infrastructure implements ports defined in Application.
+#   Domain ← Application ← Infrastructure
+# ---------------------------------------------------------------------------
+
 [dependencies]
+# Async trait support (required by outbound ports)
 async-trait = { workspace = true }
+
+# Error handling
 thiserror = { workspace = true }
+
+# Domain layer – infrastructure operates on domain entities
 quicksort-domain = { path = "../quicksort-domain" }
+
+# Application layer – provides the port traits that infrastructure implements
+# NEW: Infrastructure MUST depend on Application to access the port interfaces
+# (ConfigurationRepository, OperationRepository, FileSystem, etc.)
+quicksort-application = { path = "../quicksort-application" }
+
+# Serialization / deserialization (JSON configs, operation history)
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1"
+
+# UUID generation (v4)
 uuid = { version = "1.23.4", features = ["v4"] }
+
+# Async runtime for file system operations
 tokio = { version = "1", features = ["full", "fs"] }
+
+# Temporary files / directories for testing
 tempfile = "3"
+
+# Convenience error handling (used in tests; production code uses specific errors)
 anyhow = "1.0"
