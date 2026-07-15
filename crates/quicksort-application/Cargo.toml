@@ -12,6 +12,12 @@ edition = "2021"
 # Asynchronous trait support (used by Port interfaces)
 async-trait = { workspace = true }
 
+# Time utilities for operation timestamps
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging framework
+tracing = "0.1"
+
 # Error handling – UseCaseError derives thiserror::Error
 thiserror = { workspace = true }
 

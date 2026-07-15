@@ -22,7 +22,14 @@ use async_trait::async_trait;
 
 use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
-// Imports for use cases are delegated through the struct fields.
+
+// Импорт типов UseCase через прямые ре-экспорты из crate::use_cases
+use crate::use_cases::{
+    ExecuteOperationUseCase,
+    UndoOperationUseCase,
+    GetFoldersUseCase,
+    ManageFoldersUseCase,
+};
 use super::{ExecuteOperation, GetFolders, ManageFolders, UndoOperation};
 use quicksort_domain::{Folder, FolderId, OperationId};
 
