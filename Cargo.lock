@@ -2824,6 +2824,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "quicksort-application",
  "quicksort-domain",
  "serde",
  "serde_json",
