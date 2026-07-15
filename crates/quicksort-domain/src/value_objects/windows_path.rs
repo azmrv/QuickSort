@@ -5,6 +5,16 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
 
+// Реализация Default для обратной совместимости
+// WindowsPath не может быть пустым - возвращаем корень текущего диска в конструкторе по умолчанию
+impl Default for WindowsPath {
+    fn default() -> Self {
+        // Для обратной совместимости создаем пустой путь (будет проваливаться валидации)
+        let empty_path = PathBuf::from("");
+        Self(empty_path)
+    }
+}
+
 /// Windows path value object
 /// Provides a strict representation of paths in Windows format (C:\folder\file)
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

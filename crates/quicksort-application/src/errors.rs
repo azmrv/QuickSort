@@ -30,6 +30,16 @@ pub enum UseCaseError {
     #[error("Operation not undoable: {0}")]
     UndoNotPossible(String),
 
-    #[error("Internal error: {0}")]
+    #[error("Invalid state transition: {0}")]
+    InvalidState(String),
+
+    #[error("Operation not found: {0}")]
+    OperationNotFound(String),
+
+    #[error("Domain error: {0}")]
+    Domain(String),
+
+    /// Внутренняя ошибка использования случая (использовать с осторожностью)
+    #[error("Internal Use Case error: {0}")]
     Internal(String),
 }

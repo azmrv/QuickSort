@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use quicksort_domain::{Folder, FolderId, WindowsPath};
 use quicksort_application::ports::outbound::ConfigurationRepository;
-use quicksort_application::errors::UseCaseError;
+use quicksort_infrastructure::errors::InfrastructureError;
 
 #[derive(Serialize, Deserialize)]
 struct ConfigFile {
@@ -35,20 +35,18 @@ impl JsonConfigurationRepository {
         Self { path }
     }
 
-    fn load_from_file(&self) -> Result<Vec<Folder>, UseCaseError> {
+    fn load_from_file(&self) -> Result<Vec<Folder>, InfrastructureError> {
         if !self.path.exists() {
             return Ok(vec![]);
         }
-        let content = fs::read_to_string(&self.path)
-            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
-        let config: ConfigFile = serde_json::from_str(&content)
-            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+        let content = fs::read_to_string(&self.path)?;
+        let config: ConfigFile = serde_json::from_str(&content)?;
 
         // Convert each folder data to domain Folder, handling potential path validation errors.
         let mut folders = Vec::with_capacity(config.folders.len());
         for f in config.folders {
             let path = WindowsPath::new(&f.path)
-                .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+                .map_err(|e| InfrastructureError::Repository(e.to_string()))?;
             folders.push(Folder {
                 id: FolderId::from_string(f.id),
                 name: f.name,
@@ -60,7 +58,7 @@ impl JsonConfigurationRepository {
         Ok(folders)
     }
 
-    fn save_to_file(&self, folders: &[Folder]) -> Result<(), UseCaseError> {
+    fn save_to_file(&self, folders: &[Folder]) -> Result<(), InfrastructureError> {
         let config = ConfigFile {
             version: 1,
             folders: folders.iter().map(|f| FolderData {
@@ -71,43 +69,56 @@ impl JsonConfigurationRepository {
                 sort_order: f.sort_order,
             }).collect(),
         };
-        let content = serde_json::to_string_pretty(&config)
-            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+        let content = serde_json::to_string_pretty(&config)?;
         fs::write(&self.path, content)
-            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+            .map_err(|e| InfrastructureError::Serialization(e.to_string()))?;
         Ok(())
     }
 }
 
 #[async_trait]
 impl ConfigurationRepository for JsonConfigurationRepository {
-    async fn load_all(&self) -> Result<Vec<Folder>, UseCaseError> {
+    async fn load_all(&self) -> Result<Vec<Folder>, InfrastructureError> {
         self.load_from_file()
     }
 
-    async fn save_all(&self, folders: &[Folder]) -> Result<(), UseCaseError> {
+    async fn save_all(&self, folders: &[Folder]) -> Result<(), InfrastructureError> {
         self.save_to_file(folders)
     }
 
-    async fn add(&self, folder: Folder) -> Result<(), UseCaseError> {
+    async fn add(&self, folder: Folder) -> Result<(), InfrastructureError> {
         let mut folders = self.load_from_file()?;
         folders.push(folder);
         self.save_to_file(&folders)
     }
 
-    async fn remove(&self, id: &FolderId) -> Result<(), UseCaseError> {
+    async fn remove(&self, id: &FolderId) -> Result<(), InfrastructureError> {
         let mut folders = self.load_from_file()?;
         folders.retain(|f| f.id != *id);
         self.save_to_file(&folders)
     }
 
-    async fn find_by_id(&self, id: &FolderId) -> Result<Option<Folder>, UseCaseError> {
+    async fn find_by_id(&self, id: &FolderId) -> Result<Option<Folder>, InfrastructureError> {
         let folders = self.load_from_file()?;
         Ok(folders.into_iter().find(|f| f.id == *id))
     }
 
-    async fn find_by_path(&self, path: &str) -> Result<Option<Folder>, UseCaseError> {
+    async fn find_by_path(&self, path: &str) -> Result<Option<Folder>, InfrastructureError> {
         let folders = self.load_from_file()?;
         Ok(folders.into_iter().find(|f| f.path.as_str() == path))
+    }
+
+    /// Возвращает ID папки "Документы" (по умолчанию).
+    /// Если папка не найдена, создаёт новый FolderId для неё.
+    async fn get_default_folder_id(&self) -> Result<FolderId, InfrastructureError> {
+        // Ищем существующую папку "Документы" по пути
+        let documents_path = WindowsPath::new("C:\\Users\\Public\\Documents")?;
+        
+        if let Some(folder) = self.find_by_path(documents_path.as_str())? {
+            return Ok(folder.id);
+        }
+
+        // Если не найдено, создаём новый ID (для использования при первой записи)
+        Ok(FolderId::new())
     }
 }

@@ -1,6 +1,3 @@
 mod in_memory_operation_repository;
 mod json_configuration_repository;
-// mod json_repository;
-
-pub use in_memory_operation_repository::InMemoryOperationRepository;
-pub use json_configuration_repository::JsonConfigurationRepository;
+mod json_operation_repository;

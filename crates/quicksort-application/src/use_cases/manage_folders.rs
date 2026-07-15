@@ -30,7 +30,7 @@ impl ManageFolders for ManageFoldersUseCase {
     async fn rename_folder(&self, id: FolderId, new_name: String) -> Result<(), UseCaseError> {
         let mut folders = self.config_repo.load_all().await?;
         let folder = folders.iter_mut().find(|f| f.id == id)
-            .ok_or_else(|| UseCaseError::FolderNotFound(id.as_str().to_string()))?;
+            .ok_or_else(|| UseCaseError::FolderNotFound(id.to_string()))?;
         folder.name = new_name;
         self.config_repo.save_all(&folders).await
     }

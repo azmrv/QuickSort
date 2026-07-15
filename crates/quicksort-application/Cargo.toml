@@ -8,7 +8,6 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 quicksort-domain = { path = "../quicksort-domain" }
 serde = { version = "1", features = ["derive"] }
-
-
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt", "macros"] }
+tokio = { workspace = true, features = ["rt", "macros", "sync", "rt-multi-thread"] }
+anyhow = "1.0"

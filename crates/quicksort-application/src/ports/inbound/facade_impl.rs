@@ -7,6 +7,7 @@ use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
 use crate::use_cases::{
     ExecuteOperationUseCase, 
+    UndoOperationUseCase,
     GetFoldersUseCase, ManageFoldersUseCase,
 };
 use super::{ExecuteOperation, GetFolders, ManageFolders};
@@ -15,7 +16,7 @@ use quicksort_domain::{Folder, FolderId, OperationId};
 /// Combined implementation of all inbound ports.
 pub struct ApplicationFacadeImpl {
     pub execute: Arc<ExecuteOperationUseCase>,
-    // pub undo: Arc<UndoOperationUseCase>,
+    pub undo: Arc<UndoOperationUseCase>,
     pub get_folders: Arc<GetFoldersUseCase>,
     pub manage_folders: Arc<ManageFoldersUseCase>,
 }
@@ -27,12 +28,12 @@ impl ExecuteOperation for ApplicationFacadeImpl {
     }
 }
 
-// #[async_trait]
-// impl UndoOperation for ApplicationFacadeImpl {
-//     async fn undo(&self, operation_id: OperationId) -> Result<OperationResult, UseCaseError> {
-//         self.undo.undo(operation_id).await
-//     }
-// }
+#[async_trait]
+impl UndoOperation for ApplicationFacadeImpl {
+    async fn undo(&self, operation_id: OperationId) -> Result<OperationResult, UseCaseError> {
+        self.undo.undo(operation_id).await
+    }
+}
 
 #[async_trait]
 impl GetFolders for ApplicationFacadeImpl {
