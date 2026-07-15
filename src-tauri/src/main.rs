@@ -95,8 +95,7 @@ fn main() {
     if let Some(cmd) = &cli.command {
         match cmd {
             Commands::Move { target, file } => {
-                // OLD: MoveEngine::move_file (deprecated)
-                // NEW: The CLI Move command should also go through the facade,
+                // The CLI Move command should also go through the facade,
                 // but for now we keep the legacy call to avoid scope creep.
                 if let Err(e) = crate::move_engine::MoveEngine::move_file(
                     std::path::Path::new(file),

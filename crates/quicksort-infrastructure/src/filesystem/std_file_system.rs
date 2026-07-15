@@ -21,8 +21,7 @@ impl StdFileSystem {
 #[async_trait]
 impl FileSystem for StdFileSystem {
     async fn exists(&self, path: &WindowsPath) -> Result<bool, UseCaseError> {
-        // OLD: tokio_fs::metadata(Path::new(path.as_str()))
-        // NEW: use to_path_buf() for reliable conversion
+        // use to_path_buf() for reliable conversion
         Ok(tokio_fs::metadata(path.to_path_buf()).await.is_ok())
     }
 
@@ -90,8 +89,7 @@ mod tests {
         }
         
         let fs = StdFileSystem;
-        // OLD: WindowsPath::new(file_path.to_str().unwrap().to_string())
-        // NEW: pass the &str directly
+        // pass the &str directly
         let path = WindowsPath::new(file_path.to_str().unwrap()).unwrap();
         let size = fs.get_file_size(&path).await.unwrap();
         

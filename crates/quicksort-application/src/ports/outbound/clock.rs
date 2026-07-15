@@ -33,8 +33,4 @@ pub trait Clock: Send + Sync {
     fn now(&self) -> DateTime<Utc>;
 }
 
-// OLD: used `std::time::SystemTime`
-// pub trait Clock: Send + Sync {
-//     fn now(&self) -> SystemTime;
-// }
-// NEW: switched to `chrono::DateTime<Utc>` for JSON compatibility
+// switched to `chrono::DateTime<Utc>` for JSON compatibility

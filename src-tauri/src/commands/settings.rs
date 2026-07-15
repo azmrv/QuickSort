@@ -33,7 +33,6 @@ use crate::state::{AppState, LogEntry};
 /// `"Selector"`, otherwise `"Editor"`.
 #[tauri::command]
 pub fn get_mode() -> String {
-    // OLD: hardcoded "Editor"
     "Editor".to_string()
 }
 
@@ -78,7 +77,6 @@ pub fn check_menu_status() -> bool {
 /// through the facade, this command should be removed.
 #[tauri::command]
 pub fn get_logs(state: State<AppState>) -> Vec<LogEntry> {
-    // OLD: state.logs.lock().clone()
     // `AppState.logs` was removed during the migration.  To keep the
     // `get_logs` endpoint working, we return an empty list for now.
     // Future: replace with `state.facade.get_operation_history()`.
@@ -120,7 +118,6 @@ pub fn register_com_server(state: State<AppState>) -> Result<String, String> {
     // ---- 2. Register the CLSID with the path to the DLL ----
     let (clsid_key, _) = hkcu
         .create_subkey(format!("Software\\Classes\\CLSID\\{}", clsid))
-        // OLD: Не удалось создать CLSID
         .map_err(|e| format!("Failed to create CLSID key: {}", e))?;
     clsid_key
         .set_value("", &"QuickSort Context Menu Extension")
@@ -153,9 +150,7 @@ pub fn register_com_server(state: State<AppState>) -> Result<String, String> {
     // ---- 4. Log the registration ----
     let entry = LogEntry {
         timestamp: Utc::now().to_rfc3339(),
-        // OLD: COM-сервер зарегистрирован
         event: "COM server registered".into(),
-        // OLD: Успех
         status: "Success".into(),
     };
     activity_log::add_log(&state.logs, entry.event, entry.status);
@@ -168,7 +163,6 @@ pub fn register_com_server(state: State<AppState>) -> Result<String, String> {
         .spawn()
         .map_err(|e| format!("Failed to restart Explorer: {}", e))?;
 
-    // OLD: COM-сервер успешно зарегистрирован и Проводник перезапущен.
     Ok("COM server registered successfully. Explorer has been restarted.".to_string())
 }
 
@@ -207,14 +201,11 @@ pub fn unregister_com_server(state: State<AppState>) -> Result<String, String> {
     // ---- 3. Log the event ----
     let entry = LogEntry {
         timestamp: Utc::now().to_rfc3339(),
-        // OLD: COM-сервер удалён
         event: "COM server unregistered".into(),
-        // OLD: Успех
         status: "Success".into(),
     };
     activity_log::add_log(&state.logs, entry.event, entry.status);
 
-    // OLD: COM-сервер успешно удалён из реестра.
     Ok("COM server unregistered successfully.".to_string())
 }
 

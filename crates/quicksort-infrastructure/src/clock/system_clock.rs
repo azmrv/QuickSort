@@ -7,14 +7,11 @@ use quicksort_application::ports::outbound::Clock;
 pub struct SystemClock;
 
 impl Clock for SystemClock {
-    // OLD: returned a Unix timestamp (u64)
-    // NEW: returns DateTime<Utc> as required by the updated port
+    // returns DateTime<Utc> as required by the updated port
     fn now(&self) -> DateTime<Utc> {
         Utc::now()
     }
 }
 
-// OLD: use std::time::{SystemTime, UNIX_EPOCH};
-// OLD: use quicksort_infrastructure_contract::timestamp::Timestamp;
 // The old implementation was based on a non-existent trait.  The new
 // implementation matches the `Clock` port from `quicksort-application`.

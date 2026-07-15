@@ -21,7 +21,6 @@ use parking_lot::Mutex;
 use std::sync::OnceLock;
 
 /// Global storage for a file path that should be opened in the Selector.
-// OLD: Хранит путь к файлу, который передан через --select-folder
 static PENDING_FILE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 
 /// Retrieves and clears the pending file path, if any.

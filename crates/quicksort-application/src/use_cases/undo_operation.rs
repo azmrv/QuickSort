@@ -46,11 +46,10 @@ impl UndoOperation for UndoOperationUseCase {
             .find_by_id(&operation_id)
             .await
             .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?
-            .ok_or_else(|| UseCaseError::OperationNotFound(operation_id.clone()))?;
+            .ok_or_else(|| UseCaseError::OperationNotFound(operation_id))?;
 
         // 2. Validate that the operation can be undone (only Completed → Undone)
-        // OLD: if op.state != quicksort_domain::OperationState::Completed {
-        // NEW: use pattern match for clarity and completeness
+        // use pattern match for clarity and completeness
         if !matches!(op.state, OperationState::Completed { .. }) {
             return Err(UseCaseError::UndoNotPossible(
                 "Only completed operations can be undone".to_string(),
@@ -67,11 +66,8 @@ impl UndoOperation for UndoOperationUseCase {
         }
 
         // 4. Mark the operation as undone using the domain method
-        // OLD: op.state = OperationState::Undone;
-        //      op.updated_at = self.clock.now();
-        // NEW: use the aggregate's own method to preserve invariants
-        let now = self.clock.now();
-        op.mark_undone(now).map_err(|e| UseCaseError::DomainError(e.to_string()))?;
+        // use the aggregate's own method to preserve invariants
+        op.mark_undone().map_err(|e| UseCaseError::Domain(e))?;
 
         // 5. Persist the updated operation
         self.operation_repo
@@ -102,8 +98,7 @@ impl UndoOperationUseCase {
             .ok_or_else(|| UseCaseError::UndoNotPossible("No target folder for Move".to_string()))?;
 
         // Determine the file name from the source path
-        // OLD: .as_str().ok_or(...) – WindowsPath may not have as_str()
-        // NEW: convert to a string via Display/ToString
+        // convert to a string via Display/ToString
         let file_name = source_path
             .file_name()
             .ok_or_else(|| UseCaseError::UndoNotPossible("Invalid source file name".to_string()))?;

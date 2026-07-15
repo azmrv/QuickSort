@@ -41,11 +41,9 @@ pub struct Folder {
     /// Usage statistics (not persisted if not needed, but available for analytics).
     #[serde(default)]
     pub stats: FolderStats,
-    // OLD: pub created_at: SystemTime,
-    /// When this folder was first created.
+    // When this folder was first created.
     pub created_at: DateTime<Utc>,
-    // OLD: pub updated_at: SystemTime,
-    /// When this folder was last modified.
+    // When this folder was last modified.
     pub updated_at: DateTime<Utc>,
 }
 
@@ -88,13 +86,11 @@ impl Folder {
     ///
     /// # Errors
     /// Returns `DomainError::InvalidFolderName` if the name is empty.
-    // OLD: returned `Result<(), String>` with a raw string error
-    // NEW: returns `Result<(), DomainError>` for consistency
+    // returns `Result<(), DomainError>` for consistency
     pub fn update_name(&mut self, name: impl Into<String>) -> Result<(), DomainError> {
         let new_name = name.into();
         if new_name.trim().is_empty() {
-            // OLD: return Err(format!("Folder name cannot be empty"));
-            // NEW: use a proper domain error variant
+            // use a proper domain error variant
             return Err(DomainError::InvalidFolderName);
         }
         self.name = new_name;

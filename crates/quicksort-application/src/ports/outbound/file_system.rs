@@ -34,8 +34,7 @@ pub trait FileSystem: Send + Sync {
     /// # Errors
     /// Returns `FileNotFound` if the path does not exist or is a directory.
     /// Returns `FileSystemError` if metadata retrieval fails.
-    // OLD: Получить размер файла в байтах.
-    // NEW: English comment as per project standards
+    // English comment as per project standards
     async fn get_file_size(&self, path: &WindowsPath) -> Result<u64, UseCaseError>;
 
     /// Moves a file from `from` to `to`.

@@ -28,8 +28,3 @@ pub use quicksort_ipc_contract::{
 
 // The old types below are no longer used, but are kept as comments for
 // reference during the migration.
-
-// OLD: pub struct PipeCommand { ... }
-// OLD: pub enum PipeAction { ... }
-// OLD: pub struct OperationCommand { ... }
-// (all replaced by the types in quicksort-ipc-contract)

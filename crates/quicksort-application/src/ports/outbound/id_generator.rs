@@ -29,8 +29,4 @@ pub trait IdGenerator: Send + Sync {
     fn generate(&self) -> OperationId;
 }
 
-// OLD: used String
-// pub trait IdGenerator: Send + Sync {
-//     fn generate(&self) -> String;
-// }
-// NEW: switched to `OperationId` for type safety and domain alignment
+// switched to `OperationId` for type safety and domain alignment

@@ -18,11 +18,6 @@
 //!    operations from `JsonOperationRepository`.
 //! 3. Delete this file.
 
-// OLD: use crate::state::LogEntry;
-// OLD: use chrono::Utc;
-// OLD: use parking_lot::Mutex;
-// OLD: use std::path::PathBuf;
-
 // All functions below are kept for backward compatibility during the
 // transition.  They will be removed once the migration is complete.
 

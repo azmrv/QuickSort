@@ -10,7 +10,7 @@
 //!   (`serde`, `uuid`, `chrono`, `thiserror`) that do not impose
 //!   architectural constraints.
 
-// OLD: pub mod dtos;
+
 // DTOs (OperationCommand, OperationResult, OverwritePolicy) are part of
 // the Application layer's contract with the outside world.  They were
 // temporarily placed here during an early refactoring phase but have
@@ -30,6 +30,5 @@ pub use errors::DomainError;
 pub use events::DomainEvent;
 pub use value_objects::{WindowsPath, FolderId, OperationId};
 
-// OLD: pub use dtos::{OperationCommand, OperationResult, OverwritePolicy, create_operation_failure};
-// NEW: DTOs are no longer re-exported from the domain layer.
+// DTOs are no longer re-exported from the domain layer.
 // Adapters and Application should obtain them from `quicksort-application`.У нас есть исправленный доменный слой, где DTO удалены. Теперь нужно убедиться, что Application слой правильно определяет и экспортирует эти DTO, и что все ссылки в адаптерах (Tauri команды, IPC) обновлены. Следующий шаг — проверить `quicksort-application` и обновить импорты во всех крейтах, которые использовали `quicksort-domain::OperationCommand`. Готовы продолжить?

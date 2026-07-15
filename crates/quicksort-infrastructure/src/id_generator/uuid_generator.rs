@@ -6,8 +6,7 @@ use quicksort_application::ports::outbound::IdGenerator;
 pub struct UuidGenerator;
 
 impl IdGenerator for UuidGenerator {
-    // OLD: returned `String`
-    // NEW: returns `OperationId` as required by the updated port
+    // returns `OperationId` as required by the updated port
     fn generate(&self) -> OperationId {
         OperationId::from_uuid(Uuid::new_v4())
     }

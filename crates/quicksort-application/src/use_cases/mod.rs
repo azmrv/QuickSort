@@ -13,8 +13,7 @@
 //!
 //! All use cases are re-exported for convenient access by the application facade.
 
-// OLD: simple `mod` declarations without documentation
-// NEW: each sub-module is now declared with a brief comment for clarity
+// each sub-module is now declared with a brief comment for clarity
 
 mod execute_operation;   // ExecuteOperationUseCase – Move, Copy, Delete, Rename
 mod undo_operation;      // UndoOperationUseCase – revert completed operations

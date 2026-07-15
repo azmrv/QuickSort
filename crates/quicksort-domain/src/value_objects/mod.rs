@@ -39,7 +39,6 @@ impl FolderId {
     }
 
     /// Returns the string representation of the UUID.
-    // OLD: pub fn to_string(&self) -> String { self.0.to_string() }
     // The standard way to get a string from an ID is through `Display`.
     // Keeping `to_string` as a convenience method is fine, but it should
     // just delegate to the `Display` implementation for consistency.
@@ -51,7 +50,7 @@ impl FolderId {
     ///
     /// # Errors
     /// Returns a `DomainError` if the string is not a valid UUID.
-    // NEW: added a safe constructor that validates the input
+    // added a safe constructor that validates the input
     pub fn from_string(s: &str) -> Result<Self, crate::errors::DomainError> {
         Uuid::parse_str(s)
             .map(Self)
@@ -99,9 +98,7 @@ impl OperationId {
     ///
     /// # Errors
     /// Returns a `DomainError` if the string is not a valid UUID.
-    // OLD: возвращал `Result<Self, String>` – raw string errors are
-    // inconsistent with the rest of the domain.
-    // NEW: returns `Result<Self, DomainError>` for uniformity.
+    // returns `Result<Self, DomainError>` for uniformity.
     pub fn from_string(s: &str) -> Result<Self, crate::errors::DomainError> {
         Uuid::parse_str(s)
             .map(Self)

@@ -100,8 +100,7 @@ pub enum UseCaseError {
     /// An unexpected internal error occurred. Use sparingly, only for
     /// truly unrecoverable situations (e.g., poisoned mutex, broken
     /// invariant).
-    // OLD: комментарий на русском языке
-    // NEW: English-only comment as per project standards
+    // English-only comment as per project standards
     #[error("Internal Use Case error: {0}")]
     Internal(String),
 }

@@ -16,11 +16,6 @@
 //! Once all references in this crate have been updated, this file should
 //! be deleted.
 
-// OLD: use std::path::PathBuf;
-// OLD: use serde::{Deserialize, Serialize};
-// OLD: use uuid::Uuid;
-// OLD: use chrono::{DateTime, Utc};
-
 // Re-export the canonical types so that existing imports continue to work.
 // This is a temporary bridge; each `use crate::models::...` should be
 // replaced with the proper domain or application import.

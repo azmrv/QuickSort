@@ -39,8 +39,7 @@ impl ManageFolders for ManageFoldersUseCase {
         self.config_repo
             .add(folder)
             .await
-            // OLD: no error mapping – relied on `?` with implicit conversion
-            // NEW: explicit mapping from anyhow::Error to UseCaseError
+            // explicit mapping from anyhow::Error to UseCaseError
             .map_err(|e| UseCaseError::RepositoryError(e.to_string()))
     }
 
@@ -76,8 +75,7 @@ impl ManageFolders for ManageFoldersUseCase {
             .find(|f| f.id == id)
             .ok_or_else(|| UseCaseError::FolderNotFound(id.to_string()))?;
 
-        // OLD: direct field mutation
-        // NEW: preserve the original comment for clarity
+        // preserve the original comment for clarity
         folder.name = new_name;
 
         // Persist the updated list
@@ -95,8 +93,7 @@ impl ManageFolders for ManageFoldersUseCase {
     /// in the `Folder` entity, which will be introduced during the SQLite migration
     /// (see TASK-015). Once those fields exist, this method will delegate to a
     /// `ConfigurationRepository::update` method that modifies a single folder.
-    // OLD: Russian TODO comment
-    // NEW: Translated to English with a reference to the tracking task
+    // Translated to English with a reference to the tracking task
     // TODO: TASK-015 – implement toggle_favorite after Folder gains is_favorite field
     async fn toggle_favorite(&self, _id: FolderId) -> Result<(), UseCaseError> {
         Ok(())

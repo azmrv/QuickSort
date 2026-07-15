@@ -53,24 +53,24 @@
 *Этот план является рабочим документом и может быть скорректирован в процессе разработки.*
 </write_to_file>
 <task_progress>
-- [x] Прочитать файл agents.md (Выполнено)
-- [x] Изучить структуру папки docs (Выполнено)
-- [x] Собрать контент из подпапок `docs/architecture`, `docs/specs`, `docs/standards` и т.д. (Выполнено)
-- [x] Прочитать ADR 001: Architectural Style (Выполнено)
-- [x] Прочитать ADR 002: Dependency Rule (Выполнено)
-- [x] Прочитать ADR 003: Domain First (Выполнено)
-- [x] Прочитать ADR 004: Operations Primary (Выполнено)
-- [x] Прочитать ADR 005: Domain Events (Выполнено)
-- [x] Прочитать ADR 006: Stable Ports (Выполнено)
-- [x] Собрать контент из оставшихся ключевых файлов документации (`ai/`, `standards/`) - Чтение standards/testing.md (Выполнено)
-- [x] Собрать контент из оставшихся ключевых файлов документации - Чтение docs/architecture/vision.md (Выполнено)
-- [x] Проверить содержимое подпапок `docs/specs` и `docs/standards` на наличие новых критических документов. (Найдена spec: execute-operation.md)
-- [x] Анализировать собранный контент для обновления agents.md
-- [x] Создание документа плана реализации (implementation_plan.md)
-- [x] Выполнение интеграции документации в agents.md
-- [x] Рефакторинг `resolve_conflict` и обновление stubs для Rename/Delete в `execute_operation.rs`.
-- [x] Обновить DTO `OperationCommand` для поддержки Delete и Rename операций.
-- [x] Обновить Use Case `ExecuteOperationUseCase` для обработки Delete и Rename, используя новые поля DTO.
+- [ ] Прочитать файл agents.md (Выполнено)
+- [ ] Изучить структуру папки docs (Выполнено)
+- [ ] Собрать контент из подпапок `docs/architecture`, `docs/specs`, `docs/standards` и т.д. (Выполнено)
+- [ ] Прочитать ADR 001: Architectural Style (Выполнено)
+- [ ] Прочитать ADR 002: Dependency Rule (Выполнено)
+- [ ] Прочитать ADR 003: Domain First (Выполнено)
+- [ ] Прочитать ADR 004: Operations Primary (Выполнено)
+- [ ] Прочитать ADR 005: Domain Events (Выполнено)
+- [ ] Прочитать ADR 006: Stable Ports (Выполнено)
+- [ ] Собрать контент из оставшихся ключевых файлов документации (`ai/`, `standards/`) - Чтение standards/testing.md (Выполнено)
+- [ ] Собрать контент из оставшихся ключевых файлов документации - Чтение docs/architecture/vision.md (Выполнено)
+- [ ] Проверить содержимое подпапок `docs/specs` и `docs/standards` на наличие новых критических документов. (Найдена spec: execute-operation.md)
+- [ ] Анализировать собранный контент для обновления agents.md
+- [ ] Создание документа плана реализации (implementation_plan.md)
+- [ ] Выполнение интеграции документации в agents.md
+- [ ] Рефакторинг `resolve_conflict` и обновление stubs для Rename/Delete в `execute_operation.rs`.
+- [ ] Обновить DTO `OperationCommand` для поддержки Delete и Rename операций.
+- [ ] Обновить Use Case `ExecuteOperationUseCase` для обработки Delete и Rename, используя новые поля DTO.
 - [ ] Проверить, что все зависимости (например, из `quicksort-domain`) обновлены для новых типов операций.
 </task_progress>
 </write_to_file>

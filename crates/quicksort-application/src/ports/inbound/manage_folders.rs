@@ -52,7 +52,6 @@ pub trait ManageFolders: Send + Sync {
     /// toggling a favorite is a boolean operation unrelated to ordering.
     /// Order management will be handled separately when the SQLite
     /// migration adds a dedicated `sort_order` field.
-    // OLD: async fn toggle_favorite(&self, id: FolderId, order: i32) -> Result<(), UseCaseError>;
-    // NEW: order parameter removed – see TASK-015 for ordering feature
+    // order parameter removed – see TASK-015 for ordering feature
     async fn toggle_favorite(&self, id: FolderId) -> Result<(), UseCaseError>;
 }

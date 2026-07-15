@@ -21,7 +21,7 @@ use crate::ports::inbound::ExecuteOperation;
 ///
 /// This is the only public function in the pipeline module. Adapters should
 /// call it with the command received from the user or external system.
-pub fn run_pipeline(
+pub async fn run_pipeline(
     command: OperationCommand,
     execute_use_case: &dyn ExecuteOperation,
 ) -> Result<OperationResult, UseCaseError> {
@@ -29,7 +29,7 @@ pub fn run_pipeline(
     validate_command(&command)?;
 
     // Stage 2: Execute the command via the Use Case
-    let result = execute_use_case.execute(command)?;
+    let result = execute_use_case.execute(command).await?;
 
     // Stage 3: Log the outcome (in a real system, this might write to a file,
     // send to a monitoring system, or emit a domain event)
@@ -63,8 +63,7 @@ fn validate_command(command: &OperationCommand) -> Result<(), UseCaseError> {
         ));
     }
 
-    // OLD: no path traversal check
-    // NEW: basic path traversal prevention – reject paths that try to escape
+    // basic path traversal prevention – reject paths that try to escape
     // the allowed directories via ".." sequences.
     for path in &command.source_paths {
         // Check for ".." components which could be used to traverse directories
@@ -134,7 +133,7 @@ mod tests {
     }
 
     /// Helper to create a test command.
-    fn test_command() -> OperationCommand {
+    async fn test_command() -> OperationCommand {
         OperationCommand {
             operation_type: OperationType::Move,
             source_paths: vec![WindowsPath::new("C:\\test.txt").unwrap()],
@@ -144,24 +143,24 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_validation_empty_sources() {
+    #[tokio::test]
+    async fn test_validation_empty_sources() {
         let mut cmd = test_command();
         cmd.source_paths = vec![];
         let result = validate_command(&cmd);
         assert!(matches!(result, Err(UseCaseError::InvalidCommand(_))));
     }
 
-    #[test]
-    fn test_validation_path_traversal() {
+    #[tokio::test]
+    async fn test_validation_path_traversal() {
         let mut cmd = test_command();
         cmd.source_paths = vec![WindowsPath::new("C:\\..\\secret.txt").unwrap()];
         let result = validate_command(&cmd);
         assert!(matches!(result, Err(UseCaseError::InvalidCommand(_))));
     }
 
-    #[test]
-    fn test_validation_valid() {
+    #[tokio::test]
+    async fn test_validation_valid() {
         let cmd = test_command();
         let result = validate_command(&cmd);
         assert!(result.is_ok());
@@ -170,16 +169,16 @@ mod tests {
     #[tokio::test]
     async fn test_pipeline_success() {
         let mock = MockExecuteOperation;
-        let cmd = test_command();
-        let result = run_pipeline(cmd, &mock);
+        let cmd = test_command().await;
+        let result = run_pipeline(cmd, &mock).await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_pipeline_execution_error() {
         let mock = FailingMockExecuteOperation;
-        let cmd = test_command();
-        let result = run_pipeline(cmd, &mock);
+        let cmd = test_command().await;
+        let result = run_pipeline(cmd, &mock).await;
         assert!(matches!(result, Err(UseCaseError::FileSystemError(_))));
     }
 }

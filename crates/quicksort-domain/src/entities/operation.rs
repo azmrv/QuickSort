@@ -19,8 +19,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-// OLD: use std::time::SystemTime;
-// NEW: use chrono::{DateTime, Utc}; — better serialization support
+// use chrono::{DateTime, Utc}; — better serialization support
 
 /// Defines the kind of file operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,8 +37,7 @@ pub enum OperationState {
     Executing,
     Completed {
         processed_files: u32,
-        // OLD: bytes_moved: u64,
-        // NEW: renamed to bytes_processed to accurately reflect copy operations
+        // renamed to bytes_processed to accurately reflect copy operations
         bytes_processed: u64,
     },
     Failed {
@@ -62,9 +60,7 @@ pub struct Operation {
     pub source_paths: Vec<WindowsPath>,
     pub target_folder_path: Option<WindowsPath>,
     pub target_paths: Option<Vec<WindowsPath>>,
-    // OLD: pub created_at: SystemTime,
     pub created_at: DateTime<Utc>,
-    // OLD: pub updated_at: SystemTime,
     pub updated_at: DateTime<Utc>,
     #[serde(skip)]
     pub(crate) events: Vec<DomainEvent>,

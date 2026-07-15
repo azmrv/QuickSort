@@ -26,8 +26,7 @@ pub use undo_operation::UndoOperation;
 pub use get_folders::GetFolders;
 pub use manage_folders::ManageFolders;
 pub use facade::ApplicationFacade;
-// OLD: pub use facade_impl::ApplicationFacadeImpl;
-// NEW: ApplicationFacadeImpl is now re-exported for adapters that need
+// ApplicationFacadeImpl is now re-exported for adapters that need
 // to construct the facade (e.g., during dependency injection in main.rs).
 pub use facade_impl::ApplicationFacadeImpl;
 

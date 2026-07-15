@@ -34,17 +34,8 @@ pub trait OperationRepository: Send + Sync {
     async fn delete_all(&self) -> Result<(), UseCaseError>;
 }
 
-// OLD: original trait definition (kept for reference)
-// #[async_trait::async_trait]
-// pub trait OperationRepository: Send + Sync {
-//     async fn save(&self, operation: &Operation) -> Result<()>;
-//     async fn load_all(&self) -> Result<Vec<Operation>>;
-//     async fn load_last(&self) -> Result<Option<Operation>>;
-//     async fn update_status(&self, id: &str, status: OperationStatus) -> Result<()>;
-//     async fn delete_all(&self) -> Result<()>;
-// }
-//
-// NEW: redesigned with explicit OperationId, OperationStatus removed
+
+// redesigned with explicit OperationId, OperationStatus removed
 // (status is managed inside the Operation aggregate), and proper
 // error type (UseCaseError) instead of anyhow::Result.
 //

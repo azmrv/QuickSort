@@ -61,8 +61,7 @@ async fn move_target_folder_not_found() {
     );
 
     // A command targeting a folder that does not exist
-    // OLD: target_folder_id: Some(FolderId::from_string("non-existent"))
-    // NEW: FolderId::from_string is not a constructor; we create a FolderId
+    // FolderId::from_string is not a constructor; we create a FolderId
     // directly using a test helper or the newtype's constructor.
     let command = OperationCommand {
         operation_type: OperationType::Move,
@@ -75,8 +74,7 @@ async fn move_target_folder_not_found() {
     // ---- When ----
     let result = use_case.execute(command).await;
 
-    // ---- Then ----
-    // OLD: assert!(matches!(result, Err(UseCaseError::FolderNotFound(_))));
+    // ---- Then ----    
     // The error variant may be different depending on how the use case
     // resolves the folder ID. With our current implementation,
     // OperationCommand::target_folder_id is a plain String, and the

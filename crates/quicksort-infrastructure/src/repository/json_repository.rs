@@ -24,7 +24,7 @@ pub struct JsonOperationRepository {
 impl JsonOperationRepository {
     /// Creates a new repository.  The file will be stored in
     /// `%APPDATA%\QuickSort\operations.json`.
-    // OLD: used `directories::ProjectDirs` – removed to reduce dependency
+    // used `directories::ProjectDirs` – removed to reduce dependency
     // footprint.  The path is now directly derived from `APPDATA` for
     // consistency with other configuration files.
     pub fn new() -> Result<Self, UseCaseError> {
@@ -71,8 +71,7 @@ impl OperationRepository for JsonOperationRepository {
     /// Saves (inserts or updates) an operation.
     async fn save(&self, operation: &Operation) -> Result<(), UseCaseError> {
         let mut ops = self.read_all()?;
-        // OLD: checked `o.id == operation.id`
-        // NEW: `OperationId` supports equality, so the comparison is unchanged.
+        // `OperationId` supports equality, so the comparison is unchanged.
         if let Some(existing) = ops.iter_mut().find(|o| o.id == operation.id) {
             *existing = operation.clone();
         } else {

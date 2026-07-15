@@ -11,12 +11,9 @@ use quicksort_application::ApplicationFacadeImpl;
 use quicksort_application::dtos::{OperationCommand, OperationResult};
 use quicksort_application::errors::UseCaseError;
 
-// OLD: use crate::folder::repository::JsonRepository;
-// OLD: use crate::folder::service::FolderService;
 // The old FolderService and related modules have been removed.
 // All business logic now goes through the ApplicationFacade.
 
-// OLD: LogEntry and logs – logging was previously done ad-hoc.
 // Logging is now handled by domain events and the ActivityLog
 // infrastructure adapter, so the state no longer needs to track logs.
 
@@ -39,4 +36,3 @@ pub struct AppState {
     // pub pending_file: Mutex<Option<String>>,
 }
 
-// OLD: LogEntry struct removed – logging is handled by infrastructure.

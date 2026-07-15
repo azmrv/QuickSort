@@ -90,7 +90,6 @@ quicksort-application = { path = "../crates/quicksort-application" }
 # into Use Cases.
 quicksort-infrastructure = { path = "../crates/quicksort-infrastructure" }
 
-# OLD: quicksort-domain = { path = "../crates/quicksort-domain" }
 # REMOVED: Adapters must not depend directly on the Domain layer.
 # All domain types (Folder, OperationId, WindowsPath) are accessed
 # through the Application layer's DTOs and port interfaces.

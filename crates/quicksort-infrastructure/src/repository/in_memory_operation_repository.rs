@@ -31,16 +31,14 @@ impl InMemoryOperationRepository {
 #[async_trait]
 impl OperationRepository for InMemoryOperationRepository {
     async fn find_by_id(&self, id: &OperationId) -> Result<Option<Operation>, UseCaseError> {
-        // OLD: storage.get(id.as_str()).cloned()
-        // NEW: OperationId::to_string() returns the UUID string
+        // OperationId::to_string() returns the UUID string
         let storage = self.storage.lock().unwrap();
         Ok(storage.get(&id.to_string()).cloned())
     }
 
     async fn save(&self, operation: &Operation) -> Result<(), UseCaseError> {
         let mut storage = self.storage.lock().unwrap();
-        // OLD: operation.id.as_str() – OperationId does not have as_str()
-        // NEW: use to_string() via the Display implementation
+        // use to_string() via the Display implementation
         storage.insert(operation.id.to_string(), operation.clone());
         Ok(())
     }

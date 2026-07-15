@@ -35,7 +35,6 @@ use crate::errors::DomainError;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WindowsPath(PathBuf);
 
-// OLD: impl Default { … returns empty path … }
 // An empty path violates the type's invariant.  A reasonable default is
 // the root of the current drive, which is always valid.
 impl Default for WindowsPath {
@@ -70,7 +69,6 @@ impl WindowsPath {
     /// # Errors
     /// Returns `DomainError::EmptyPath` or `DomainError::InvalidPath` if
     /// the input does not meet the requirements.
-    // OLD: comments were in Russian
     pub fn new(path: &str) -> Result<Self, DomainError> {
         // Normalise separators to backslashes.
         let s = path.replace('/', "\\");
@@ -100,7 +98,6 @@ impl WindowsPath {
         Ok(Self(PathBuf::from(s)))
     }
 
-    // OLD: try_from_str – bypassed validation completely.
     // This method is kept for backward compatibility but marked deprecated.
     // New code should use `WindowsPath::new()` instead.
     #[deprecated(since = "0.2.0", note = "Use WindowsPath::new() for validated construction")]
@@ -133,7 +130,6 @@ impl WindowsPath {
     }
 
     /// Returns the path as a string (lossy conversion for non-UTF-8).
-    // OLD: pub fn to_string(&self) -> String { self.as_str().unwrap_or("").to_string() }
     // Using `unwrap_or("")` silently hides invalid paths.  Use `to_string_lossy`
     // which always returns a usable string.
     pub fn to_string(&self) -> String {
@@ -168,7 +164,6 @@ impl WindowsPath {
         self.as_str().map(|s| s.chars().take(2).collect())
     }
 
-    // OLD: get_short_name – incorrect implementation.
     // This method was taking characters until the first backslash, which is the
     // drive/root component, not the short name.  Removing it because it was
     // never used and its semantics are unclear.
@@ -196,7 +191,6 @@ impl WindowsPath {
     }
 
     /// Checks whether the path is a drive root (e.g., `C:\`).
-    // OLD: complex logic mixing UNC and drive checks
     // Simplified: a path is a root if it has exactly one component (the root
     // itself, e.g., `C:\` or `\\server\share`).
     pub fn is_root(&self) -> bool {
@@ -206,7 +200,6 @@ impl WindowsPath {
     }
 
     /// Returns the string slice without checking (for internal use).
-    // OLD: pub fn as_unchecked(&self) -> &str { self.as_str().unwrap() }
     // Using `unwrap()` can panic.  Use `to_string_lossy` for guaranteed safety.
     #[deprecated(since = "0.2.0", note = "Use to_string() or to_string_lossy() instead")]
     pub fn as_unchecked(&self) -> &str {
