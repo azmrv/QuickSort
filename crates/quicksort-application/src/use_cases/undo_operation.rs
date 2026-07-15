@@ -1,14 +1,26 @@
-// UndoOperationUseCase - reverts a completed operation.
+//! UndoOperationUseCase - reverts a completed operation.
+//!
+//! # Design Decisions
+//! - Uses `Operation::mark_undone()` instead of directly modifying state to
+//!   preserve domain invariants and trigger domain events.
+//! - All file-system interactions go through the `FileSystem` port, keeping
+//!   the use case testable and independent of the actual file system.
+//! - Each undo strategy is isolated in a private helper method for readability.
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use quicksort_domain::{OperationId, OperationState, OperationType, WindowsPath};
+use quicksort_domain::{
+    Operation, OperationId, OperationType, OperationState, WindowsPath,
+};
 use crate::dtos::OperationResult;
 use crate::errors::UseCaseError;
 use crate::ports::outbound::{OperationRepository, FileSystem, Clock};
 use crate::ports::inbound::UndoOperation;
 
-/// Реализация Use Case отката операций.
+/// Use case implementation for undoing operations.
+///
+/// It loads the operation from the repository, performs the reverse action,
+/// and marks the operation as undone.
 pub struct UndoOperationUseCase {
     operation_repo: Arc<dyn OperationRepository>,
     file_system: Arc<dyn FileSystem>,
@@ -27,70 +39,79 @@ impl UndoOperationUseCase {
 
 #[async_trait]
 impl UndoOperation for UndoOperationUseCase {
-    /// Выполняет откат операции с указанным ID.
+    /// Undoes the operation with the given ID.
     async fn undo(&self, operation_id: OperationId) -> Result<OperationResult, UseCaseError> {
-        // 1. Load operation
+        // 1. Load the operation from the repository
         let mut op = self.operation_repo
             .find_by_id(&operation_id)
             .await
             .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?
             .ok_or_else(|| UseCaseError::OperationNotFound(operation_id.clone()))?;
 
-        // 2. Check if operation is completed and not already undone
-        if op.state != OperationState::Completed {
+        // 2. Validate that the operation can be undone (only Completed → Undone)
+        // OLD: if op.state != quicksort_domain::OperationState::Completed {
+        // NEW: use pattern match for clarity and completeness
+        if !matches!(op.state, OperationState::Completed { .. }) {
             return Err(UseCaseError::UndoNotPossible(
                 "Only completed operations can be undone".to_string(),
             ));
         }
 
-        // 3. Perform undo based on operation type
-        let result = match op.operation_type {
-            OperationType::Move => self.undo_move(&mut op).await,
-            OperationType::Copy => self.undo_copy(&mut op).await,
-            OperationType::Delete => self.undo_delete(&mut op).await,
-            OperationType::Rename => self.undo_rename(&mut op).await,
-        };
-
-        // 4. If successful, update operation state to Undone
-        match result {
-            Ok(_) => {
-                op.state = OperationState::Undone;
-                op.updated_at = self.clock.now();
-                
-                self.operation_repo
-                    .save(&op)
-                    .await
-                    .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
-
-                Ok(OperationResult {
-                    operation_id: op.id.clone(),
-                    state: OperationState::Undone,
-                    processed_files: 1, // По умолчанию для одной операции
-                    bytes_moved: 0,
-                })
-            }
-            Err(e) => Err(e),
+        // 3. Perform the undo according to the operation type
+        // Each helper returns Ok(()) on success or a UseCaseError
+        match op.operation_type {
+            OperationType::Move => self.undo_move(&mut op).await?,
+            OperationType::Copy => self.undo_copy(&mut op).await?,
+            OperationType::Delete => self.undo_delete(&mut op).await?,
+            OperationType::Rename => self.undo_rename(&mut op).await?,
         }
+
+        // 4. Mark the operation as undone using the domain method
+        // OLD: op.state = OperationState::Undone;
+        //      op.updated_at = self.clock.now();
+        // NEW: use the aggregate's own method to preserve invariants
+        let now = self.clock.now();
+        op.mark_undone(now).map_err(|e| UseCaseError::DomainError(e.to_string()))?;
+
+        // 5. Persist the updated operation
+        self.operation_repo
+            .save(&op)
+            .await
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+
+        // 6. Return a result DTO
+        Ok(OperationResult {
+            operation_id: op.id.clone(),
+            state: OperationState::Undone,
+            processed_files: 1,
+            bytes_moved: 0,
+        })
     }
 }
 
-// ===== Helper methods =====
+// ===== Private helper methods for each operation type =====
 
 impl UndoOperationUseCase {
-    /// Откат Move операции: перемещает файл обратно из цели в исходную позицию.
-    async fn undo_move(&self, op: &mut quicksort_domain::Operation) -> Result<(), UseCaseError> {
+    /// Undo Move: move the file back from the target folder to the original location.
+    async fn undo_move(&self, op: &mut Operation) -> Result<(), UseCaseError> {
+        // Extract the source (original) path and the target folder path
         let source_path = op.source_paths.first()
             .ok_or_else(|| UseCaseError::UndoNotPossible("No source path found".to_string()))?;
+
         let target_folder = op.target_folder_path.as_ref()
             .ok_or_else(|| UseCaseError::UndoNotPossible("No target folder for Move".to_string()))?;
 
-        // Determine destination file name (use the same file name as source)
-        let file_name = source_path.as_str().split('\\').last()
-            .ok_or_else(|| UseCaseError::UndoNotPossible("Invalid source path".to_string()))?;
-        let target_path = WindowsPath::new(&format!("{}\\{}", target_folder.as_str(), file_name))
-            .map_err(|_| UseCaseError::UndoNotPossible("Invalid target path".to_string()))?;
+        // Determine the file name from the source path
+        // OLD: .as_str().ok_or(...) – WindowsPath may not have as_str()
+        // NEW: convert to a string via Display/ToString
+        let file_name = source_path
+            .file_name()
+            .ok_or_else(|| UseCaseError::UndoNotPossible("Invalid source file name".to_string()))?;
 
-        // Check if file exists at target
+        // Construct the full target path (target_folder + file_name)
+        let target_path = target_folder.join(&file_name);
+
+        // Verify that the file actually exists at the target location
         if !self.file_system.exists(&target_path).await
             .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
         {
@@ -99,27 +120,28 @@ impl UndoOperationUseCase {
             ));
         }
 
-        // Move back to source
+        // Perform the reverse move (rename back to source)
         self.file_system.rename_file(&target_path, source_path).await
             .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
 
         Ok(())
     }
 
-    /// Откат Copy операции: удаляет копию файла из цели.
-    async fn undo_copy(&self, op: &mut quicksort_domain::Operation) -> Result<(), UseCaseError> {
-        let target_folder = op.target_folder_path.as_ref()
-            .ok_or_else(|| UseCaseError::UndoNotPossible("No target folder for Copy".to_string()))?;
+    /// Undo Copy: delete the copied file from the target folder.
+    async fn undo_copy(&self, op: &mut Operation) -> Result<(), UseCaseError> {
         let source_path = op.source_paths.first()
             .ok_or_else(|| UseCaseError::UndoNotPossible("No source path found".to_string()))?;
 
-        // Determine copied file name
-        let file_name = source_path.as_str().split('\\').last()
-            .ok_or_else(|| UseCaseError::UndoNotPossible("Invalid source path".to_string()))?;
-        let target_path = WindowsPath::new(&format!("{}\\{}", target_folder.as_str(), file_name))
-            .map_err(|_| UseCaseError::UndoNotPossible("Invalid target path".to_string()))?;
+        let target_folder = op.target_folder_path.as_ref()
+            .ok_or_else(|| UseCaseError::UndoNotPossible("No target folder for Copy".to_string()))?;
 
-        // Remove the copied file if it exists
+        let file_name = source_path
+            .file_name()
+            .ok_or_else(|| UseCaseError::UndoNotPossible("Invalid source file name".to_string()))?;
+
+        let target_path = target_folder.join(&file_name);
+
+        // Only delete if the file still exists (it might have been removed already)
         if self.file_system.exists(&target_path).await
             .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
         {
@@ -130,40 +152,42 @@ impl UndoOperationUseCase {
         Ok(())
     }
 
-    /// Откат Delete операции: восстанавливает удалённый файл из корзины.
-    async fn undo_delete(&self, op: &mut quicksort_domain::Operation) -> Result<(), UseCaseError> {
-        // TODO: Реализация с поддержкой корзины (Trash can pattern)
-        // Пока возвращаем ошибку - не поддерживается без механизма корзины
+    /// Undo Delete: restore the deleted file.
+    /// Currently unsupported – requires trash can integration.
+    async fn undo_delete(&self, _op: &mut Operation) -> Result<(), UseCaseError> {
+        // TODO: TASK-020 — Implement undo for Delete using trash can (IFileOperation with
+        // FO_MOVE to recycle bin). For now, return a clear error.
         Err(UseCaseError::UndoNotPossible(
             "Undo of Delete operation requires trash can implementation".to_string(),
         ))
     }
 
-    /// Откат Rename операции: возвращает исходное имя файла.
-    async fn undo_rename(&self, op: &mut quicksort_domain::Operation) -> Result<(), UseCaseError> {
-        // Для отката rename нам нужны old_name и new_name поля в Operation
-        let old_name = &op.old_name;
-        let file_path = &op.source_paths.first()
+    /// Undo Rename: restore the original file name.
+    async fn undo_rename(&self, op: &mut Operation) -> Result<(), UseCaseError> {
+        // For rename, source_paths[0] holds the old path,
+        // target_paths[0] holds the new (current) path.
+        let old_path = op.source_paths.first()
             .ok_or_else(|| UseCaseError::UndoNotPossible("No source path found".to_string()))?;
 
-        // Construct new path with old name
-        let path_str = file_path.as_str();
-        let parent = path_str.rsplit_once('\\')
-            .map(|(p, _)| p)
-            .unwrap_or("");
-        
-        let new_path_str = if parent.is_empty() {
-            old_name.to_string()
-        } else {
-            format!("{}\\{}", parent, old_name)
-        };
+        let new_path = op.target_paths.as_ref()
+            .and_then(|paths| paths.first())
+            .ok_or_else(|| UseCaseError::UndoNotPossible("No target path for Rename".to_string()))?;
 
-        let new_path = WindowsPath::new(new_path_str)
-            .map_err(|_| UseCaseError::UndoNotPossible("Invalid path construction".to_string()))?;
+        // Verify that the renamed file still exists
+        if !self.file_system.exists(new_path).await
+            .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
+        {
+            return Err(UseCaseError::UndoNotPossible(
+                "File with new name no longer exists".to_string(),
+            ));
+        }
 
-        // Rename back to original name
-        self.file_system.rename_file(file_path, &new_path).await
-            .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+        // Rename back to the original name
+        self.file_system.rename_file(new_path, old_path).await
+            .map_err(|e| {
+                // Distinguish between file-system errors and other failures
+                UseCaseError::FileSystemError(e.to_string())
+            })?;
 
         Ok(())
     }

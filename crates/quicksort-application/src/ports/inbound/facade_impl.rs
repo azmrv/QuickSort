@@ -10,7 +10,7 @@ use crate::use_cases::{
     UndoOperationUseCase,
     GetFoldersUseCase, ManageFoldersUseCase,
 };
-use super::{ExecuteOperation, GetFolders, ManageFolders};
+use super::{ExecuteOperation, GetFolders, ManageFolders, UndoOperation};
 use quicksort_domain::{Folder, FolderId, OperationId};
 
 /// Combined implementation of all inbound ports.
