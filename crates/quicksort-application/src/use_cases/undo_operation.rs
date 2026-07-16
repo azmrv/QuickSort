@@ -9,9 +9,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use quicksort_domain::{
-    Operation, OperationId, OperationType, OperationState, WindowsPath,
-};
+use quicksort_domain::{Operation, OperationId, OperationState, OperationType};
 use crate::dtos::OperationResult;
 use crate::errors::UseCaseError;
 use crate::ports::outbound::{OperationRepository, FileSystem, Clock};
@@ -46,10 +44,9 @@ impl UndoOperation for UndoOperationUseCase {
             .find_by_id(&operation_id)
             .await
             .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?
-            .ok_or_else(|| UseCaseError::OperationNotFound(operation_id))?;
+            .ok_or_else(|| UseCaseError::OperationNotFound(operation_id.to_string()))?;
 
         // 2. Validate that the operation can be undone (only Completed → Undone)
-        // use pattern match for clarity and completeness
         if !matches!(op.state, OperationState::Completed { .. }) {
             return Err(UseCaseError::UndoNotPossible(
                 "Only completed operations can be undone".to_string(),
@@ -67,7 +64,7 @@ impl UndoOperation for UndoOperationUseCase {
 
         // 4. Mark the operation as undone using the domain method
         // use the aggregate's own method to preserve invariants
-        op.mark_undone().map_err(|e| UseCaseError::Domain(e))?;
+        op.mark_undone().map_err(|e| UseCaseError::Domain(e.to_string()))?;
 
         // 5. Persist the updated operation
         self.operation_repo

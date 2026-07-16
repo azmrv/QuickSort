@@ -109,3 +109,5 @@ docs/*
 .omo/run-continuation/*
 .clinerules/*
 .omo/*
+.clinerules
+crates/quicksort-application/.cargo_check_output.txt
