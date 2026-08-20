@@ -236,12 +236,19 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             let h_submenu = CreatePopupMenu().unwrap();
             let mut current_id = min_cmd_id;
 
-            let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
-            for folder in favorites {
+            let mut sorted_folders = folders.clone();
+            sorted_folders.sort_by(|a, b| b.is_favorite.cmp(&a.is_favorite));
+
+            for folder in &sorted_folders {
                 if current_id > max_cmd_id {
                     break;
                 }
-                let wide_name: Vec<u16> = OsString::from(&folder.name)
+                let label = if folder.is_favorite {
+                    format!("★ {}", folder.name)
+                } else {
+                    folder.name.clone()
+                };
+                let wide_name: Vec<u16> = OsString::from(&label)
                     .encode_wide()
                     .chain(Some(0))
                     .collect();
@@ -258,8 +265,20 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 current_id += 1;
             }
 
+            if current_id <= max_cmd_id && !sorted_folders.is_empty() {
+                let sep = MENUITEMINFOW {
+                    cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
+                    fMask: MIIM_ID | MIIM_STATE,
+                    wID: current_id,
+                    fState: MFS_ENABLED,
+                    ..Default::default()
+                };
+                let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &sep);
+                current_id += 1;
+            }
+
             if current_id <= max_cmd_id {
-                let other_text = w!("📂 Все папки...");
+                let other_text = w!("Все папки...");
                 let other_wide: Vec<u16> = other_text.as_wide().to_vec();
                 let item = MENUITEMINFOW {
                     cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
@@ -297,8 +316,10 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         let verb = (ici.lpVerb.0 as usize) & 0xFFFF;
 
         let folders = self.this.folders.lock();
-        let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
-        let total_fav = favorites.len();
+        let mut sorted_folders: Vec<&MenuFolder> = folders.iter().collect();
+        sorted_folders.sort_by(|a, b| b.is_favorite.cmp(&a.is_favorite));
+        let total_folders = sorted_folders.len();
+        let all_folder_index = total_folders + 1;
 
         let sources: Vec<String> = self
             .this
@@ -313,32 +334,29 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             return E_FAIL.ok();
         }
 
-        if verb < total_fav {
-            let target = &favorites[verb];
-            let sources: Vec<String> = self
-                .this
-                .item_paths
-                .borrow()
-                .iter()
-                .map(|p| p.to_string_lossy().to_string())
-                .collect();
+        if verb < total_folders {
+            let target = sorted_folders[verb];
+            log::info!("Moving to: {} ({})", target.name, target.id);
 
-            if let Err(e) = move_to_folder(sources, target.id.clone(), OverwritePolicy::Skip) {
-                log::error!("Failed to move: {}", e);
-                let msg = format!("Failed to move file: {}", e);
-                let wide_msg: Vec<u16> = OsString::from(msg).encode_wide().chain(Some(0)).collect();
-                unsafe {
-                    MessageBoxW(
-                        None,
-                        PCWSTR(wide_msg.as_ptr()),
-                        w!("QuickSort Error"),
-                        MB_OK,
-                    );
+            match move_to_folder(sources, target.id.clone(), OverwritePolicy::Skip) {
+                Ok(resp) => {
+                    log::info!("Move response: {:?}", resp);
                 }
-            } else {
-                log::info!("Move command sent successfully");
+                Err(e) => {
+                    log::error!("Failed to move: {}", e);
+                    let msg = format!("Failed to move file: {}", e);
+                    let wide_msg: Vec<u16> = OsString::from(msg).encode_wide().chain(Some(0)).collect();
+                    unsafe {
+                        MessageBoxW(
+                            None,
+                            PCWSTR(wide_msg.as_ptr()),
+                            w!("QuickSort Error"),
+                            MB_OK,
+                        );
+                    }
+                }
             }
-        } else if verb == total_fav {
+        } else if verb == all_folder_index {
             for path in self.this.item_paths.borrow().iter() {
                 let exe_path = get_quicksort_exe_path();
                 let exe_path_wide: Vec<u16> =

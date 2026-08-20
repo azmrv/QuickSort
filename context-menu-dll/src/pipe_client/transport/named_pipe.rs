@@ -1,5 +1,3 @@
-//! Win32 Named Pipe transport.
-
 use super::PipeTransport;
 use crate::pipe_client::error::PipeError;
 use std::ffi::OsStr;
@@ -16,9 +14,9 @@ use windows::Win32::Storage::FileSystem::{
 use windows::Win32::System::Pipes::WaitNamedPipeW;
 
 const PIPE_NAME: &str = r"\\.\pipe\quicksort_cmd";
-const CONNECT_TIMEOUT_MS: u32 = 100;
-const MAX_RETRIES: u32 = 3;
-const RETRY_INTERVAL_MS: u64 = 20;
+const CONNECT_TIMEOUT_MS: u32 = 500;
+const MAX_RETRIES: u32 = 5;
+const RETRY_INTERVAL_MS: u64 = 50;
 
 pub struct PipeHandle(HANDLE);
 
@@ -119,20 +117,53 @@ impl PipeTransport for NamedPipeTransport {
     fn receive(&mut self) -> Result<Vec<u8>, PipeError> {
         let handle = self.handle.as_ref().ok_or(PipeError::Unavailable)?;
 
-        let mut buf = vec![0u8; 4096];
+        let mut len_buf = [0u8; 4];
         let mut bytes_read = 0u32;
-
         unsafe {
             ReadFile(
                 handle.as_handle(),
-                Some(&mut buf),
+                Some(&mut len_buf),
                 Some(&mut bytes_read),
                 None,
             )?;
         }
+        if bytes_read != 4 {
+            return Err(PipeError::IncompleteRead {
+                expected: 4,
+                actual: bytes_read,
+            });
+        }
 
-        buf.truncate(bytes_read as usize);
-        Ok(buf)
+        let payload_len = u32::from_le_bytes(len_buf) as usize;
+        if payload_len > 1024 * 1024 {
+            return Err(PipeError::MessageTooLarge {
+                size: payload_len as u32,
+                max: 1024 * 1024,
+            });
+        }
+
+        let mut payload = vec![0u8; payload_len];
+        let mut total_read = 0usize;
+        while total_read < payload_len {
+            let mut chunk_read = 0u32;
+            unsafe {
+                ReadFile(
+                    handle.as_handle(),
+                    Some(&mut payload[total_read..]),
+                    Some(&mut chunk_read),
+                    None,
+                )?;
+            }
+            if chunk_read == 0 {
+                return Err(PipeError::IncompleteRead {
+                    expected: payload_len as u32,
+                    actual: total_read as u32,
+                });
+            }
+            total_read += chunk_read as usize;
+        }
+
+        Ok(payload)
     }
 
     fn disconnect(&mut self) -> Result<(), PipeError> {

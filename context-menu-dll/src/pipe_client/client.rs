@@ -12,28 +12,55 @@ impl<T: PipeTransport> PipeClient<T> {
         Self { transport }
     }
 
-    pub fn send_command(&mut self, command: &CommandMessage) -> Result<(), PipeError> {
+    pub fn send_command(&mut self, command: &CommandMessage) -> Result<ResponseMessage, PipeError> {
         self.transport.connect()?;
 
         let json = serde_json::to_vec(command)?;
-        self.transport.send(&json)?;
 
-        Ok(())
+        let len = json.len() as u32;
+        let len_bytes = len.to_le_bytes();
+        let mut framed = Vec::with_capacity(4 + json.len());
+        framed.extend_from_slice(&len_bytes);
+        framed.extend_from_slice(&json);
+        self.transport.send(&framed)?;
+
+        let response_bytes = self.transport.receive()?;
+        if response_bytes.len() < 4 {
+            return Err(PipeError::IncompleteRead {
+                expected: 4,
+                actual: response_bytes.len() as u32,
+            });
+        }
+        let resp_len = u32::from_le_bytes([
+            response_bytes[0],
+            response_bytes[1],
+            response_bytes[2],
+            response_bytes[3],
+        ]) as usize;
+
+        if response_bytes.len() < 4 + resp_len {
+            return Err(PipeError::IncompleteRead {
+                expected: (4 + resp_len) as u32,
+                actual: response_bytes.len() as u32,
+            });
+        }
+
+        let resp: ResponseMessage = serde_json::from_slice(&response_bytes[4..4 + resp_len])?;
+        self.transport.disconnect()?;
+        Ok(resp)
     }
 }
 
-/// Sends a command through a new NamedPipeTransport connection.
-pub fn send_command(command: &CommandMessage) -> Result<(), PipeError> {
+pub fn send_command(command: &CommandMessage) -> Result<ResponseMessage, PipeError> {
     let mut client = PipeClient::new(NamedPipeTransport::new());
     client.send_command(command)
 }
 
-/// Moves source files to a target folder via IPC.
 pub fn move_to_folder(
     sources: Vec<String>,
     target_folder_id: String,
     overwrite_policy: OverwritePolicy,
-) -> Result<(), PipeError> {
+) -> Result<ResponseMessage, PipeError> {
     let cmd = CommandMessage::ExecuteOperation(ExecuteOperationData {
         operation_type: OperationType::Move,
         source_paths: sources,
@@ -43,7 +70,6 @@ pub fn move_to_folder(
     send_command(&cmd)
 }
 
-/// Sends a Ping command to check server availability.
-pub fn ping() -> Result<(), PipeError> {
+pub fn ping() -> Result<ResponseMessage, PipeError> {
     send_command(&CommandMessage::Ping)
 }

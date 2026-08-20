@@ -124,8 +124,8 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                 PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
                 PIPE_UNLIMITED_INSTANCES,
-                512,
-                512,
+                4096,
+                4096,
                 0,
                 None,
             )
