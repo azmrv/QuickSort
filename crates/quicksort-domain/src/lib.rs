@@ -30,4 +30,4 @@ pub use events::DomainEvent;
 pub use value_objects::{FolderId, OperationId, WindowsPath};
 
 // DTOs are no longer re-exported from the domain layer.
-// Adapters and Application should obtain them from `quicksort-application`.У нас есть исправленный доменный слой, где DTO удалены. Теперь нужно убедиться, что Application слой правильно определяет и экспортирует эти DTO, и что все ссылки в адаптерах (Tauri команды, IPC) обновлены. Следующий шаг — проверить `quicksort-application` и обновить импорты во всех крейтах, которые использовали `quicksort-domain::OperationCommand`. Готовы продолжить?
+// Adapters and Application should obtain them from `quicksort-application`.
