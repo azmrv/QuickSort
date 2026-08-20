@@ -1,4 +1,190 @@
-body {
-    margin: 0;
-    transition: background-color 0.2s, color 0.2s;
+/* QuickSort Global Styles */
+
+/* Import Design System */
+@import './design-system.css';
+
+/* Ant Design Overrides */
+.ant-tabs {
+    --ant-color-primary: var(--qs-accent) !important;
+    --ant-color-bg-container: transparent !important;
+}
+
+.ant-tabs-nav {
+    margin-bottom: var(--qs-space-lg) !important;
+}
+
+.ant-tabs-tab {
+    font-family: var(--qs-font-display) !important;
+    font-size: 13px !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    color: var(--qs-text-muted) !important;
+    transition: all var(--qs-transition-fast) !important;
+    padding: var(--qs-space-sm) var(--qs-space-md) !important;
+    border-radius: var(--qs-radius-sm) !important;
+}
+
+.ant-tabs-tab:hover {
+    color: var(--qs-text-secondary) !important;
+    background: var(--qs-bg-hover) !important;
+}
+
+.ant-tabs-tab-active {
+    color: var(--qs-accent) !important;
+}
+
+.ant-tabs-tab-active .ant-tabs-tab-btn {
+    color: var(--qs-accent) !important;
+}
+
+.ant-tabs-ink-bar {
+    background: var(--qs-accent) !important;
+    height: 2px !important;
+    border-radius: 1px !important;
+}
+
+/* Button Overrides */
+.ant-btn {
+    font-family: var(--qs-font-body) !important;
+    border-radius: var(--qs-radius-md) !important;
+    font-weight: 500 !important;
+    transition: all var(--qs-transition-fast) !important;
+}
+
+.ant-btn-primary {
+    background: var(--qs-accent) !important;
+    border-color: var(--qs-accent) !important;
+    color: var(--qs-bg-primary) !important;
+}
+
+.ant-btn-primary:hover {
+    background: var(--qs-accent-hover) !important;
+    border-color: var(--qs-accent-hover) !important;
+    box-shadow: var(--qs-shadow-glow) !important;
+}
+
+.ant-btn-default {
+    background: var(--qs-bg-tertiary) !important;
+    border-color: var(--qs-border) !important;
+    color: var(--qs-text-primary) !important;
+}
+
+.ant-btn-default:hover {
+    border-color: var(--qs-border-hover) !important;
+    background: var(--qs-bg-hover) !important;
+}
+
+.ant-btn-dangerous {
+    background: var(--qs-danger-muted) !important;
+    border-color: transparent !important;
+    color: var(--qs-danger) !important;
+}
+
+.ant-btn-dangerous:hover {
+    background: var(--qs-danger) !important;
+    color: white !important;
+}
+
+.ant-btn-dashed {
+    border-color: var(--qs-border) !important;
+    color: var(--qs-text-secondary) !important;
+}
+
+.ant-btn-dashed:hover {
+    border-color: var(--qs-accent) !important;
+    color: var(--qs-accent) !important;
+    background: var(--qs-accent-muted) !important;
+}
+
+/* Input Overrides */
+.ant-input,
+.ant-input-affix-wrapper {
+    background: var(--qs-bg-tertiary) !important;
+    border-color: var(--qs-border) !important;
+    color: var(--qs-text-primary) !important;
+    border-radius: var(--qs-radius-md) !important;
+}
+
+.ant-input:focus,
+.ant-input-affix-wrapper-focused {
+    border-color: var(--qs-accent) !important;
+    box-shadow: 0 0 0 2px var(--qs-accent-muted) !important;
+}
+
+.ant-input::placeholder {
+    color: var(--qs-text-muted) !important;
+}
+
+/* List Overrides */
+.ant-list {
+    background: transparent !important;
+}
+
+.ant-list-item {
+    border-color: var(--qs-border) !important;
+    transition: all var(--qs-transition-fast) !important;
+    padding: var(--qs-space-md) !important;
+    border-radius: var(--qs-radius-md) !important;
+    margin-bottom: var(--qs-space-sm) !important;
+}
+
+.ant-list-item:hover {
+    background: var(--qs-bg-hover) !important;
+    border-color: var(--qs-border-hover) !important;
+}
+
+.ant-list-item-meta-title {
+    color: var(--qs-text-primary) !important;
+    font-weight: 500 !important;
+}
+
+.ant-list-item-meta-description {
+    color: var(--qs-text-secondary) !important;
+    font-family: var(--qs-font-mono) !important;
+    font-size: 12px !important;
+}
+
+/* Switch Overrides */
+.ant-switch {
+    background: var(--qs-bg-tertiary) !important;
+    border-color: var(--qs-border) !important;
+}
+
+.ant-switch-checked {
+    background: var(--qs-accent) !important;
+}
+
+/* Popconfirm Overrides */
+.ant-popconfirm .ant-popover-inner {
+    background: var(--qs-bg-elevated) !important;
+    border: 1px solid var(--qs-border) !important;
+    border-radius: var(--qs-radius-lg) !important;
+    box-shadow: var(--qs-shadow-lg) !important;
+}
+
+/* Message Overrides */
+.ant-message-notice-content {
+    background: var(--qs-bg-elevated) !important;
+    border: 1px solid var(--qs-border) !important;
+    border-radius: var(--qs-radius-md) !important;
+    color: var(--qs-text-primary) !important;
+    box-shadow: var(--qs-shadow-lg) !important;
+}
+
+/* Typography Overrides */
+.ant-typography {
+    color: var(--qs-text-primary) !important;
+}
+
+.ant-typography-secondary {
+    color: var(--qs-text-secondary) !important;
+}
+
+.ant-typography code {
+    background: var(--qs-bg-tertiary) !important;
+    padding: 2px 6px !important;
+    border-radius: var(--qs-radius-sm) !important;
+    font-family: var(--qs-font-mono) !important;
+    font-size: 12px !important;
+    color: var(--qs-accent) !important;
 }
