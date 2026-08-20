@@ -102,10 +102,14 @@ adr
 opencode
 .omo
 docs/
+docs
 .omo/run-continuation/
 .clinerules/
 .omo/
 docs/*
+tasks
+tasks/
+tasks/*
 .omo/run-continuation/*
 .clinerules/*
 .omo/*
