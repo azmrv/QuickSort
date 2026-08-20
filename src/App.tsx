@@ -53,72 +53,48 @@ function App() {
             }}
         >
             <AntApp>
-                <div className="app-container">
-                    {isAdmin === false && (
-                        <div style={{
-                            background: '#7c2d12',
-                            color: '#fed7aa',
-                            padding: '8px 16px',
-                            fontSize: '13px',
-                            textAlign: 'center',
-                            borderBottom: '1px solid #9a3412',
-                        }}>
-                            Режим ограниченных прав. Запустите от имени администратора для регистрации контекстного меню.
-                        </div>
-                    )}
-                    {mode === 'editor' ? (
-                        <>
-                            <header className="app-header">
-                                <div className="app-logo">
-                                    <div className="app-logo-icon">Q</div>
-                                    <span className="app-logo-text">QuickSort</span>
-                                    <span className="app-logo-version">v0.2.0</span>
-                                </div>
-                                <div 
-                                    className="theme-toggle"
-                                    onClick={() => setIsDark(!isDark)}
-                                >
-                                    <span className="theme-toggle-icon">
-                                        {isDark ? '🌙' : '☀️'}
-                                    </span>
-                                </div>
-                            </header>
-                            <main className="app-content page-enter">
-                                <Tabs
-                                    activeKey={activeTab}
-                                    onChange={(key) => {
-                                        setActiveTab(key);
-                                        logger.action('App', `tab switch → ${key}`);
-                                    }}
-                                    items={[
-                                        { 
-                                            key: 'folders', 
-                                            label: 'Папки', 
-                                            children: <EditorPage /> 
-                                        },
-                                        { 
-                                            key: 'log', 
-                                            label: 'Лог', 
-                                            children: <LogPage /> 
-                                        },
-                                        { 
-                                            key: 'settings', 
-                                            label: 'Настройки', 
-                                            children: <SettingsPage /> 
-                                        },
-                                        { 
-                                            key: 'about', 
-                                            label: 'О программе', 
-                                            children: <AboutPage /> 
-                                        },
-                                    ]}
-                                />
-                            </main>
-                        </>
-                    ) : (
-                        <SelectorPage file={selectFile} onClose={() => setMode('editor')} />
-                    )}
-                </div>
+                {mode === 'editor' ? (
+                    <div className="app-layout">
+                        {isAdmin === false && (
+                            <div className="admin-banner">
+                                Режим ограниченных прав. Запустите от имени администратора для регистрации контекстного меню.
+                            </div>
+                        )}
+                        <header className="app-header">
+                            <div className="app-logo">
+                                <div className="app-logo-icon">Q</div>
+                                <span className="app-logo-text">QuickSort</span>
+                                <span className="app-logo-version">v0.2.0</span>
+                            </div>
+                            <div
+                                className="theme-toggle"
+                                onClick={() => setIsDark(!isDark)}
+                            >
+                                <span className="theme-toggle-icon">
+                                    {isDark ? '🌙' : '☀️'}
+                                </span>
+                            </div>
+                        </header>
+                        <main className="app-main">
+                            <Tabs
+                                destroyInactiveTabPane
+                                activeKey={activeTab}
+                                onChange={(key) => {
+                                    setActiveTab(key);
+                                    logger.action('App', `tab switch → ${key}`);
+                                }}
+                                items={[
+                                    { key: 'folders', label: 'Папки', children: <EditorPage /> },
+                                    { key: 'log', label: 'Лог', children: <LogPage /> },
+                                    { key: 'settings', label: 'Настройки', children: <SettingsPage /> },
+                                    { key: 'about', label: 'О программе', children: <AboutPage /> },
+                                ]}
+                            />
+                        </main>
+                    </div>
+                ) : (
+                    <SelectorPage file={selectFile} onClose={() => setMode('editor')} />
+                )}
             </AntApp>
         </ConfigProvider>
     );

@@ -8,30 +8,6 @@
 .ant-tabs {
     --ant-color-primary: var(--qs-accent) !important;
     --ant-color-bg-container: transparent !important;
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-}
-
-.ant-tabs-nav {
-    margin-bottom: var(--qs-space-lg) !important;
-    flex-shrink: 0;
-}
-
-.ant-tabs-content-holder {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-}
-
-.ant-tabs-content {
-    height: 100%;
-}
-
-.ant-tabs-tabpane {
-    height: 100%;
-    overflow: hidden;
 }
 
 .ant-tabs-tab {

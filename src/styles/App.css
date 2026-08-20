@@ -1,14 +1,23 @@
 /* QuickSort App Styles */
 
 /* ================================
-   App Container
+   Layout (CSS Grid — viewport-locked)
    ================================ */
-.app-container {
-    display: flex;
-    flex-direction: column;
+.app-layout {
+    display: grid;
+    grid-template-rows: auto auto 1fr;
     height: 100vh;
     overflow: hidden;
     background: var(--qs-bg-primary);
+}
+
+.admin-banner {
+    background: #7c2d12;
+    color: #fed7aa;
+    padding: 8px 16px;
+    font-size: 13px;
+    text-align: center;
+    border-bottom: 1px solid #9a3412;
 }
 
 /* ================================
@@ -18,10 +27,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--qs-space-lg) var(--qs-space-xl);
+    padding: var(--qs-space-md) var(--qs-space-xl);
     border-bottom: 1px solid var(--qs-border);
     background: var(--qs-bg-secondary);
-    flex-shrink: 0;
     z-index: 100;
 }
 
@@ -94,18 +102,49 @@
 }
 
 /* ================================
-   Main Content
+   Main Content (the scroll-breaker)
    ================================ */
-.app-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    max-width: 800px;
-    width: 100%;
-    margin: 0 auto;
-    padding: var(--qs-space-xl);
+.app-main {
     min-height: 0;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: var(--qs-space-lg) var(--qs-space-xl);
+}
+
+/* ================================
+   Ant Tabs — force height containment
+   ================================ */
+.app-main .ant-tabs {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    max-height: 100%;
+}
+
+.app-main .ant-tabs-nav {
+    margin-bottom: var(--qs-space-md) !important;
+    flex-shrink: 0;
+}
+
+.app-main .ant-tabs-content-holder {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.app-main .ant-tabs-content {
+    height: 100%;
+}
+
+.app-main .ant-tabs-tabpane {
+    height: 100%;
+    overflow: hidden;
+}
+
+.app-main .ant-tabs-tabpane-active {
+    overflow: auto;
 }
 
 /* ================================
@@ -562,6 +601,7 @@
 .log-list {
     flex: 1;
     overflow-y: auto;
+    min-height: 0;
     background: var(--qs-bg-secondary);
     border: 1px solid var(--qs-border);
     border-radius: var(--qs-radius-md);
@@ -569,7 +609,6 @@
     font-family: var(--qs-font-mono);
     font-size: 12px;
     line-height: 1.6;
-    min-height: 0;
 }
 
 .log-empty {
