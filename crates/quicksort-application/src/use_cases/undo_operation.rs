@@ -140,6 +140,14 @@ impl UndoOperationUseCase {
             self.file_system.delete_file(&target_path).await
                 .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
         }
+    /// Undo Delete: Placeholder for future Trash Can integration.
+    async fn undo_delete(&self, _op: &mut Operation) -> Result<(), UseCaseError> {
+        // TODO: TASK-020 — Implement undo for Delete using trash can (IFileOperation with
+        // FO_MOVE to recycle bin). For now, return a clear error indicating missing feature.
+        Err(UseCaseError::UndoNotPossible(
+            "Undo of Delete operation is not yet implemented. Trash Can integration required.".to_string(),
+        ))
+    }
 
         Ok(())
     }

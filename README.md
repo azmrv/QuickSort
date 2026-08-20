@@ -92,24 +92,33 @@ If you have ideas or suggestions, open an issue or pull request. Let’s make Ex
 
 ## 📦 Dependencies
 
-### Rust (core / Tauri)
-```toml
-tauri = "2"
-tauri-plugin-dialog = "2"
-tauri-plugin-opener = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-winreg = "0.56"
-clap = { version = "4", features = ["derive"] }
-anyhow = "1"
-chrono = { version = "0.4", features = ["serde"] }
-directories = "6"
-uuid = { version = "1", features = ["v4", "serde"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-parking_lot = "0.12"
-winctx = "1.4"
-```
+// --- Modernization Suggestion for README.md ---
+
+// ## 📦 Dependencies
+// ... (existing dependencies list) ...
+// ### Rust (core / Tauri)
+// ```toml
+// tauri = "2"
+// tauri-plugin-dialog = "2"
+// tauri-plugin-opener = "2"
+// serde = { version = "1", features = ["derive"] }
+// serde_json = "1"
+// winreg = "0.56"
+// clap = { version = "4", features = ["derive"] }
+// anyhow = "1"
+// chrono = { version = "0.4", features = ["serde"] }
+// directories = "6"
+// uuid = { version = "1", features = ["v4", "serde"] }
+// tracing = "0.1"
+// tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+// parking_lot = "0.12"
+// winctx = "1.4"
+// ```
+// **New Norm:** Explicitly list the use of Observability tools (`tracing`) and quality tools (`clippy`) in the dependencies section to signal a high standard of code quality.
+
+// ### Frontend (React)
+// ... (existing frontend dependencies) ...
+// **Modernization Note:** We rely on modern tooling like Vite 7 for rapid development cycles.
 
 ### Frontend (React)
 ```json
