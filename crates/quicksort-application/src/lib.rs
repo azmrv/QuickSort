@@ -60,7 +60,7 @@ pub use ports::inbound::{
 // Domain types – re-exported so adapters can construct domain entities
 // without violating the Dependency Rule (adapters depend on Application,
 // which depends on Domain).
-pub use quicksort_domain::{Folder, FolderId, OperationId, WindowsPath};
+pub use quicksort_domain::{Folder, FolderId, OperationId, OperationType, WindowsPath};
 
 // Pipeline is intentionally NOT re-exported – it is an internal mechanism
 // that adapters should not depend on directly.  They should call the facade,

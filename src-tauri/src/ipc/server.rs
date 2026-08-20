@@ -19,8 +19,8 @@ use windows::Win32::System::Pipes::{
 };
 
 use quicksort_application::{
-    ApplicationFacadeImpl, ExecuteOperation, OperationCommand,
-    OverwritePolicy as AppOverwritePolicy, FolderId, OperationType as DomainOpType, WindowsPath,
+    ApplicationFacadeImpl, ExecuteOperation, FolderId, OperationCommand,
+    OperationType as DomainOpType, OverwritePolicy as AppOverwritePolicy, WindowsPath,
 };
 use quicksort_ipc_contract::{
     CommandMessage, ExecuteOperationData, OperationType as IpcOpType,
@@ -109,10 +109,7 @@ fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> 
 pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
     tracing::info!("Pipe server starting on {}", PIPE_NAME);
 
-    let pipe_name: Vec<u16> = OsStr::new(PIPE_NAME)
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
+    let pipe_name: Vec<u16> = OsStr::new(PIPE_NAME).encode_wide().chain(Some(0)).collect();
 
     // Create a Tokio runtime for blocking on async facade calls.
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -177,26 +174,24 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                     tracing::info!("Received ExecuteOperation: {:?}", data);
 
                     let response = match convert_execute_data(data) {
-                        Some(command) => {
-                            match rt.block_on(facade.execute(command)) {
-                                Ok(result) => {
-                                    let op_id = result.operation_id.to_string();
-                                    let processed = result.processed_files;
-                                    ResponseMessage {
-                                        status: ResponseStatus::Ok,
-                                        message: format!("Processed {} files", processed),
-                                        operation_id: Some(op_id),
-                                        data: None,
-                                    }
-                                }
-                                Err(e) => ResponseMessage {
-                                    status: ResponseStatus::Error,
-                                    message: e.to_string(),
-                                    operation_id: None,
+                        Some(command) => match rt.block_on(facade.execute(command)) {
+                            Ok(result) => {
+                                let op_id = result.operation_id.to_string();
+                                let processed = result.processed_files;
+                                ResponseMessage {
+                                    status: ResponseStatus::Ok,
+                                    message: format!("Processed {} files", processed),
+                                    operation_id: Some(op_id),
                                     data: None,
-                                },
+                                }
                             }
-                        }
+                            Err(e) => ResponseMessage {
+                                status: ResponseStatus::Error,
+                                message: e.to_string(),
+                                operation_id: None,
+                                data: None,
+                            },
+                        },
                         None => ResponseMessage {
                             status: ResponseStatus::Error,
                             message: "Invalid command: no valid source paths".to_string(),
