@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from './lib/invoke';
 import { logger } from './lib/logger';
 import { ConfigProvider, theme, App as AntApp } from 'antd';
@@ -14,15 +14,9 @@ function App() {
     const [selectFile, setSelectFile] = useState<string | null>(null);
     const [isDark, setIsDark] = useState(true);
     const [activeTab, setActiveTab] = useState('folders');
-    const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-    const mainRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         logger.info('App', 'startup');
-        invoke<boolean>('is_admin').then(admin => {
-            setIsAdmin(admin);
-            logger.info('App', `admin=${admin}`);
-        });
         invoke<string | null>('get_pending_file').then((file) => {
             if (file) {
                 logger.info('App', `pending file: ${file}`);
@@ -63,11 +57,6 @@ function App() {
             <AntApp>
                 {mode === 'editor' ? (
                     <div className="app-layout">
-                        {isAdmin === false && (
-                            <div className="admin-banner">
-                                Режим ограниченных прав. Запустите от имени администратора для регистрации контекстного меню.
-                            </div>
-                        )}
                         <header className="app-header">
                             <div className="app-logo">
                                 <div className="app-logo-icon">Q</div>
@@ -78,7 +67,7 @@ function App() {
                                 <span className="theme-toggle-icon">{isDark ? '🌙' : '☀️'}</span>
                             </div>
                         </header>
-                        <main className="app-main" ref={mainRef}>
+                        <main className="app-main">
                             <div className="tab-nav">
                                 {TABS.map(t => (
                                     <button

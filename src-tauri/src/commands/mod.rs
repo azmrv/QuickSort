@@ -160,11 +160,6 @@ pub fn register_com_server() -> Result<String, String> {
     use winreg::enums::*;
     use winreg::RegKey;
 
-    if !is_user_admin() {
-        tracing::error!(command = "register_com_server", "not admin");
-        return Err("Administrator privileges required to register COM server".to_string());
-    }
-
     let appdata = std::env::var("APPDATA")
         .map_err(|e| format!("APPDATA environment variable not set: {}", e))?;
     let dll_path = std::path::PathBuf::from(&appdata)

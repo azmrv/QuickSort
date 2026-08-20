@@ -5,19 +5,10 @@
    ================================ */
 .app-layout {
     display: grid;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto 1fr;
     height: 100vh;
     overflow: hidden;
     background: var(--qs-bg-primary);
-}
-
-.admin-banner {
-    background: #7c2d12;
-    color: #fed7aa;
-    padding: 8px 16px;
-    font-size: 13px;
-    text-align: center;
-    border-bottom: 1px solid #9a3412;
 }
 
 /* ================================
