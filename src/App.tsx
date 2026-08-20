@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from './lib/invoke';
 import { logger } from './lib/logger';
-import { ConfigProvider, theme, App as AntApp, Tabs } from 'antd';
+import { ConfigProvider, theme, App as AntApp } from 'antd';
 import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
 import LogPage from './pages/LogPage';
@@ -15,6 +15,7 @@ function App() {
     const [isDark, setIsDark] = useState(true);
     const [activeTab, setActiveTab] = useState('folders');
     const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+    const mainRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         logger.info('App', 'startup');
@@ -35,6 +36,13 @@ function App() {
         document.body.style.backgroundColor = isDark ? '#0a0a0b' : '#f8f9fa';
         document.body.style.color = isDark ? '#e8e8ec' : '#1a1a1d';
     }, [isDark]);
+
+    const TABS = [
+        { key: 'folders', label: 'Папки', content: <EditorPage /> },
+        { key: 'log', label: 'Лог', content: <LogPage /> },
+        { key: 'settings', label: 'Настройки', content: <SettingsPage /> },
+        { key: 'about', label: 'О программе', content: <AboutPage /> },
+    ];
 
     return (
         <ConfigProvider
@@ -66,30 +74,32 @@ function App() {
                                 <span className="app-logo-text">QuickSort</span>
                                 <span className="app-logo-version">v0.2.0</span>
                             </div>
-                            <div
-                                className="theme-toggle"
-                                onClick={() => setIsDark(!isDark)}
-                            >
-                                <span className="theme-toggle-icon">
-                                    {isDark ? '🌙' : '☀️'}
-                                </span>
+                            <div className="theme-toggle" onClick={() => setIsDark(!isDark)}>
+                                <span className="theme-toggle-icon">{isDark ? '🌙' : '☀️'}</span>
                             </div>
                         </header>
-                        <main className="app-main">
-                            <Tabs
-                                destroyInactiveTabPane
-                                activeKey={activeTab}
-                                onChange={(key) => {
-                                    setActiveTab(key);
-                                    logger.action('App', `tab switch → ${key}`);
-                                }}
-                                items={[
-                                    { key: 'folders', label: 'Папки', children: <EditorPage /> },
-                                    { key: 'log', label: 'Лог', children: <LogPage /> },
-                                    { key: 'settings', label: 'Настройки', children: <SettingsPage /> },
-                                    { key: 'about', label: 'О программе', children: <AboutPage /> },
-                                ]}
-                            />
+                        <main className="app-main" ref={mainRef}>
+                            <div className="tab-nav">
+                                {TABS.map(t => (
+                                    <button
+                                        key={t.key}
+                                        className={`tab-nav-btn ${activeTab === t.key ? 'active' : ''}`}
+                                        onClick={() => {
+                                            setActiveTab(t.key);
+                                            logger.action('App', `tab switch → ${t.key}`);
+                                        }}
+                                    >
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="tab-content">
+                                {TABS.filter(t => t.key === activeTab).map(t => (
+                                    <div key={t.key} className="tab-panel">
+                                        {t.content}
+                                    </div>
+                                ))}
+                            </div>
                         </main>
                     </div>
                 ) : (

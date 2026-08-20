@@ -1,7 +1,7 @@
 /* QuickSort App Styles */
 
 /* ================================
-   Layout (CSS Grid — viewport-locked)
+   Layout — CSS Grid, viewport-locked
    ================================ */
 .app-layout {
     display: grid;
@@ -102,49 +102,65 @@
 }
 
 /* ================================
-   Main Content (the scroll-breaker)
+   Main Content — Grid row "1fr"
+   Fills remaining viewport space exactly
    ================================ */
 .app-main {
-    min-height: 0;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding: var(--qs-space-lg) var(--qs-space-xl);
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 var(--qs-space-xl);
 }
 
 /* ================================
-   Ant Tabs — force height containment
+   Custom Tab Nav
    ================================ */
-.app-main .ant-tabs {
+.tab-nav {
     display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    max-height: 100%;
-}
-
-.app-main .ant-tabs-nav {
-    margin-bottom: var(--qs-space-md) !important;
+    gap: 4px;
+    padding: var(--qs-space-md) 0;
+    border-bottom: 1px solid var(--qs-border);
     flex-shrink: 0;
 }
 
-.app-main .ant-tabs-content-holder {
+.tab-nav-btn {
+    font-family: var(--qs-font-display);
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: var(--qs-space-sm) var(--qs-space-md);
+    border-radius: var(--qs-radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--qs-text-muted);
+    cursor: pointer;
+    transition: all var(--qs-transition-fast);
+}
+
+.tab-nav-btn:hover {
+    color: var(--qs-text-secondary);
+    background: var(--qs-bg-hover);
+}
+
+.tab-nav-btn.active {
+    color: var(--qs-accent);
+    background: var(--qs-accent-muted);
+}
+
+/* ================================
+   Tab Content — fills remaining space,
+   ONLY scrolls here
+   ================================ */
+.tab-content {
     flex: 1;
     min-height: 0;
-    overflow: hidden;
-}
-
-.app-main .ant-tabs-content {
-    height: 100%;
-}
-
-.app-main .ant-tabs-tabpane {
-    height: 100%;
-    overflow: hidden;
-}
-
-.app-main .ant-tabs-tabpane-active {
     overflow: auto;
+    padding: var(--qs-space-md) 0;
+}
+
+.tab-panel {
+    height: 100%;
 }
 
 /* ================================
@@ -517,7 +533,8 @@
 }
 
 /* ================================
-   Log Page
+   Log Page — ALL scrolling happens
+   inside .log-list, NOT the page
    ================================ */
 .log-page {
     display: flex;
