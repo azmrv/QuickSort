@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Tag } from 'antd';
-import { CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 
 const StatusIndicator: React.FC = () => {
@@ -11,13 +9,12 @@ const StatusIndicator: React.FC = () => {
     }, []);
 
     return (
-        <div style={{ marginBottom: 16 }}>
-            Статус контекстного меню:{' '}
-            {active ? (
-                <Tag icon={<CheckCircleOutlined />} color="success">Активно</Tag>
-            ) : (
-                <Tag icon={<ExclamationCircleOutlined />} color="error">Неактивно</Tag>
-            )}
+        <div className="status-bar">
+            <div className={`status-dot ${active ? '' : 'error'}`}></div>
+            <span>Контекстное меню:</span>
+            <span style={{ color: active ? 'var(--qs-success)' : 'var(--qs-danger)' }}>
+                {active ? 'Активно' : 'Неактивно'}
+            </span>
         </div>
     );
 };

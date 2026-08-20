@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { List, Typography } from 'antd';
 
 interface LogEntry {
     timestamp: string;
@@ -10,24 +9,49 @@ interface LogEntry {
 
 const LogPage = () => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
-    const loadLogs = () => {
-        invoke<LogEntry[]>('get_logs').then(setLogs).catch(console.error);
-    };
+
     useEffect(() => {
-        loadLogs();
+        invoke<LogEntry[]>('get_logs').then(setLogs).catch(console.error);
     }, []);
 
+    if (logs.length === 0) {
+        return (
+            <div className="empty-state">
+                <div className="empty-state-icon">📋</div>
+                <div className="empty-state-title">Нет записей</div>
+                <div className="empty-state-description">
+                    Журнал операций будет отображаться здесь
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div>
-            <List
-                dataSource={logs}
-                renderItem={(item) => (
-                    <List.Item>
-                        <Typography.Text code>{item.timestamp}</Typography.Text> — {item.event} ({item.status})
-                    </List.Item>
-                )}
-            />
+        <div className="folder-list">
+            {logs.map((log, index) => (
+                <div 
+                    key={index}
+                    className="folder-card"
+                    style={{ animationDelay: `${index * 30}ms` }}
+                >
+                    <div className="folder-icon" style={{
+                        background: log.status === 'Success' 
+                            ? 'var(--qs-success-muted)' 
+                            : 'var(--qs-danger-muted)',
+                        color: log.status === 'Success' 
+                            ? 'var(--qs-success)' 
+                            : 'var(--qs-danger)',
+                    }}>
+                        {log.status === 'Success' ? '✓' : '✗'}
+                    </div>
+                    <div className="folder-info">
+                        <div className="folder-name">{log.event}</div>
+                        <div className="folder-path">{log.timestamp}</div>
+                    </div>
+                </div>
+            ))}
         </div>
     );
 };
+
 export default LogPage;

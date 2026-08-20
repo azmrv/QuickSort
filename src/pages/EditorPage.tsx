@@ -1,24 +1,20 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Typography, Switch, Space, Button, Popconfirm, message } from 'antd';
-import { BulbOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { message } from 'antd';
 import FolderList from '../components/FolderList';
 import AddFolderButton from '../components/AddFolderButton';
-import ApplyButton from '../components/ApplyButton';
 import StatusIndicator from '../components/StatusIndicator';
 import { Folder } from '../types';
-
-const { Title } = Typography;
 
 interface EditorPageProps {
     isDark: boolean;
     onToggleTheme: (checked: boolean) => void;
 }
 
-const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
+const EditorPage: React.FC<EditorPageProps> = () => {
     const [folders, setFolders] = useState<Folder[]>([]);
 
-    // Загрузка папок через новую команду
+    // Load folders via the new command
     useEffect(() => {
         invoke<Folder[]>('get_folders_v2')
             .then(setFolders)
@@ -26,10 +22,10 @@ const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
     }, []);
 
     const handleAddFolder = (name: string, path: string) => {
-        // Вызываем новую команду add_folder_v2
+        // Call the new add_folder_v2 command
         invoke('add_folder_v2', { name, path })
             .then(() => {
-                // После успешного добавления перезагружаем список
+                // Reload the list after successful addition
                 return invoke<Folder[]>('get_folders_v2');
             })
             .then(setFolders)
@@ -37,18 +33,18 @@ const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
     };
 
     const handleRename = (id: string, newName: string) => {
-        // Пока нет отдельной команды rename_folder – обновляем локально
+        // Update locally for now
         setFolders(folders.map((f) => (f.id === id ? { ...f, name: newName } : f)));
-        // TODO: вызвать rename_folder_v2, когда будет реализовано
+        // TODO: Call rename_folder_v2 when implemented
     };
 
     const handleToggleFavorite = async (id: string) => {
-        // Находим папку и её текущий порядок
+        // Find the folder and its current order
         const folder = folders.find(f => f.id === id);
         if (!folder) return;
         const newOrder = folder.is_favorite ? 0 : folders.filter(f => f.is_favorite).length + 1;
 
-        // Оптимистичное обновление UI
+        // Optimistic UI update
         setFolders(folders.map((f) =>
             f.id === id ? { ...f, is_favorite: !f.is_favorite, sort_order: newOrder } : f
         ));
@@ -57,31 +53,15 @@ const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
             await invoke('toggle_favorite_v2', { id, order: newOrder });
         } catch (err) {
             console.error(err);
-            // Откатываем при ошибке
+            // Rollback on error
             setFolders(folders);
             message.error('Ошибка обновления избранного');
         }
     };
 
     const handleApply = async (newFolders: Folder[]) => {
-        // Применяем изменения (переупорядочивание) – можно вызвать update_folders_v2, но его пока нет.
-        // Просто обновляем локальный список.
+        // Apply changes (reordering) — update local list for now
         setFolders(newFolders);
-    };
-
-    const handleDeleteMenu = async () => {
-        // Удаляем все папки по одной
-        try {
-            for (const folder of folders) {
-                await invoke('remove_folder_v2', { id: folder.id });
-            }
-            // Перезагружаем список
-            const updated = await invoke<Folder[]>('get_folders_v2');
-            setFolders(updated);
-            message.success('Все папки удалены');
-        } catch (err) {
-            message.error(`Ошибка удаления: ${err}`);
-        }
     };
 
     const handleRegisterComServer = async () => {
@@ -103,14 +83,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
     };
 
     return (
-        <div style={{ maxWidth: 640, margin: '0 auto', padding: 24, minHeight: '100vh' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <Title level={3} style={{ margin: 0 }}>QuickSort</Title>
-                <Space>
-                    <BulbOutlined />
-                    <Switch checked={isDark} onChange={onToggleTheme} checkedChildren="🌙" unCheckedChildren="☀️" />
-                </Space>
-            </div>
+        <div>
             <StatusIndicator />
             <AddFolderButton onFolderAdded={handleAddFolder} />
             <FolderList
@@ -119,23 +92,19 @@ const EditorPage: React.FC<EditorPageProps> = ({ isDark, onToggleTheme }) => {
                 onToggleFavorite={handleToggleFavorite}
                 onApply={handleApply}
             />
-            <div style={{ marginTop: 16 }}>
-                <ApplyButton folders={folders} onSuccess={() => {}} />
-            </div>
-            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                <Popconfirm title="Удалить все пункты меню?" onConfirm={handleDeleteMenu} okText="Да" cancelText="Нет">
-                    <Button danger icon={<DeleteOutlined />} block disabled={folders.length === 0}>
-                        Удалить меню
-                    </Button>
-                </Popconfirm>
-            </div>
-            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                <Button icon={<CheckCircleOutlined />} onClick={handleRegisterComServer} block>
-                    Зарегистрировать COM-сервер
-                </Button>
-                <Button icon={<CloseCircleOutlined />} onClick={handleUnregisterComServer} block>
-                    Удалить COM-сервер
-                </Button>
+            <div className="action-bar">
+                <button 
+                    className="add-folder-btn"
+                    onClick={handleRegisterComServer}
+                >
+                    Зарегистрировать COM
+                </button>
+                <button 
+                    className="add-folder-btn"
+                    onClick={handleUnregisterComServer}
+                >
+                    Удалить COM
+                </button>
             </div>
         </div>
     );

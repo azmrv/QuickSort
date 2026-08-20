@@ -1,15 +1,11 @@
 use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
-use crate::ports::inbound::execute_operation::ExecuteOperation;
-use crate::ports::outbound::clock::Clock;
-use crate::ports::outbound::configuration_repository::ConfigurationRepository;
-use crate::ports::outbound::file_system::FileSystem;
-use crate::ports::outbound::id_generator::IdGenerator;
-use crate::ports::outbound::operation_repository::OperationRepository;
-use crate::ports::outbound::conflict_resolver::ConflictResolver;
-use quicksort_domain::entities::{Operation, OperationStatus};
-use quicksort_domain::services::OperationService;
-use quicksort_domain::value_objects::windows_path::WindowsPath;
+use crate::ExecuteOperation;
+use crate::ports::outbound::{
+    Clock, ConfigurationRepository, FileSystem,
+    IdGenerator, OperationRepository, ConflictResolver,
+};
+use quicksort_domain::{Operation, OperationState, WindowsPath};
 
 /// Реализация Use Case для выполнения операции перемещения/копирования.
 pub struct ExecuteOperationImpl {

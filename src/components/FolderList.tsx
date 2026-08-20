@@ -1,9 +1,5 @@
-import { List, Button, Typography, Popconfirm, Input, Switch } from 'antd';
-import { FolderOpenOutlined, DeleteOutlined, EditOutlined, StarOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { Folder } from '../types';
-
-const { Text } = Typography;
 
 interface FolderListProps {
     folders: Folder[];
@@ -34,45 +30,89 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
     };
 
     if (folders.length === 0) {
-        return <div style={{ textAlign: 'center', padding: '24px', color: '#888' }}>Нет добавленных папок.</div>;
+        return (
+            <div className="empty-state">
+                <div className="empty-state-icon">📁</div>
+                <div className="empty-state-title">Нет добавленных папок</div>
+                <div className="empty-state-description">
+                    Нажмите "Добавить папку" чтобы начать
+                </div>
+            </div>
+        );
     }
 
     return (
-        <List
-            dataSource={folders}
-            renderItem={(folder) => (
-                <List.Item
-                    actions={[
-                        <Switch
-                            checked={folder.is_favorite}
-                            onChange={() => onToggleFavorite(folder.id)}
-                            checkedChildren={<StarOutlined />}
-                            unCheckedChildren={<StarOutlined />}
-                        />,
-                        editingId === folder.id ? (
-                            <Button type="link" onClick={confirmEdit} icon={<EditOutlined />}>Сохранить</Button>
-                        ) : (
-                            <Button type="text" icon={<EditOutlined />} onClick={() => startEdit(folder.id, folder.name)} />
-                        ),
-                        <Popconfirm title="Удалить папку?" onConfirm={() => handleRemove(folder.id)} okText="Да" cancelText="Нет">
-                            <Button type="text" danger icon={<DeleteOutlined />} />
-                        </Popconfirm>,
-                    ]}
+        <div className="folder-list">
+            {folders.map((folder, index) => (
+                <div 
+                    key={folder.id} 
+                    className={`folder-card ${folder.is_favorite ? 'favorite' : ''}`}
+                    style={{ animationDelay: `${index * 50}ms` }}
                 >
-                    <List.Item.Meta
-                        avatar={<FolderOpenOutlined style={{ fontSize: '24px', color: '#faad14' }} />}
-                        title={
-                            editingId === folder.id ? (
-                                <Input value={editValue} onChange={e => setEditValue(e.target.value)} onPressEnter={confirmEdit} onBlur={confirmEdit} autoFocus />
-                            ) : (
-                                <Text strong>{folder.name}</Text>
-                            )
-                        }
-                        description={<Text type="secondary">{folder.path}</Text>}
-                    />
-                </List.Item>
-            )}
-        />
+                    <div className="folder-icon">📁</div>
+                    <div className="folder-info">
+                        {editingId === folder.id ? (
+                            <input
+                                type="text"
+                                value={editValue}
+                                onChange={e => setEditValue(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && confirmEdit()}
+                                onBlur={confirmEdit}
+                                autoFocus
+                                style={{
+                                    background: 'var(--qs-bg-tertiary)',
+                                    border: '1px solid var(--qs-accent)',
+                                    borderRadius: 'var(--qs-radius-sm)',
+                                    padding: '4px 8px',
+                                    color: 'var(--qs-text-primary)',
+                                    fontFamily: 'var(--qs-font-body)',
+                                    fontSize: '14px',
+                                    fontWeight: 500,
+                                    width: '100%',
+                                    outline: 'none',
+                                }}
+                            />
+                        ) : (
+                            <div className="folder-name">{folder.name}</div>
+                        )}
+                        <div className="folder-path">{folder.path}</div>
+                    </div>
+                    <div className="folder-actions">
+                        <button
+                            className={`folder-action-btn star ${folder.is_favorite ? 'active' : ''}`}
+                            onClick={() => onToggleFavorite(folder.id)}
+                            title={folder.is_favorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                        >
+                            {folder.is_favorite ? '★' : '☆'}
+                        </button>
+                        {editingId === folder.id ? (
+                            <button
+                                className="folder-action-btn"
+                                onClick={confirmEdit}
+                                title="Сохранить"
+                            >
+                                ✓
+                            </button>
+                        ) : (
+                            <button
+                                className="folder-action-btn"
+                                onClick={() => startEdit(folder.id, folder.name)}
+                                title="Переименовать"
+                            >
+                                ✎
+                            </button>
+                        )}
+                        <button
+                            className="folder-action-btn danger"
+                            onClick={() => handleRemove(folder.id)}
+                            title="Удалить"
+                        >
+                            ×
+                        </button>
+                    </div>
+                </div>
+            ))}
+        </div>
     );
 };
 

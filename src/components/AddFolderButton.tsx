@@ -1,5 +1,3 @@
-import { Button } from 'antd';
-import { FolderAddOutlined } from '@ant-design/icons';
 import { open } from '@tauri-apps/plugin-dialog';
 
 interface AddFolderButtonProps {
@@ -14,7 +12,13 @@ const AddFolderButton: React.FC<AddFolderButtonProps> = ({ onFolderAdded }) => {
             onFolderAdded(name, selected);
         }
     };
-    return <Button type="dashed" icon={<FolderAddOutlined />} onClick={handleClick} block>Добавить папку</Button>;
+
+    return (
+        <button className="add-folder-btn" onClick={handleClick}>
+            <span className="add-folder-btn-icon">+</span>
+            Добавить папку
+        </button>
+    );
 };
 
 export default AddFolderButton;
