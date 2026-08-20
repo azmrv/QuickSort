@@ -46,7 +46,7 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
             {folders.map((folder, index) => (
                 <div 
                     key={folder.id} 
-                    className={`folder-card ${folder.is_favorite ? 'favorite' : ''}`}
+                    className={`folder-card ${folder.favorite ? 'favorite' : ''}`}
                     style={{ animationDelay: `${index * 50}ms` }}
                 >
                     <div className="folder-icon">📁</div>
@@ -79,11 +79,11 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
                     </div>
                     <div className="folder-actions">
                         <button
-                            className={`folder-action-btn star ${folder.is_favorite ? 'active' : ''}`}
+                            className={`folder-action-btn star ${folder.favorite ? 'active' : ''}`}
                             onClick={() => onToggleFavorite(folder.id)}
-                            title={folder.is_favorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                            title={folder.favorite ? 'Убрать из избранного' : 'Добавить в избранное'}
                         >
-                            {folder.is_favorite ? '★' : '☆'}
+                            {folder.favorite ? '★' : '☆'}
                         </button>
                         {editingId === folder.id ? (
                             <button

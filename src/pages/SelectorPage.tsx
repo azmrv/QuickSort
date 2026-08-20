@@ -35,6 +35,7 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
                 operation_type: 'Move',
                 source_paths: [file],
                 target_folder_id: folder.id,
+                target_paths: null,
                 overwrite_policy: 'Skip',
             };
             await invoke('execute_operation_v2', { command });

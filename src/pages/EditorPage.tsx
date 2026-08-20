@@ -42,11 +42,11 @@ const EditorPage: React.FC<EditorPageProps> = () => {
         // Find the folder and its current order
         const folder = folders.find(f => f.id === id);
         if (!folder) return;
-        const newOrder = folder.is_favorite ? 0 : folders.filter(f => f.is_favorite).length + 1;
+        const newOrder = folder.favorite ? 0 : folders.filter(f => f.favorite).length + 1;
 
         // Optimistic UI update
         setFolders(folders.map((f) =>
-            f.id === id ? { ...f, is_favorite: !f.is_favorite, sort_order: newOrder } : f
+            f.id === id ? { ...f, favorite: !f.favorite, order: newOrder } : f
         ));
 
         try {
