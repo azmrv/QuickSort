@@ -5,10 +5,12 @@ mod shellext;
 
 use std::ptr;
 use std::sync::atomic::Ordering;
-use windows::core::{GUID, HRESULT, IUnknown, Interface};
-use windows::Win32::Foundation::{CLASS_E_CLASSNOTAVAILABLE, E_INVALIDARG, E_POINTER, S_FALSE, S_OK};
+use windows::core::{IUnknown, Interface, GUID, HRESULT};
+use windows::Win32::Foundation::{
+    CLASS_E_CLASSNOTAVAILABLE, E_INVALIDARG, E_POINTER, S_FALSE, S_OK,
+};
 
-use shellext::{CLSID_QUICKSORT, QuickSortClassFactory, INSTANCE_COUNT};
+use shellext::{QuickSortClassFactory, CLSID_QUICKSORT, INSTANCE_COUNT};
 
 /// DllGetClassObject - returns a class factory for the requested CLSID.
 #[no_mangle]
@@ -20,7 +22,9 @@ pub extern "system" fn DllGetClassObject(
     if ppv.is_null() {
         return E_POINTER.into();
     }
-    unsafe { *ppv = ptr::null_mut(); }
+    unsafe {
+        *ppv = ptr::null_mut();
+    }
 
     if rclsid.is_null() || riid.is_null() {
         return E_INVALIDARG.into();

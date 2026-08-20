@@ -77,12 +77,20 @@ fn start_tauri() {
         Box::new(quicksort_infrastructure::StdFileSystem::new()),
     );
 
-    let facade = ApplicationFacadeImpl::new(
+    let facade = Arc::new(ApplicationFacadeImpl::new(
         Arc::new(execute_use_case),
         Arc::new(undo_use_case),
         Arc::new(get_folders_use_case),
         Arc::new(manage_folders_use_case),
-    );
+    ));
+
+    let facade_for_ipc = Arc::clone(&facade);
+    std::thread::Builder::new()
+        .name("ipc-pipe-server".into())
+        .spawn(move || {
+            crate::ipc::server::start_pipe_server(facade_for_ipc);
+        })
+        .expect("failed to spawn IPC pipe server thread");
 
     let app_state = AppState { facade };
 

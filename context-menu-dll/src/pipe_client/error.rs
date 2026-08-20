@@ -1,7 +1,7 @@
 //! IPC error types.
 
-use windows::core::Error as WindowsError;
 use thiserror::Error;
+use windows::core::Error as WindowsError;
 
 #[derive(Error, Debug)]
 pub enum PipeError {

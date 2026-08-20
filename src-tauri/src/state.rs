@@ -1,5 +1,6 @@
+use std::sync::Arc;
 use quicksort_application::ApplicationFacadeImpl;
 
 pub struct AppState {
-    pub facade: ApplicationFacadeImpl,
+    pub facade: Arc<ApplicationFacadeImpl>,
 }

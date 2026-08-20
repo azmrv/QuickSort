@@ -1,26 +1,22 @@
 //! Win32 Named Pipe transport.
 
+use super::PipeTransport;
+use crate::pipe_client::error::PipeError;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::time::Duration;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_PIPE_BUSY, HANDLE,
-    GENERIC_READ, GENERIC_WRITE,
+    CloseHandle, GetLastError, ERROR_PIPE_BUSY, GENERIC_READ, GENERIC_WRITE, HANDLE,
 };
 use windows::Win32::Storage::FileSystem::{
-    CreateFileW, ReadFile, WriteFile, FILE_SHARE_READ, FILE_SHARE_WRITE,
-    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+    CreateFileW, ReadFile, WriteFile, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    OPEN_EXISTING,
 };
 use windows::Win32::System::Pipes::WaitNamedPipeW;
-use crate::pipe_client::error::PipeError;
-use crate::pipe_client::protocol::*;  // <-- добавлен импорт
-use super::PipeTransport;
 
 const PIPE_NAME: &str = r"\\.\pipe\quicksort_cmd";
 const CONNECT_TIMEOUT_MS: u32 = 100;
-const READ_TIMEOUT_MS: u32 = 1000;
-const WRITE_TIMEOUT_MS: u32 = 1000;
 const MAX_RETRIES: u32 = 3;
 const RETRY_INTERVAL_MS: u64 = 20;
 
@@ -60,10 +56,7 @@ impl NamedPipeTransport {
 
 impl PipeTransport for NamedPipeTransport {
     fn connect(&mut self) -> Result<(), PipeError> {
-        let pipe_name_wide: Vec<u16> = OsStr::new(PIPE_NAME)
-            .encode_wide()
-            .chain(Some(0))
-            .collect();
+        let pipe_name_wide: Vec<u16> = OsStr::new(PIPE_NAME).encode_wide().chain(Some(0)).collect();
         let pipe_name = PCWSTR::from_raw(pipe_name_wide.as_ptr());
 
         let mut attempts = 0;
@@ -104,8 +97,7 @@ impl PipeTransport for NamedPipeTransport {
     }
 
     fn send(&mut self, data: &[u8]) -> Result<(), PipeError> {
-        let handle = self.handle.as_ref()
-            .ok_or(PipeError::Unavailable)?;
+        let handle = self.handle.as_ref().ok_or(PipeError::Unavailable)?;
 
         let mut bytes_written = 0u32;
         unsafe {
@@ -125,57 +117,22 @@ impl PipeTransport for NamedPipeTransport {
     }
 
     fn receive(&mut self) -> Result<Vec<u8>, PipeError> {
-        let handle = self.handle.as_ref()
-            .ok_or(PipeError::Unavailable)?;
+        let handle = self.handle.as_ref().ok_or(PipeError::Unavailable)?;
 
-        // Read header first (12 bytes)
-        let mut header_buf = [0u8; 12];
+        let mut buf = vec![0u8; 4096];
         let mut bytes_read = 0u32;
 
         unsafe {
             ReadFile(
                 handle.as_handle(),
-                Some(&mut header_buf),
+                Some(&mut buf),
                 Some(&mut bytes_read),
                 None,
             )?;
         }
 
-        if bytes_read as usize != header_buf.len() {
-            return Err(PipeError::IncompleteRead {
-                expected: header_buf.len() as u32,
-                actual: bytes_read,
-            });
-        }
-
-        let header = MessageHeader::decode(&header_buf)?;
-        let payload_len = header.length as usize;
-
-        // Read payload
-        let mut payload = vec![0u8; payload_len];
-        let mut bytes_read = 0u32;
-
-        unsafe {
-            ReadFile(
-                handle.as_handle(),
-                Some(&mut payload),
-                Some(&mut bytes_read),
-                None,
-            )?;
-        }
-
-        if bytes_read as usize != payload_len {
-            return Err(PipeError::IncompleteRead {
-                expected: payload_len as u32,
-                actual: bytes_read,
-            });
-        }
-
-        let mut result = Vec::with_capacity(header_buf.len() + payload_len);
-        result.extend_from_slice(&header_buf);
-        result.extend_from_slice(&payload);
-
-        Ok(result)
+        buf.truncate(bytes_read as usize);
+        Ok(buf)
     }
 
     fn disconnect(&mut self) -> Result<(), PipeError> {

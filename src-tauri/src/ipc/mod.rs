@@ -5,8 +5,6 @@
 //! `quicksort-ipc-contract` and forwards decoded commands to the
 //! Application Facade.
 
-pub mod framing; // Low-level length-prefixed frame I/O
-pub mod protocol; // Protocol types (temporary; will move to quicksort-ipc-contract)
-pub mod server; // Pipe server lifecycle and request handling
-
-pub use server::start_pipe_server;
+pub mod framing;
+pub mod protocol;
+pub mod server;

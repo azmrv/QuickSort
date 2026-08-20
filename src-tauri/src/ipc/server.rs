@@ -4,50 +4,40 @@
 //! incoming connections on `\\.\pipe\quicksort_cmd`.  Every command
 //! received is deserialized, validated, and forwarded to the Application
 //! Facade for execution.  A response is sent back to the client (DLL).
-//!
-//! # Design Decisions
-//! - The server uses a single-threaded, synchronous I/O model because
-//!   command volume is low (a few per minute) and simplicity is preferred.
-//! - The server is **not** responsible for retry or error recovery – that
-//!   is handled by the client (DLL) via its own retry policy.
-//! - Once the Application Facade is fully integrated, the TODO marker
-//!   below will be replaced with an actual `facade.execute_operation(...)`
-//!   call.
 
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
+use std::sync::Arc;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE};
 use windows::Win32::Storage::FileSystem::{
-    FlushFileBuffers, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_SHARE_READ, FILE_SHARE_WRITE,
-    PIPE_ACCESS_DUPLEX,
+    FlushFileBuffers, FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX,
 };
 use windows::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE,
     PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
 };
 
-// Import the canonical IPC contract – no more duplicated DTOs.
-use quicksort_ipc_contract::{CommandMessage, ResponseMessage, ResponseStatus, PROTOCOL_VERSION};
+use quicksort_application::{
+    ApplicationFacadeImpl, ExecuteOperation, OperationCommand,
+    OverwritePolicy as AppOverwritePolicy, FolderId, OperationType as DomainOpType, WindowsPath,
+};
+use quicksort_ipc_contract::{
+    CommandMessage, ExecuteOperationData, OperationType as IpcOpType,
+    OverwritePolicy as IpcOverwritePolicy, ResponseMessage, ResponseStatus,
+};
 
 use super::framing::{read_frame, write_frame};
 
-/// The well-known name of the pipe.  Both the DLL and this server MUST agree
-/// on this value.
 const PIPE_NAME: &str = r"\\.\pipe\quicksort_cmd";
 
 // ---------------------------------------------------------------------------
 // RAII wrapper for HANDLE
 // ---------------------------------------------------------------------------
 
-/// Owns a pipe `HANDLE` and closes it on drop.
-///
-/// Using RAII guarantees that the handle is released even if an error occurs
-/// or the thread panics.
 struct PipeHandle(HANDLE);
 
 impl PipeHandle {
-    /// Returns the underlying `HANDLE` for read/write operations.
     fn raw(&self) -> HANDLE {
         self.0
     }
@@ -62,6 +52,52 @@ impl Drop for PipeHandle {
 }
 
 // ---------------------------------------------------------------------------
+// Type conversions: IPC contract → Application DTOs
+// ---------------------------------------------------------------------------
+
+fn convert_operation_type(ty: IpcOpType) -> DomainOpType {
+    match ty {
+        IpcOpType::Move => DomainOpType::Move,
+        IpcOpType::Copy => DomainOpType::Copy,
+        IpcOpType::Delete => DomainOpType::Delete,
+        IpcOpType::Rename => DomainOpType::Rename,
+    }
+}
+
+fn convert_overwrite_policy(p: IpcOverwritePolicy) -> AppOverwritePolicy {
+    match p {
+        IpcOverwritePolicy::Skip => AppOverwritePolicy::Skip,
+        IpcOverwritePolicy::Overwrite => AppOverwritePolicy::Overwrite,
+        IpcOverwritePolicy::AutoRename => AppOverwritePolicy::AutoRename,
+        IpcOverwritePolicy::Ask => AppOverwritePolicy::AutoRename, // non-interactive fallback
+    }
+}
+
+fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> {
+    let source_paths: Vec<WindowsPath> = data
+        .source_paths
+        .iter()
+        .filter_map(|p| WindowsPath::new(p).ok())
+        .collect();
+
+    if source_paths.is_empty() {
+        return None;
+    }
+
+    let target_folder_id = data
+        .target_folder_id
+        .and_then(|id| FolderId::from_string(&id).ok());
+
+    Some(OperationCommand {
+        operation_type: convert_operation_type(data.operation_type),
+        source_paths,
+        target_folder_id,
+        target_paths: None,
+        overwrite_policy: convert_overwrite_policy(data.overwrite_policy),
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
@@ -69,63 +105,58 @@ impl Drop for PipeHandle {
 ///
 /// # Blocking
 /// This function never returns under normal operation.  It must be spawned
-/// on a dedicated OS thread (e.g., via `std::thread::spawn`).
-///
-/// # Future Enhancement
-/// Currently the server processes each command synchronously.  If response
-/// time becomes critical, the inner handler can be moved to a `tokio` task.
-pub fn start_pipe_server() {
+/// on a dedicated OS thread.
+pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
     tracing::info!("Pipe server starting on {}", PIPE_NAME);
 
-    // Convert the pipe name to a UTF-16 wide string required by Win32.
     let pipe_name: Vec<u16> = OsStr::new(PIPE_NAME)
         .encode_wide()
-        .chain(Some(0)) // null-terminate
+        .chain(Some(0))
         .collect();
 
+    // Create a Tokio runtime for blocking on async facade calls.
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("failed to create tokio runtime for pipe server");
+
     loop {
-        // ---- Create the pipe instance ----
         let handle = unsafe {
             CreateNamedPipeW(
                 PCWSTR::from_raw(pipe_name.as_ptr()),
                 PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
                 PIPE_UNLIMITED_INSTANCES,
-                512,  // output buffer size (small – commands are short)
-                512,  // input buffer size
-                0,    // default timeout (blocking)
-                None, // default security descriptor
+                512,
+                512,
+                0,
+                None,
             )
         };
 
         if handle == INVALID_HANDLE_VALUE {
             let err = unsafe { GetLastError() };
             tracing::error!("CreateNamedPipeW failed: {:?}", err);
-            // Avoid a tight loop if the error is persistent.
             std::thread::sleep(std::time::Duration::from_secs(1));
             continue;
         }
 
         let pipe = PipeHandle(handle);
 
-        // ---- Wait for the DLL client to connect ----
         unsafe {
-            ConnectNamedPipe(pipe.raw(), None);
+            let _ = ConnectNamedPipe(pipe.raw(), None);
         }
         tracing::info!("Client connected to pipe");
 
-        // ---- Service this client until the connection is lost ----
         loop {
-            // 1. Read a complete framed message.
             let data = match read_frame(pipe.raw()) {
                 Ok(bytes) => bytes,
                 Err(e) => {
                     tracing::error!("Read error: {}", e);
-                    break; // connection broken → wait for next client
+                    break;
                 }
             };
 
-            // 2. Deserialize the JSON payload.
             let cmd: CommandMessage = match serde_json::from_slice(&data) {
                 Ok(c) => c,
                 Err(e) => {
@@ -141,29 +172,39 @@ pub fn start_pipe_server() {
                 }
             };
 
-            // 3. Dispatch according to the command type.
             let response = match cmd {
                 CommandMessage::ExecuteOperation(data) => {
                     tracing::info!("Received ExecuteOperation: {:?}", data);
-                    // -----------------------------------------------------------
-                    // TODO: Replace the placeholder below with the actual Use Case
-                    // call once the Application Facade is wired in.
-                    //
-                    // Example:
-                    //   let facade = get_facade_handle();  // obtain via AppState
-                    //   let result = facade.execute_operation(command).await;
-                    // -----------------------------------------------------------
-                    let success = true; // ← placeholder
-                    ResponseMessage {
-                        status: if success {
-                            ResponseStatus::Ok
-                        } else {
-                            ResponseStatus::Error
+
+                    let response = match convert_execute_data(data) {
+                        Some(command) => {
+                            match rt.block_on(facade.execute(command)) {
+                                Ok(result) => {
+                                    let op_id = result.operation_id.to_string();
+                                    let processed = result.processed_files;
+                                    ResponseMessage {
+                                        status: ResponseStatus::Ok,
+                                        message: format!("Processed {} files", processed),
+                                        operation_id: Some(op_id),
+                                        data: None,
+                                    }
+                                }
+                                Err(e) => ResponseMessage {
+                                    status: ResponseStatus::Error,
+                                    message: e.to_string(),
+                                    operation_id: None,
+                                    data: None,
+                                },
+                            }
+                        }
+                        None => ResponseMessage {
+                            status: ResponseStatus::Error,
+                            message: "Invalid command: no valid source paths".to_string(),
+                            operation_id: None,
+                            data: None,
                         },
-                        message: String::new(),
-                        operation_id: None,
-                        data: None,
-                    }
+                    };
+                    response
                 }
                 CommandMessage::Ping => ResponseMessage {
                     status: ResponseStatus::Ok,
@@ -173,7 +214,6 @@ pub fn start_pipe_server() {
                 },
             };
 
-            // 4. Send the response back to the DLL.
             let response_bytes = match serde_json::to_vec(&response) {
                 Ok(b) => b,
                 Err(e) => {
@@ -185,8 +225,6 @@ pub fn start_pipe_server() {
                 tracing::error!("Write response failed: {}", e);
                 break;
             }
-            // Ensure the response is pushed to the wire before waiting for
-            // the next command.
             unsafe {
                 FlushFileBuffers(pipe.raw()).ok();
             }
