@@ -17,9 +17,9 @@
 //! to keep them simple and synchronous. Since all test scenarios are
 //! single-threaded or use `tokio::task::spawn_blocking`, this is safe.
 
-use crate::dtos::OperationCommand;
-use crate::errors::UseCaseError;
-use crate::ports::outbound::{
+use quicksort_application::OperationCommand;
+use quicksort_application::UseCaseError;
+use quicksort_application::ports::outbound::{
     Clock, ConfigurationRepository, ConflictResolver, FileSystem, IdGenerator, OperationRepository,
 };
 use async_trait::async_trait;
@@ -336,7 +336,7 @@ impl IdGenerator for MockIdGenerator {
         let mut counter = self.counter.lock().unwrap();
         let id = format!("test-op-{:03}", *counter);
         *counter += 1;
-        OperationId::from_string(&id)
+        OperationId::from_string(&id).unwrap()
     }
 }
 

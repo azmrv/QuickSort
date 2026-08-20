@@ -302,7 +302,7 @@ impl IdGenerator for MockIdGenerator {
         let mut counter = self.counter.lock().unwrap();
         let id = format!("test-op-{:03}", *counter);
         *counter += 1;
-        OperationId::from_string(&id)
+        OperationId::from_string(&id).unwrap()
     }
 }
 
@@ -369,13 +369,16 @@ impl ConflictResolver for MockConflictResolver {
 
 /// Creates a default folder for testing.
 pub fn test_folder() -> Folder {
+    let now = chrono::Utc::now();
     Folder {
-        id: FolderId::from_string("folder-1"),
+        id: FolderId::from_string("00000000-0000-0000-0000-000000000001").unwrap(),
         name: "Documents".to_string(),
         path: WindowsPath::new("C:\\Users\\Test\\Documents").unwrap(),
         favorite: false,
         order: 0,
         stats: Default::default(),
+        created_at: now,
+        updated_at: now,
     }
 }
 

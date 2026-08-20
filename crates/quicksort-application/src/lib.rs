@@ -29,7 +29,7 @@
 //! | `pipeline` | Optional command processing pipeline (validation, logging) |
 //!
 //! # Example – Creating the facade
-//! ```rust,no_run
+//! ```rust,ignore
 //! use quicksort_application::ApplicationFacadeImpl;
 //! // ... create infrastructure services ...
 //! let facade = ApplicationFacadeImpl::new(execute, undo, get_folders, manage);

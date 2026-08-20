@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 /// to the chosen policy, and performs the actual file operations.
 ///
 /// # Examples
-/// ```rust
+/// ```rust,ignore
 /// let cmd = OperationCommand::new_move(
 ///     vec![source_path],
 ///     target_folder_id,

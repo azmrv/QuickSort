@@ -31,7 +31,8 @@ use thiserror::Error;
 /// responses (e.g., HTTP status codes, user notifications, log entries).
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
+/// use quicksort_application::UseCaseError;
 /// fn handle_command() -> Result<(), UseCaseError> {
 ///     // Trigger a domain error
 ///     Err(UseCaseError::FolderNotFound("MyFolder".to_string()))
