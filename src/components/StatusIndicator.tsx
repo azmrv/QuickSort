@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/invoke';
+import { logger } from '../lib/logger';
 
 const StatusIndicator: React.FC = () => {
     const [active, setActive] = useState(false);
 
     useEffect(() => {
-        invoke<boolean>('check_menu_status').then(setActive).catch(console.error);
+        invoke<boolean>('check_menu_status')
+            .then(active => {
+                setActive(active);
+                logger.info('StatusIndicator', `menu status: ${active ? 'active' : 'inactive'}`);
+            })
+            .catch(err => logger.error('StatusIndicator', 'failed to check menu status', err));
     }, []);
 
     return (

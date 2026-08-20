@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from './lib/invoke';
+import { logger } from './lib/logger';
 import { ConfigProvider, theme, App as AntApp, Tabs } from 'antd';
 import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
@@ -15,8 +16,10 @@ function App() {
     const [activeTab, setActiveTab] = useState('folders');
 
     useEffect(() => {
+        logger.info('App', 'startup — checking pending file');
         invoke<string | null>('get_pending_file').then((file) => {
             if (file) {
+                logger.info('App', `pending file received: ${file} — switching to selector`);
                 setSelectFile(file);
                 setMode('selector');
             }
@@ -66,12 +69,15 @@ function App() {
                             <main className="app-content page-enter">
                                 <Tabs
                                     activeKey={activeTab}
-                                    onChange={setActiveTab}
+                                    onChange={(key) => {
+                                        setActiveTab(key);
+                                        logger.action('App', `tab switch → ${key}`);
+                                    }}
                                     items={[
                                         { 
                                             key: 'folders', 
                                             label: 'Папки', 
-                                            children: <EditorPage isDark={isDark} onToggleTheme={setIsDark} /> 
+                                            children: <EditorPage /> 
                                         },
                                         { 
                                             key: 'log', 

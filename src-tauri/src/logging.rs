@@ -1,47 +1,101 @@
-//! Initialization of the structured logging system.
-//!
-//! This module configures `tracing-subscriber` as the global log subscriber
-//! for the entire application (Tauri adapter, IPC server, CLI commands).
-//! Once `init()` is called, all `tracing::info!`, `tracing::error!`, etc.
-//! macros will produce output according to the configured format and filters.
-//!
-//! # Why we use `tracing` instead of `log`
-//! `tracing` provides:
-//! - **Structured, async-aware spans** – ideal for tracking operations across
-//!   multiple threads and async tasks.
-//! - **Scoped filtering** – we can enable/disable logging per module at runtime
-//!   via the `RUST_LOG` environment variable.
-//! - **Integration with Tauri** – Tauri's internal logging also uses `tracing`,
-//!   so we get a unified log stream.
-//!
-//! # How to control the log level
-//! Set the `RUST_LOG` environment variable before starting the application:
-//! ```powershell
-//! # Show only errors from our crate, but all info+ from Tauri internals
-//! $env:RUST_LOG="quicksort=error,tauri=info"
-//! cargo run
-//! ```
-//!
-//! # When to call this function
-//! `init()` must be called exactly once, before any `tracing` macros are used.
-//! In `main.rs` it is called right after the CLI arguments are parsed, so
-//! both the CLI and GUI parts benefit from logging.
+use std::sync::{Mutex, OnceLock};
+use tauri::Emitter;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
-/// Initializes the global tracing subscriber.
-///
-/// The subscriber is configured with:
-/// - An `EnvFilter` that reads the `RUST_LOG` environment variable.
-///   If the variable is not set, the default is `warn` for all crates.
-/// - A human-readable, compact output format suitable for terminal display.
-///
-/// # Panics
-/// Panics if called more than once – `tracing_subscriber` forbids multiple
-/// global subscribers.  If you need to reconfigure logging at runtime, use
-/// `EnvFilter::reload` instead of calling `init()` again.
+static APP_HANDLE: OnceLock<Mutex<Option<tauri::AppHandle>>> = OnceLock::new();
+
+struct FrontendLayer;
+
+impl<S> tracing_subscriber::Layer<S> for FrontendLayer
+where
+    S: tracing::Subscriber,
+{
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let meta = event.metadata();
+        let level = match *meta.level() {
+            tracing::Level::ERROR => "ERROR",
+            tracing::Level::WARN => "WARN",
+            tracing::Level::INFO => "INFO",
+            tracing::Level::DEBUG => "DEBUG",
+            tracing::Level::TRACE => "TRACE",
+        };
+
+        let target = meta.target();
+        let mut visitor = FieldVisitor(String::new());
+        event.record(&mut visitor);
+
+        let log_entry = serde_json::json!({
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "level": level,
+            "target": target,
+            "message": visitor.0,
+        });
+
+        if let Some(handle) = APP_HANDLE.get() {
+            if let Ok(guard) = handle.lock() {
+                if let Some(ref h) = *guard {
+                    let _ = h.emit("backend-log", &log_entry);
+                }
+            }
+        }
+    }
+}
+
+struct FieldVisitor(String);
+
+impl tracing::field::Visit for FieldVisitor {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        if !self.0.is_empty() {
+            self.0.push(' ');
+        }
+        self.0.push_str(&format!("{}={:?}", field.name(), value));
+    }
+
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        if !self.0.is_empty() {
+            self.0.push(' ');
+        }
+        self.0.push_str(&format!("{}={}", field.name(), value));
+    }
+
+    fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
+        if !self.0.is_empty() {
+            self.0.push(' ');
+        }
+        self.0.push_str(&format!("{}={}", field.name(), value));
+    }
+
+    fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
+        if !self.0.is_empty() {
+            self.0.push(' ');
+        }
+        self.0.push_str(&format!("{}={}", field.name(), value));
+    }
+
+    fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
+        if !self.0.is_empty() {
+            self.0.push(' ');
+        }
+        self.0.push_str(&format!("{}={}", field.name(), value));
+    }
+}
+
 pub fn init() {
-    tracing_subscriber::fmt()
-        // The `EnvFilter` enables/disables log events based on their target
-        // (crate/module name) and level.  It reads the RUST_LOG env var.
-        .with_env_filter(tracing_subscriber::filter::EnvFilter::from_default_env())
+    let env_filter = tracing_subscriber::filter::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::filter::EnvFilter::new("info"));
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(tracing_subscriber::fmt::layer())
+        .with(FrontendLayer)
         .init();
+}
+
+pub fn set_app_handle(handle: tauri::AppHandle) {
+    let _ = APP_HANDLE.set(Mutex::new(Some(handle)));
 }

@@ -1,83 +1,95 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { message } from 'antd';
+import { App } from 'antd';
+import { invoke } from '../lib/invoke';
+import { logger } from '../lib/logger';
 import FolderList from '../components/FolderList';
 import AddFolderButton from '../components/AddFolderButton';
 import StatusIndicator from '../components/StatusIndicator';
 import { Folder } from '../types';
 
-interface EditorPageProps {
-    isDark: boolean;
-    onToggleTheme: (checked: boolean) => void;
-}
-
-const EditorPage: React.FC<EditorPageProps> = () => {
+const EditorPage: React.FC = () => {
     const [folders, setFolders] = useState<Folder[]>([]);
+    const { message } = App.useApp();
 
-    // Load folders via the new command
     useEffect(() => {
+        logger.action('EditorPage', 'mount — loading folders');
         invoke<Folder[]>('get_folders_v2')
-            .then(setFolders)
-            .catch(console.error);
+            .then(folders => {
+                setFolders(folders);
+                logger.info('EditorPage', `loaded ${folders.length} folders`);
+            })
+            .catch(err => {
+                logger.error('EditorPage', 'failed to load folders', err);
+                message.error(`Ошибка загрузки: ${err}`);
+            });
     }, []);
 
     const handleAddFolder = (name: string, path: string) => {
-        // Call the new add_folder_v2 command
+        logger.action('EditorPage', `add folder: ${name} → ${path}`);
         invoke('add_folder_v2', { name, path })
             .then(() => {
-                // Reload the list after successful addition
+                logger.info('EditorPage', 'folder added, reloading list');
                 return invoke<Folder[]>('get_folders_v2');
             })
-            .then(setFolders)
-            .catch(err => message.error(`Ошибка добавления: ${err}`));
+            .then(folders => {
+                setFolders(folders);
+                logger.info('EditorPage', `reloaded ${folders.length} folders`);
+            })
+            .catch(err => {
+                logger.error('EditorPage', 'add folder failed', err);
+                message.error(`Ошибка добавления: ${err}`);
+            });
     };
 
     const handleRename = (id: string, newName: string) => {
-        // Update locally for now
+        logger.action('EditorPage', `rename folder ${id} → "${newName}"`);
         setFolders(folders.map((f) => (f.id === id ? { ...f, name: newName } : f)));
-        // TODO: Call rename_folder_v2 when implemented
     };
 
     const handleToggleFavorite = async (id: string) => {
-        // Find the folder and its current order
         const folder = folders.find(f => f.id === id);
         if (!folder) return;
         const newOrder = folder.favorite ? 0 : folders.filter(f => f.favorite).length + 1;
+        logger.action('EditorPage', `toggle favorite: ${id} (favorite=${!folder.favorite}, order=${newOrder})`);
 
-        // Optimistic UI update
         setFolders(folders.map((f) =>
             f.id === id ? { ...f, favorite: !f.favorite, order: newOrder } : f
         ));
 
         try {
             await invoke('toggle_favorite_v2', { id, order: newOrder });
+            logger.info('EditorPage', `favorite toggled: ${id}`);
         } catch (err) {
-            console.error(err);
-            // Rollback on error
+            logger.error('EditorPage', 'toggle favorite failed', err);
             setFolders(folders);
             message.error('Ошибка обновления избранного');
         }
     };
 
     const handleApply = async (newFolders: Folder[]) => {
-        // Apply changes (reordering) — update local list for now
         setFolders(newFolders);
     };
 
     const handleRegisterComServer = async () => {
+        logger.action('EditorPage', 'register COM server');
         try {
             const msg = await invoke<string>('register_com_server');
+            logger.info('EditorPage', `COM registered: ${msg}`);
             message.success(msg);
         } catch (err) {
+            logger.error('EditorPage', 'COM register failed', err);
             message.error(`Ошибка регистрации: ${err}`);
         }
     };
 
     const handleUnregisterComServer = async () => {
+        logger.action('EditorPage', 'unregister COM server');
         try {
             const msg = await invoke<string>('unregister_com_server');
+            logger.info('EditorPage', `COM unregistered: ${msg}`);
             message.success(msg);
         } catch (err) {
+            logger.error('EditorPage', 'COM unregister failed', err);
             message.error(`Ошибка удаления: ${err}`);
         }
     };
@@ -93,16 +105,10 @@ const EditorPage: React.FC<EditorPageProps> = () => {
                 onApply={handleApply}
             />
             <div className="action-bar">
-                <button 
-                    className="add-folder-btn"
-                    onClick={handleRegisterComServer}
-                >
+                <button className="add-folder-btn" onClick={handleRegisterComServer}>
                     Зарегистрировать COM
                 </button>
-                <button 
-                    className="add-folder-btn"
-                    onClick={handleUnregisterComServer}
-                >
+                <button className="add-folder-btn" onClick={handleUnregisterComServer}>
                     Удалить COM
                 </button>
             </div>

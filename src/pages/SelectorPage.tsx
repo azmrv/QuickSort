@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { message } from 'antd';
+import { App } from 'antd';
+import { invoke } from '../lib/invoke';
+import { logger } from '../lib/logger';
 import { Folder, OperationCommand } from '../types';
 
 interface SelectorPageProps {
@@ -11,11 +12,19 @@ interface SelectorPageProps {
 const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
     const [folders, setFolders] = useState<Folder[]>([]);
     const [search, setSearch] = useState('');
+    const { message } = App.useApp();
 
     useEffect(() => {
+        logger.action('SelectorPage', `mount — loading folders for file: ${file}`);
         invoke<Folder[]>('get_folders_v2')
-            .then(setFolders)
-            .catch(console.error);
+            .then(folders => {
+                setFolders(folders);
+                logger.info('SelectorPage', `loaded ${folders.length} folders`);
+            })
+            .catch(err => {
+                logger.error('SelectorPage', 'failed to load folders', err);
+                message.error(`Ошибка загрузки: ${err}`);
+            });
     }, []);
 
     const filtered = folders.filter(
@@ -29,8 +38,8 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
             message.error('Нет файла для перемещения');
             return;
         }
+        logger.action('SelectorPage', `move file "${file}" → "${folder.name}" (${folder.path})`);
         try {
-            // Form the Move command
             const command: OperationCommand = {
                 operation_type: 'Move',
                 source_paths: [file],
@@ -38,10 +47,12 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
                 target_paths: null,
                 overwrite_policy: 'Skip',
             };
-            await invoke('execute_operation_v2', { command });
+            const result = await invoke('execute_operation_v2', { command });
+            logger.info('SelectorPage', 'file moved successfully', result);
             message.success(`Файл перемещён в ${folder.name}`);
-            onClose(); // Return to editor
+            onClose();
         } catch (err) {
+            logger.error('SelectorPage', 'move file failed', err);
             message.error(`Ошибка: ${err}`);
         }
     };

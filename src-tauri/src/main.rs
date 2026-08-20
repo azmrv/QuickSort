@@ -38,10 +38,12 @@ enum Commands {
 
 fn main() {
     logging::init();
+    tracing::info!(app = "quicksort", "starting");
 
     let cli = Cli::parse();
 
     if let Some(Commands::SelectFolder { file }) = &cli.command {
+        tracing::info!(file = %file, "select-folder subcommand");
         crate::pending::set_pending_file(file.clone());
         start_tauri();
         return;
@@ -50,7 +52,56 @@ fn main() {
     start_tauri();
 }
 
+fn ensure_dll_copied() {
+    let appdata = match std::env::var("APPDATA") {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(error = %e, "cannot read APPDATA");
+            return;
+        }
+    };
+
+    let dest_dir = PathBuf::from(&appdata).join("QuickSort");
+    let dest = dest_dir.join("context_menu_dll.dll");
+
+    if dest.exists() {
+        tracing::debug!(path = %dest.display(), "DLL already present");
+        return;
+    }
+
+    let source = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .map(|p| p.join("context_menu_dll.dll"));
+
+    let source = match source {
+        Some(s) if s.exists() => s,
+        _ => {
+            tracing::warn!("DLL not found next to exe — COM registration will fail until DLL is built and placed in {}", dest_dir.display());
+            return;
+        }
+    };
+
+    match std::fs::copy(&source, &dest) {
+        Ok(bytes) => tracing::info!(source = %source.display(), dest = %dest.display(), bytes, "DLL copied"),
+        Err(e) => tracing::error!(error = %e, "failed to copy DLL"),
+    }
+}
+
+fn is_user_admin() -> bool {
+    std::process::Command::new("net")
+        .args(["session"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 fn start_tauri() {
+    let admin = is_user_admin();
+    tracing::info!(admin, "startup check");
+
+    ensure_dll_copied();
+
     let config_dir = dirs::config_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("QuickSort");
@@ -110,8 +161,11 @@ fn start_tauri() {
             commands::get_logs,
             commands::register_com_server,
             commands::unregister_com_server,
+            commands::is_admin,
         ])
         .setup(|app| {
+            logging::set_app_handle(app.handle().clone());
+
             let open = MenuItemBuilder::with_id("open", "Open editor").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Exit").build(app)?;
             let menu = MenuBuilder::new(app)
