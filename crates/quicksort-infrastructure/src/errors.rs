@@ -73,6 +73,7 @@ impl ErrorConverter for () {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quicksort_application::errors::UseCaseError;
 
     #[test]
     fn test_conversion() {

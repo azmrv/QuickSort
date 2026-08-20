@@ -98,8 +98,8 @@ mod tests {
         WindowsPath::new(path).unwrap()
     }
 
-    #[test]
-    fn test_load_empty_repository() {
+    #[tokio::test]
+    async fn test_load_empty_repository() {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("operations.json");
         let repo = JsonOperationRepository::new(file_path);
@@ -108,13 +108,12 @@ mod tests {
         assert!(operations.is_empty());
     }
 
-    #[test]
-    fn test_save_and_load_operation() {
+    #[tokio::test]
+    async fn test_save_and_load_operation() {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("operations.json");
         let repo = JsonOperationRepository::new(file_path);
 
-        // Create a test operation using the new domain API
         let mut op = Operation::new_move(
             vec![test_path("C:\\src.txt")],
             test_path("C:\\dst.txt"),
@@ -123,11 +122,9 @@ mod tests {
         op.start().unwrap();
         op.complete(1, 1024).unwrap();
 
-        // Save it
-        repo.save(&op).unwrap();
+        repo.save(&op).await.unwrap();
 
-        // Load all operations and verify
-        let operations = repo.load_all().unwrap();
+        let operations = repo.load_all().await.unwrap();
         assert_eq!(operations.len(), 1);
         assert_eq!(operations[0].id, op.id);
         assert!(matches!(
@@ -136,13 +133,12 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn test_delete_operation() {
+    #[tokio::test]
+    async fn test_delete_operation() {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("operations.json");
         let repo = JsonOperationRepository::new(file_path);
 
-        // Create and save two operations
         let op1 = Operation::new_move(
             vec![test_path("C:\\a.txt")],
             test_path("C:\\b.txt"),
@@ -153,31 +149,29 @@ mod tests {
             test_path("C:\\d.txt"),
             Utc::now(),
         );
-        repo.save(&op1).unwrap();
-        repo.save(&op2).unwrap();
+        repo.save(&op1).await.unwrap();
+        repo.save(&op2).await.unwrap();
 
-        // Delete the first one
-        repo.delete(&op1.id).unwrap();
+        repo.delete(&op1.id).await.unwrap();
 
-        // Verify only the second remains
-        let operations = repo.load_all().unwrap();
+        let operations = repo.load_all().await.unwrap();
         assert_eq!(operations.len(), 1);
         assert_eq!(operations[0].id, op2.id);
     }
 
-    #[test]
-    fn test_find_by_id() {
+    #[tokio::test]
+    async fn test_find_by_id() {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("operations.json");
         let repo = JsonOperationRepository::new(file_path);
 
         let op = Operation::new_delete(vec![test_path("C:\\trash.txt")], Utc::now());
-        repo.save(&op).unwrap();
+        repo.save(&op).await.unwrap();
 
-        let found = repo.find_by_id(&op.id).unwrap().unwrap();
+        let found = repo.find_by_id(&op.id).await.unwrap().unwrap();
         assert_eq!(found.id, op.id);
 
-        let not_found = repo.find_by_id(&OperationId::new()).unwrap();
+        let not_found = repo.find_by_id(&OperationId::new()).await.unwrap();
         assert!(not_found.is_none());
     }
 }

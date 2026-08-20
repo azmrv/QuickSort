@@ -92,7 +92,7 @@ mod tests {
         let path = WindowsPath::new(file_path.to_str().unwrap()).unwrap();
         let size = fs.get_file_size(&path).await.unwrap();
 
-        assert_eq!(size, 11); // "Hello World\n"
+        assert_eq!(size, 12); // "Hello World\n"
     }
 
     #[tokio::test]
