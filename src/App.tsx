@@ -14,12 +14,17 @@ function App() {
     const [selectFile, setSelectFile] = useState<string | null>(null);
     const [isDark, setIsDark] = useState(true);
     const [activeTab, setActiveTab] = useState('folders');
+    const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
     useEffect(() => {
-        logger.info('App', 'startup — checking pending file');
+        logger.info('App', 'startup');
+        invoke<boolean>('is_admin').then(admin => {
+            setIsAdmin(admin);
+            logger.info('App', `admin=${admin}`);
+        });
         invoke<string | null>('get_pending_file').then((file) => {
             if (file) {
-                logger.info('App', `pending file received: ${file} — switching to selector`);
+                logger.info('App', `pending file: ${file}`);
                 setSelectFile(file);
                 setMode('selector');
             }
@@ -49,6 +54,18 @@ function App() {
         >
             <AntApp>
                 <div className="app-container">
+                    {isAdmin === false && (
+                        <div style={{
+                            background: '#7c2d12',
+                            color: '#fed7aa',
+                            padding: '8px 16px',
+                            fontSize: '13px',
+                            textAlign: 'center',
+                            borderBottom: '1px solid #9a3412',
+                        }}>
+                            Режим ограниченных прав. Запустите от имени администратора для регистрации контекстного меню.
+                        </div>
+                    )}
                     {mode === 'editor' ? (
                         <>
                             <header className="app-header">

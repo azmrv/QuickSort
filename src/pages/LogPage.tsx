@@ -14,6 +14,16 @@ type LogLevel = 'ALL' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
 const LEVEL_ORDER: Record<string, number> = { TRACE: 0, DEBUG: 1, INFO: 2, WARN: 3, ERROR: 4 };
 
+const LEVEL_COLORS: Record<string, string> = {
+    ERROR: '#ef4444',
+    WARN: '#f59e0b',
+    INFO: '#3b82f6',
+    DEBUG: '#6b7280',
+    TRACE: '#9ca3af',
+    ACTION: '#8b5cf6',
+    IPC: '#06b6d4',
+};
+
 const LogPage = () => {
     const [backendLogs, setBackendLogs] = useState<BackendLog[]>([]);
     const [frontendLogs, setFrontendLogs] = useState(logger.getLogs());
@@ -22,9 +32,10 @@ const LogPage = () => {
     const [showFrontend, setShowFrontend] = useState(true);
     const { message } = App.useApp();
     const endRef = useRef<HTMLDivElement>(null);
+    const listRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        logger.action('LogPage', 'mount — listening for backend logs');
+        logger.action('LogPage', 'mount');
         const unlisten = listen<BackendLog>('backend-log', (event) => {
             setBackendLogs(prev => [...prev.slice(-500), event.payload]);
         });
@@ -32,14 +43,17 @@ const LogPage = () => {
     }, []);
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            setFrontendLogs(logger.getLogs());
-        }, 500);
+        const interval = setInterval(() => setFrontendLogs(logger.getLogs()), 500);
         return () => clearInterval(interval);
     }, []);
 
     useEffect(() => {
-        endRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const list = listRef.current;
+        if (!list) return;
+        const isNearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+        if (isNearBottom) {
+            endRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
     }, [backendLogs, frontendLogs]);
 
     const filterLevel = (log: { level?: string }) => {
@@ -64,39 +78,10 @@ const LogPage = () => {
         message.success(`Скопировано ${allLogs.length} записей`);
     };
 
-    const levelColors: Record<string, string> = {
-        ERROR: '#ef4444',
-        WARN: '#f59e0b',
-        INFO: '#3b82f6',
-        DEBUG: '#6b7280',
-        TRACE: '#9ca3af',
-        ACTION: '#8b5cf6',
-        IPC: '#06b6d4',
-    };
-
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div style={{
-                display: 'flex',
-                gap: '8px',
-                marginBottom: '12px',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-            }}>
-                <select
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value as LogLevel)}
-                    style={{
-                        padding: '6px 12px',
-                        background: 'var(--qs-bg-tertiary)',
-                        border: '1px solid var(--qs-border)',
-                        borderRadius: 'var(--qs-radius-sm)',
-                        color: 'var(--qs-text-primary)',
-                        fontFamily: 'var(--qs-font-body)',
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                    }}
-                >
+        <div className="log-page">
+            <div className="log-toolbar">
+                <select value={filter} onChange={(e) => setFilter(e.target.value as LogLevel)}>
                     <option value="ALL">Все уровни</option>
                     <option value="ERROR">ERROR+</option>
                     <option value="WARN">WARN+</option>
@@ -104,74 +89,34 @@ const LogPage = () => {
                     <option value="DEBUG">DEBUG+</option>
                 </select>
 
-                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--qs-text-secondary)', fontSize: '13px', cursor: 'pointer' }}>
+                <label>
                     <input type="checkbox" checked={showBackend} onChange={(e) => setShowBackend(e.target.checked)} />
                     Backend
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--qs-text-secondary)', fontSize: '13px', cursor: 'pointer' }}>
+                <label>
                     <input type="checkbox" checked={showFrontend} onChange={(e) => setShowFrontend(e.target.checked)} />
                     Frontend
                 </label>
 
-                <div style={{ flex: 1 }} />
+                <span className="log-count">{allLogs.length}</span>
 
-                <button
-                    onClick={handleCopyAll}
-                    style={{
-                        padding: '6px 16px',
-                        background: 'var(--qs-accent)',
-                        border: 'none',
-                        borderRadius: 'var(--qs-radius-sm)',
-                        color: 'var(--qs-bg-primary)',
-                        fontFamily: 'var(--qs-font-body)',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                    }}
-                >
-                    Копировать всё ({allLogs.length})
+                <button className="log-copy-btn" onClick={handleCopyAll}>
+                    Копировать всё
                 </button>
             </div>
 
-            <div style={{
-                flex: 1,
-                overflow: 'auto',
-                background: 'var(--qs-bg-primary)',
-                border: '1px solid var(--qs-border)',
-                borderRadius: 'var(--qs-radius-md)',
-                padding: '8px',
-                fontFamily: 'var(--qs-font-mono)',
-                fontSize: '12px',
-                lineHeight: 1.6,
-            }}>
+            <div className="log-list" ref={listRef}>
                 {allLogs.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--qs-text-secondary)', padding: '40px' }}>
-                        Нет записей
-                    </div>
+                    <div className="log-empty">Нет записей</div>
                 ) : (
                     allLogs.map((log, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '8px', whiteSpace: 'nowrap' }}>
-                            <span style={{ color: 'var(--qs-text-secondary)', flexShrink: 0 }}>
-                                {log.timestamp.slice(11, 23)}
-                            </span>
-                            <span style={{
-                                color: levelColors[log.level] ?? 'var(--qs-text-secondary)',
-                                fontWeight: 600,
-                                flexShrink: 0,
-                                width: '44px',
-                            }}>
+                        <div key={i} className="log-entry">
+                            <span className="log-time">{log.timestamp.slice(11, 23)}</span>
+                            <span className="log-level" style={{ color: LEVEL_COLORS[log.level] ?? 'var(--qs-text-secondary)' }}>
                                 {log.level}
                             </span>
-                            <span style={{
-                                color: 'var(--qs-text-secondary)',
-                                flexShrink: 0,
-                                opacity: 0.6,
-                            }}>
-                                [{log.source}]
-                            </span>
-                            <span style={{ color: 'var(--qs-text-primary)' }}>
-                                {log.message}
-                            </span>
+                            <span className="log-source">[{log.source}]</span>
+                            <span className="log-message">{log.message}</span>
                         </div>
                     ))
                 )}
