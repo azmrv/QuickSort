@@ -1,12 +1,11 @@
 //! Standard implementation of the FileSystem port using tokio::fs.
 
-use std::path::PathBuf;
 use async_trait::async_trait;
 use tokio::fs as tokio_fs;
 
-use quicksort_domain::WindowsPath;
-use quicksort_application::ports::outbound::FileSystem;
 use quicksort_application::errors::UseCaseError;
+use quicksort_application::ports::outbound::FileSystem;
+use quicksort_domain::WindowsPath;
 
 /// Real file system implementation backed by tokio.
 pub struct StdFileSystem;
@@ -82,17 +81,17 @@ mod tests {
     async fn test_get_file_size() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test.txt");
-        
+
         {
             let mut file = File::create(&file_path).unwrap();
             writeln!(file, "Hello World").unwrap();
         }
-        
+
         let fs = StdFileSystem;
         // pass the &str directly
         let path = WindowsPath::new(file_path.to_str().unwrap()).unwrap();
         let size = fs.get_file_size(&path).await.unwrap();
-        
+
         assert_eq!(size, 11); // "Hello World\n"
     }
 
@@ -101,14 +100,13 @@ mod tests {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test.txt");
         File::create(&file_path).unwrap();
-        
+
         let fs = StdFileSystem;
         let exists_path = WindowsPath::new(file_path.to_str().unwrap()).unwrap();
         assert!(fs.exists(&exists_path).await.unwrap());
-        
-        let not_exists_path = WindowsPath::new(
-            dir.path().join("nonexistent.txt").to_str().unwrap()
-        ).unwrap();
+
+        let not_exists_path =
+            WindowsPath::new(dir.path().join("nonexistent.txt").to_str().unwrap()).unwrap();
         assert!(!fs.exists(&not_exists_path).await.unwrap());
     }
 }

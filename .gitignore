@@ -115,3 +115,13 @@ tasks/*
 .omo/*
 .clinerules
 crates/quicksort-application/.cargo_check_output.txt
+# Added by goreleaser init:
+.intentionally-empty-file.o
+bean
+.bean
+.beans
+.beans/*
+.beans.yml
+beans.yml
+.opencode
+.gorealeser.yaml

@@ -10,9 +10,9 @@
 //! on the `Operation` aggregate.  This keeps the domain free of messaging
 //! infrastructure.
 
-use serde::{Serialize, Deserialize};
-use crate::value_objects::{OperationId, FolderId};
 use crate::entities::OperationType;
+use crate::value_objects::{FolderId, OperationId};
+use serde::{Deserialize, Serialize};
 
 /// Enumeration of all domain events in the QuickSort system.
 ///

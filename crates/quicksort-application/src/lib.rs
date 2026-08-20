@@ -35,11 +35,11 @@
 //! let facade = ApplicationFacadeImpl::new(execute, undo, get_folders, manage);
 //! ```
 
-pub mod errors;
 pub mod dtos;
+pub mod errors;
+pub mod pipeline;
 pub mod ports;
 pub mod use_cases;
-pub mod pipeline;
 
 // ---------------------------------------------------------------------------
 // Re-export the public API – these are the only types adapters should depend on
@@ -53,13 +53,14 @@ pub use dtos::{OperationCommand, OperationResult, OverwritePolicy};
 
 // Inbound ports – the contracts that adapters call.
 pub use ports::inbound::{
-    ExecuteOperation,
+    ApplicationFacade, ApplicationFacadeImpl, ExecuteOperation, GetFolders, ManageFolders,
     UndoOperation,
-    GetFolders,
-    ManageFolders,
-    ApplicationFacade,
-    ApplicationFacadeImpl,
 };
+
+// Domain types – re-exported so adapters can construct domain entities
+// without violating the Dependency Rule (adapters depend on Application,
+// which depends on Domain).
+pub use quicksort_domain::{Folder, FolderId, OperationId, WindowsPath};
 
 // Pipeline is intentionally NOT re-exported – it is an internal mechanism
 // that adapters should not depend on directly.  They should call the facade,
@@ -75,4 +76,3 @@ pub use ports::inbound::{
 // - The `pipeline` module is an internal implementation detail of the
 //   Application Layer and should NOT be re-exported.
 // ---------------------------------------------------------------------------
-

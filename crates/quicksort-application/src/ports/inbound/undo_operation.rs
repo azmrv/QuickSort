@@ -4,10 +4,10 @@
 //! It is implemented by `UndoOperationUseCase` and called by adapters
 //! (Tauri commands, IPC handlers) to revert previously executed operations.
 
-use async_trait::async_trait;
 use crate::dtos::OperationResult;
 use crate::errors::UseCaseError;
-use quicksort_domain::{Operation, OperationId, OperationState};
+use async_trait::async_trait;
+use quicksort_domain::OperationId;
 
 /// Trait for undoing operations.
 ///

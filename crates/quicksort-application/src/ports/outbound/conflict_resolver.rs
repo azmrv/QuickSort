@@ -14,9 +14,9 @@
 //! (e.g., Tauri GUI) can present a dialog to the user and invoke this port
 //! to apply the user's choice (Overwrite, Skip, Rename).
 
-use async_trait::async_trait;
 use crate::dtos::OperationCommand;
 use crate::errors::UseCaseError;
+use async_trait::async_trait;
 
 /// Port for resolving file conflicts interactively.
 ///

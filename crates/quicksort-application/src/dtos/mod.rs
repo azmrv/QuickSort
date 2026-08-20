@@ -6,7 +6,9 @@
 //!
 //! # Design Decisions
 //! - DTOs use domain types (`OperationId`, `WindowsPath`, `FolderId`) where
-//!   appropriate to avoid anemic wrappers and unnecessary mapping.
+//!   appropriate to avoid anemic wrappers and unnecessary mapping.  Per the
+//!   Dependency Rule (ADR-002), adapters depend on domain types via the
+//!   Application Layer.
 //! - `OperationCommand` and `OperationResult` are the primary contracts for
 //!   file operations (Move, Copy, Delete, Rename, Undo).
 //! - `PipeCommand` / `PipeAction` are IPC-specific envelopes used by the
@@ -30,4 +32,4 @@ mod pipe_command;
 
 pub use operation_command::{OperationCommand, OverwritePolicy};
 pub use operation_result::OperationResult;
-pub use pipe_command::{PipeCommand, PipeAction};
+pub use pipe_command::{PipeAction, PipeCommand};

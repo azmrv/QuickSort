@@ -15,14 +15,14 @@
 
 // each sub-module is now declared with a brief comment for clarity
 
-mod execute_operation;   // ExecuteOperationUseCase – Move, Copy, Delete, Rename
-mod undo_operation;      // UndoOperationUseCase – revert completed operations
-mod get_folders;         // GetFoldersUseCase – list all configured folders
-mod manage_folders;      // ManageFoldersUseCase – add, remove, rename folders
+mod execute_operation; // ExecuteOperationUseCase – Move, Copy, Delete, Rename
+mod get_folders; // GetFoldersUseCase – list all configured folders
+mod manage_folders;
+mod undo_operation; // UndoOperationUseCase – revert completed operations // ManageFoldersUseCase – add, remove, rename folders
 
 // Re-export the concrete use case types so they can be used directly
 // from `crate::use_cases::*`.
 pub use execute_operation::ExecuteOperationUseCase;
-pub use undo_operation::UndoOperationUseCase;
 pub use get_folders::GetFoldersUseCase;
 pub use manage_folders::ManageFoldersUseCase;
+pub use undo_operation::UndoOperationUseCase;

@@ -30,7 +30,7 @@ pub fn read_frame(handle: HANDLE) -> Result<Vec<u8>, String> {
             handle,
             Some(&mut len_buf),
             Some(&mut bytes_read),
-            None,                 // synchronous read (no OVERLAPPED)
+            None, // synchronous read (no OVERLAPPED)
         )
         .map_err(|e| format!("ReadFile (length prefix) failed: {e:?}"))?;
     }
@@ -87,26 +87,19 @@ pub fn write_frame(handle: HANDLE, data: &[u8]) -> Result<(), String> {
             handle,
             Some(&len_bytes),
             Some(&mut written),
-            None,                 // synchronous write
+            None, // synchronous write
         )
         .map_err(|e| format!("WriteFile (length prefix) failed: {e:?}"))?;
     }
     if written != 4 {
-        return Err(format!(
-            "Incomplete length prefix write: {written}/4 bytes"
-        ));
+        return Err(format!("Incomplete length prefix write: {written}/4 bytes"));
     }
 
     // ---- Step 2: Write the payload ----
     let mut written = 0u32;
     unsafe {
-        WriteFile(
-            handle,
-            Some(data),
-            Some(&mut written),
-            None,
-        )
-        .map_err(|e| format!("WriteFile (payload) failed: {e:?}"))?;
+        WriteFile(handle, Some(data), Some(&mut written), None)
+            .map_err(|e| format!("WriteFile (payload) failed: {e:?}"))?;
     }
     if written as usize != data.len() {
         return Err(format!(

@@ -14,7 +14,6 @@
 pub mod inbound;
 pub mod outbound;
 
-
 // This module was originally part of the ports but has been moved to
 // `outbound::OperationRepository` to follow the Hexagonal Architecture pattern.
 // Kept commented out to document the historical structure.

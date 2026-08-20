@@ -67,7 +67,10 @@ fn validate_command(command: &OperationCommand) -> Result<(), UseCaseError> {
     // the allowed directories via ".." sequences.
     for path in &command.source_paths {
         // Check for ".." components which could be used to traverse directories
-        if path.components().any(|c| c == std::path::Component::ParentDir) {
+        if path
+            .components()
+            .any(|c| c == std::path::Component::ParentDir)
+        {
             return Err(UseCaseError::InvalidCommand(format!(
                 "Path traversal detected in source path: {}",
                 path.display()
@@ -109,7 +112,10 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ExecuteOperation for MockExecuteOperation {
-        async fn execute(&self, command: OperationCommand) -> Result<OperationResult, UseCaseError> {
+        async fn execute(
+            &self,
+            command: OperationCommand,
+        ) -> Result<OperationResult, UseCaseError> {
             Ok(OperationResult {
                 operation_id: quicksort_domain::OperationId::new(),
                 state: quicksort_domain::OperationState::Completed {
@@ -127,7 +133,10 @@ mod tests {
 
     #[async_trait::async_trait]
     impl ExecuteOperation for FailingMockExecuteOperation {
-        async fn execute(&self, _command: OperationCommand) -> Result<OperationResult, UseCaseError> {
+        async fn execute(
+            &self,
+            _command: OperationCommand,
+        ) -> Result<OperationResult, UseCaseError> {
             Err(UseCaseError::FileSystemError("mock error".to_string()))
         }
     }

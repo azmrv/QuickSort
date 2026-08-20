@@ -28,6 +28,7 @@ use crate::errors::DomainError;
 ///
 /// # Examples
 /// ```rust
+/// use quicksort_domain::value_objects::WindowsPath;
 /// let path = WindowsPath::new("C:\\Users\\Me\\Documents").unwrap();
 /// assert!(path.is_absolute());
 /// assert_eq!(path.file_name(), Some("Documents"));
@@ -78,6 +79,11 @@ impl WindowsPath {
             return Err(DomainError::EmptyPath);
         }
 
+        // Block path traversal attempts — reject ".." components.
+        if s.contains("..") {
+            return Err(DomainError::PathTraversalAttempt(s));
+        }
+
         // Validate absolute Windows path.
         let chars: Vec<char> = s.chars().collect();
         if chars.len() >= 2 && chars[0].is_ascii_alphabetic() && chars[1] == ':' {
@@ -100,7 +106,10 @@ impl WindowsPath {
 
     // This method is kept for backward compatibility but marked deprecated.
     // New code should use `WindowsPath::new()` instead.
-    #[deprecated(since = "0.2.0", note = "Use WindowsPath::new() for validated construction")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use WindowsPath::new() for validated construction"
+    )]
     pub fn try_from_str(path: &str) -> Result<Self, PathConversionError> {
         let inner = PathBuf::from(path);
         Ok(Self(inner))
@@ -129,13 +138,6 @@ impl WindowsPath {
         self.0.extension().and_then(|e| e.to_str())
     }
 
-    /// Returns the path as a string (lossy conversion for non-UTF-8).
-    // Using `unwrap_or("")` silently hides invalid paths.  Use `to_string_lossy`
-    // which always returns a usable string.
-    pub fn to_string(&self) -> String {
-        self.0.to_string_lossy().to_string()
-    }
-
     /// Returns the parent directory, if any.
     pub fn parent(&self) -> Option<WindowsPath> {
         self.0.parent().map(|p| WindowsPath(p.to_path_buf()))
@@ -150,6 +152,7 @@ impl WindowsPath {
     ///
     /// # Example
     /// ```rust
+    /// use quicksort_domain::value_objects::WindowsPath;
     /// let base = WindowsPath::new("C:\\Users").unwrap();
     /// let full = base.join("Documents");
     /// assert_eq!(full.to_string(), "C:\\Users\\Documents");
@@ -191,12 +194,13 @@ impl WindowsPath {
     }
 
     /// Checks whether the path is a drive root (e.g., `C:\`).
-    // Simplified: a path is a root if it has exactly one component (the root
-    // itself, e.g., `C:\` or `\\server\share`).
+    /// A root path has no `Normal` components — only Prefix, RootDir, etc.
     pub fn is_root(&self) -> bool {
-        // `Path::components()` for "C:\" returns a single `Prefix` component.
-        // For "C:\folder", it returns `Prefix` + `RootDir` + `Normal`, so 3 components.
-        self.0.components().count() == 1
+        use std::path::Component;
+        !self
+            .0
+            .components()
+            .any(|c| matches!(c, Component::Normal(_)))
     }
 
     /// Returns the string slice without checking (for internal use).
@@ -226,8 +230,9 @@ impl From<PathBuf> for WindowsPath {
     /// Converts a `PathBuf` into a `WindowsPath` without validation.
     ///
     /// # Safety
-    /// The caller must ensure the path is a valid absolute Windows path.
-    /// This is intended for internal use and deserialization of trusted data.
+    /// This bypasses all validation checks (empty, absolute, traversal).
+    /// Only use with trusted data (e.g., internal domain operations).
+    /// For external/untrusted input, always use `WindowsPath::new()`.
     fn from(path: PathBuf) -> Self {
         Self(path)
     }
@@ -308,6 +313,23 @@ mod tests {
         assert!(matches!(
             WindowsPath::new("C:file.txt"),
             Err(DomainError::InvalidPath(_))
+        ));
+    }
+
+    #[test]
+    fn test_reject_path_traversal() {
+        assert!(matches!(
+            WindowsPath::new("C:\\folder\\..\\..\\Windows"),
+            Err(DomainError::PathTraversalAttempt(_))
+        ));
+    }
+
+    #[test]
+    fn test_reject_path_traversal_encoded() {
+        // Even with forward slashes (normalised to backslashes)
+        assert!(matches!(
+            WindowsPath::new("C:/folder/../Windows"),
+            Err(DomainError::PathTraversalAttempt(_))
         ));
     }
 

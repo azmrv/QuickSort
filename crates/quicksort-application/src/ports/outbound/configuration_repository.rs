@@ -9,9 +9,9 @@
 //! rather than DTOs or raw data. This keeps the Application layer
 //! independent of serialization formats (JSON, SQLite, etc.).
 
+use crate::errors::UseCaseError;
 use async_trait::async_trait;
 use quicksort_domain::{Folder, FolderId};
-use crate::errors::UseCaseError;
 
 /// Persistence port for folder configuration.
 ///

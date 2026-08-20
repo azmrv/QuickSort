@@ -41,7 +41,6 @@ use thiserror::Error;
 pub enum UseCaseError {
     // ---- Domain-level errors ----
     // These errors originate from business rule violations.
-
     /// The requested folder does not exist or is inaccessible.
     #[error("Folder not found: {0}")]
     FolderNotFound(String),
@@ -84,7 +83,6 @@ pub enum UseCaseError {
 
     // ---- Infrastructure-level errors ----
     // These errors originate from external systems (disk, database, etc.).
-
     /// The repository failed to load or save data.
     #[error("Repository error: {0}")]
     RepositoryError(String),
@@ -96,7 +94,6 @@ pub enum UseCaseError {
     // ---- Internal errors ----
     // These errors indicate unexpected states that should never occur
     // under normal operation.
-
     /// An unexpected internal error occurred. Use sparingly, only for
     /// truly unrecoverable situations (e.g., poisoned mutex, broken
     /// invariant).

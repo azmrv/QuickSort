@@ -5,9 +5,12 @@
 //! - The folder path must not be a root directory (e.g., `C:\`).
 //! - `favorite` and `order` control visibility and sorting in the context menu.
 
-use crate::{value_objects::{FolderId, WindowsPath}, errors::DomainError};
-use serde::{Deserialize, Serialize};
+use crate::{
+    errors::DomainError,
+    value_objects::{FolderId, WindowsPath},
+};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// Statistics for a folder (how often it was used, last access time).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -22,7 +25,9 @@ pub struct FolderStats {
 ///
 /// # Examples
 /// ```rust
-/// let folder = Folder::new("Documents", WindowsPath::new("C:\\Users\\Me\\Documents").unwrap());
+/// use quicksort_domain::entities::Folder;
+/// use quicksort_domain::value_objects::WindowsPath;
+/// let folder = Folder::new("Documents", WindowsPath::new("C:\\Users\\Me\\Documents").unwrap()).unwrap();
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Folder {
@@ -51,20 +56,26 @@ impl Folder {
     /// Creates a new folder with a generated ID and current timestamps.
     ///
     /// # Parameters
-    /// - `name` – Display name (must not be empty).
+    /// - `name` – Display name (must not be empty, max 100 chars, no special chars).
     /// - `path` – Absolute filesystem path.
-    pub fn new(name: impl Into<String>, path: WindowsPath) -> Self {
+    ///
+    /// # Errors
+    /// Returns `DomainError::InvalidFolderName` if name is empty or contains
+    /// forbidden characters (`\`, `/`, `:`, `*`, `?`, `"`, `<`, `>`, `|`).
+    pub fn new(name: impl Into<String>, path: WindowsPath) -> Result<Self, DomainError> {
+        let name_str = name.into();
+        Self::validate_name(&name_str)?;
         let now = Utc::now();
-        Self {
+        Ok(Self {
             id: FolderId::new(),
-            name: name.into(),
+            name: name_str,
             path,
-            favorite: false,       // not a favorite by default
-            order: 0,              // default sort order
+            favorite: false,
+            order: 0,
             stats: Default::default(),
             created_at: now,
             updated_at: now,
-        }
+        })
     }
 
     /// Creates a new folder with an explicit ID (useful for testing or importing).
@@ -128,6 +139,32 @@ impl Folder {
         self.stats.use_count += 1;
         self.stats.last_used = Some(Utc::now());
     }
+
+    /// Validates a folder name against security and usability rules.
+    ///
+    /// # Rules
+    /// - Must not be empty or whitespace only.
+    /// - Max 100 characters.
+    /// - No Windows-forbidden characters: `\ / : * ? " < > |`
+    /// - No control characters (ASCII 0-31).
+    fn validate_name(name: &str) -> Result<(), DomainError> {
+        if name.trim().is_empty() {
+            return Err(DomainError::InvalidFolderName);
+        }
+        if name.len() > 100 {
+            return Err(DomainError::InvalidFolderName);
+        }
+        // Forbidden characters for Windows file/folder names
+        const FORBIDDEN: &[char] = &['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
+        if name.chars().any(|c| FORBIDDEN.contains(&c)) {
+            return Err(DomainError::InvalidFolderName);
+        }
+        // Reject control characters (ASCII 0-31)
+        if name.chars().any(|c| c.is_control()) {
+            return Err(DomainError::InvalidFolderName);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -140,36 +177,62 @@ mod tests {
 
     #[test]
     fn test_folder_new() {
-        let f = Folder::new("Docs", test_path("C:\\Docs"));
+        let f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
         assert_eq!(f.name, "Docs");
         assert!(!f.favorite);
         assert_eq!(f.order, 0);
     }
 
     #[test]
+    fn test_folder_new_empty_name_fails() {
+        let result = Folder::new("", test_path("C:\\Docs"));
+        assert!(result.is_err());
+        assert!(matches!(result, Err(DomainError::InvalidFolderName)));
+    }
+
+    #[test]
+    fn test_folder_new_forbidden_chars_fails() {
+        let result = Folder::new("Docs\\Invalid", test_path("C:\\Docs"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_folder_new_too_long_fails() {
+        let long_name = "A".repeat(101);
+        let result = Folder::new(long_name, test_path("C:\\Docs"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_folder_new_control_chars_fails() {
+        let result = Folder::new("Docs\x00Invalid", test_path("C:\\Docs"));
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_update_name() {
-        let mut f = Folder::new("Docs", test_path("C:\\Docs"));
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
         f.update_name("Projects").unwrap();
         assert_eq!(f.name, "Projects");
     }
 
     #[test]
     fn test_update_name_empty_fails() {
-        let mut f = Folder::new("Docs", test_path("C:\\Docs"));
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
         let result = f.update_name("");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_update_path_root_fails() {
-        let mut f = Folder::new("Docs", test_path("C:\\Docs"));
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
         let result = f.update_path(WindowsPath::new("C:\\").unwrap());
         assert!(matches!(result, Err(DomainError::IllegalDirectoryTarget)));
     }
 
     #[test]
     fn test_toggle_favorite() {
-        let mut f = Folder::new("Docs", test_path("C:\\Docs"));
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
         assert!(!f.favorite);
         f.toggle_favorite();
         assert!(f.favorite);
@@ -179,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_record_usage() {
-        let mut f = Folder::new("Docs", test_path("C:\\Docs"));
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
         assert_eq!(f.stats.use_count, 0);
         assert!(f.stats.last_used.is_none());
         f.record_usage();

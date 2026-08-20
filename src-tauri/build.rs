@@ -33,7 +33,11 @@ fn copy_dll_to_appdata() {
     };
     // Ensure the destination directory exists
     if let Err(e) = std::fs::create_dir_all(&appdata) {
-        println!("cargo:warning=Failed to create directory {}: {}", appdata.display(), e);
+        println!(
+            "cargo:warning=Failed to create directory {}: {}",
+            appdata.display(),
+            e
+        );
         return;
     }
 

@@ -28,9 +28,12 @@ static PENDING_FILE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 /// This is called by the `get_pending_file` Tauri command when the
 /// React frontend starts.  The value is returned exactly once – after
 /// that the storage is empty until a new `--select-folder` invocation.
+///
+/// The returned path is sanitized: control characters are stripped and
+/// the path is validated as a plausible Windows path.
 pub fn get_pending_file() -> Option<String> {
     let lock = PENDING_FILE.get_or_init(|| Mutex::new(None));
-    lock.lock().take()
+    lock.lock().take().map(sanitize_path)
 }
 
 /// Stores a file path that should be opened in the Selector.
@@ -40,4 +43,12 @@ pub fn get_pending_file() -> Option<String> {
 pub fn set_pending_file(file: String) {
     let lock = PENDING_FILE.get_or_init(|| Mutex::new(None));
     *lock.lock() = Some(file);
+}
+
+fn sanitize_path(path: String) -> String {
+    path.chars()
+        .filter(|c| !c.is_control())
+        .collect::<String>()
+        .trim()
+        .to_string()
 }

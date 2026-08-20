@@ -10,8 +10,8 @@
 //! `PipeAction`) is defined here as a simple DTO, while the actual
 //! `OperationCommand` is the canonical application DTO used by all Use Cases.
 
-use serde::{Deserialize, Serialize};
 use crate::dtos::OperationCommand;
+use serde::{Deserialize, Serialize};
 
 /// Top-level envelope for every message sent over the named pipe.
 ///
@@ -36,10 +36,7 @@ pub enum PipeAction {
     /// Execute a file operation (Move, Copy, Delete, Rename).
     /// The enclosed `OperationCommand` is the same DTO used by
     /// `ExecuteOperationUseCase`.
-    ExecuteOperation {
-        command: OperationCommand,
-    },
-
+    ExecuteOperation { command: OperationCommand },
     // Future extensions:
     // GetFolders,
     // Ping,

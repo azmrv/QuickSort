@@ -17,20 +17,17 @@
 //!   ports as trait objects. However, using concrete types allows the
 //!   compiler to inline calls, improving performance.
 
-use std::sync::Arc;
 use async_trait::async_trait;
+use std::sync::Arc;
 
 use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
 
 // Импорт типов UseCase через прямые ре-экспорты из crate::use_cases
-use crate::use_cases::{
-    ExecuteOperationUseCase,
-    UndoOperationUseCase,
-    GetFoldersUseCase,
-    ManageFoldersUseCase,
-};
 use super::{ExecuteOperation, GetFolders, ManageFolders, UndoOperation};
+use crate::use_cases::{
+    ExecuteOperationUseCase, GetFoldersUseCase, ManageFoldersUseCase, UndoOperationUseCase,
+};
 use quicksort_domain::{Folder, FolderId, OperationId};
 
 /// Combined implementation of all inbound ports.
@@ -45,10 +42,26 @@ use quicksort_domain::{Folder, FolderId, OperationId};
 /// - `get_folders` – Retrieves the list of configured folders.
 /// - `manage_folders` – CRUD operations for folder configuration.
 pub struct ApplicationFacadeImpl {
-    pub execute: Arc<ExecuteOperationUseCase>,
-    pub undo: Arc<UndoOperationUseCase>,
-    pub get_folders: Arc<GetFoldersUseCase>,
-    pub manage_folders: Arc<ManageFoldersUseCase>,
+    execute: Arc<ExecuteOperationUseCase>,
+    undo: Arc<UndoOperationUseCase>,
+    get_folders: Arc<GetFoldersUseCase>,
+    manage_folders: Arc<ManageFoldersUseCase>,
+}
+
+impl ApplicationFacadeImpl {
+    pub fn new(
+        execute: Arc<ExecuteOperationUseCase>,
+        undo: Arc<UndoOperationUseCase>,
+        get_folders: Arc<GetFoldersUseCase>,
+        manage_folders: Arc<ManageFoldersUseCase>,
+    ) -> Self {
+        Self {
+            execute,
+            undo,
+            get_folders,
+            manage_folders,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

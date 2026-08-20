@@ -8,12 +8,12 @@
 //! # Dependencies
 //! - `ConfigurationRepository` (outbound port) – provides access to stored folders.
 
-use async_trait::async_trait;
-use std::sync::Arc;
-use quicksort_domain::Folder;
 use crate::errors::UseCaseError;
-use crate::ports::outbound::ConfigurationRepository;
 use crate::ports::inbound::GetFolders;
+use crate::ports::outbound::ConfigurationRepository;
+use async_trait::async_trait;
+use quicksort_domain::Folder;
+use std::sync::Arc;
 
 /// A straightforward use case that retrieves all configured folders.
 ///

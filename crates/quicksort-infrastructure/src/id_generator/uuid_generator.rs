@@ -1,6 +1,6 @@
-use uuid::Uuid;
-use quicksort_domain::OperationId;
 use quicksort_application::ports::outbound::IdGenerator;
+use quicksort_domain::OperationId;
+use uuid::Uuid;
 
 /// Generates operation IDs using UUID v4.
 pub struct UuidGenerator;

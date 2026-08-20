@@ -7,8 +7,8 @@
 //!
 //! # Design Decisions
 //! - Uses domain types (`OperationId`, `OperationState`) directly to avoid
-//!   anemic DTOs and unnecessary mapping.  The Adapter layer is allowed
-//!   to depend on domain value objects.
+//!   anemic DTOs and unnecessary mapping.  Per the Dependency Rule
+//!   (ADR-002), adapters depend on domain types via the Application Layer.
 //! - The field `bytes_moved` is retained for backward compatibility with
 //!   existing adapters, even though the operation may be a Copy (where no
 //!   bytes are "moved").  A future version may rename it to `bytes_processed`
@@ -17,8 +17,8 @@
 //!   handled.  Detailed per-file results (e.g., partial failures) will be
 //!   added in a future version.
 
-use serde::{Deserialize, Serialize};
 use quicksort_domain::{OperationId, OperationState};
+use serde::{Deserialize, Serialize};
 
 /// Result of a completed or failed operation.
 ///
@@ -48,7 +48,6 @@ pub struct OperationResult {
     /// not necessarily "moved" bytes.  A more generic name (e.g.,
     /// `bytes_processed`) may be introduced in a future breaking change.
     pub bytes_moved: u64,
-
     // Future extensions:
     // pub failed_files: Vec<WindowsPath>,
     // pub errors: Vec<String>,

@@ -21,6 +21,10 @@ pub enum DomainError {
     #[error("Invalid path: {0}")]
     InvalidPath(String),
 
+    // The path contains ".." components that could escape the intended directory.
+    #[error("Path traversal detected: {0}")]
+    PathTraversalAttempt(String),
+
     // The folder name was empty or consisted only of whitespace.
     #[error("Invalid folder name")]
     InvalidFolderName,

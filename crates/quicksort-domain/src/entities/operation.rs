@@ -12,9 +12,9 @@
 //!   can be added later if needed.
 
 use crate::{
-    value_objects::{OperationId, WindowsPath},
-    events::DomainEvent,
     errors::DomainError,
+    events::DomainEvent,
+    value_objects::{OperationId, WindowsPath},
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -152,7 +152,7 @@ impl Operation {
         // NEW: use Utc::now() internally – can be changed to injected clock later
         self.updated_at = Utc::now();
         self.events.push(DomainEvent::OperationStarted {
-            operation_id: self.id.clone(),
+            operation_id: self.id,
             op_type: self.operation_type.clone(),
         });
         Ok(())
@@ -169,7 +169,7 @@ impl Operation {
         };
         self.updated_at = Utc::now();
         self.events.push(DomainEvent::OperationCompleted {
-            operation_id: self.id.clone(),
+            operation_id: self.id,
             files,
             bytes,
         });
@@ -178,7 +178,10 @@ impl Operation {
 
     /// Record a failure.
     pub fn fail(&mut self, reason: String) -> Result<(), DomainError> {
-        if !matches!(self.state, OperationState::Pending | OperationState::Executing) {
+        if !matches!(
+            self.state,
+            OperationState::Pending | OperationState::Executing
+        ) {
             return Err(DomainError::InvalidStateTransition);
         }
         self.state = OperationState::Failed {
@@ -186,7 +189,7 @@ impl Operation {
         };
         self.updated_at = Utc::now();
         self.events.push(DomainEvent::OperationFailed {
-            operation_id: self.id.clone(),
+            operation_id: self.id,
             reason,
         });
         Ok(())
@@ -200,7 +203,7 @@ impl Operation {
         self.state = OperationState::Undone;
         self.updated_at = Utc::now();
         self.events.push(DomainEvent::OperationUndone {
-            operation_id: self.id.clone(),
+            operation_id: self.id,
         });
         Ok(())
     }
@@ -239,21 +242,13 @@ mod tests {
 
     #[test]
     fn test_move() {
-        let op = Operation::new_move(
-            vec![test_path("C:\\a.txt")],
-            test_path("C:\\b.txt"),
-            now(),
-        );
+        let op = Operation::new_move(vec![test_path("C:\\a.txt")], test_path("C:\\b.txt"), now());
         assert_eq!(op.operation_type, OperationType::Move);
     }
 
     #[test]
     fn test_rename() {
-        let op = Operation::new_rename(
-            vec![test_path("C:\\a.txt")],
-            test_path("C:\\b.txt"),
-            now(),
-        );
+        let op = Operation::new_rename(vec![test_path("C:\\a.txt")], test_path("C:\\b.txt"), now());
         assert_eq!(op.operation_type, OperationType::Rename);
         assert!(op.target_folder_path.is_none());
         assert!(op.target_paths.is_some());

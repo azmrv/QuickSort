@@ -17,22 +17,18 @@
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{
-    CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE,
-};
+use windows::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE};
 use windows::Win32::Storage::FileSystem::{
-    FlushFileBuffers, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_SHARE_READ,
-    FILE_SHARE_WRITE,
+    FlushFileBuffers, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    PIPE_ACCESS_DUPLEX,
 };
 use windows::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE,
-    PIPE_READMODE_BYTE, PIPE_WAIT, PIPE_UNLIMITED_INSTANCES,
+    ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE,
+    PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
 };
 
 // Import the canonical IPC contract – no more duplicated DTOs.
-use quicksort_ipc_contract::{
-    CommandMessage, ResponseMessage, ResponseStatus, PROTOCOL_VERSION,
-};
+use quicksort_ipc_contract::{CommandMessage, ResponseMessage, ResponseStatus, PROTOCOL_VERSION};
 
 use super::framing::{read_frame, write_frame};
 
@@ -84,7 +80,7 @@ pub fn start_pipe_server() {
     // Convert the pipe name to a UTF-16 wide string required by Win32.
     let pipe_name: Vec<u16> = OsStr::new(PIPE_NAME)
         .encode_wide()
-        .chain(Some(0))     // null-terminate
+        .chain(Some(0)) // null-terminate
         .collect();
 
     loop {
@@ -95,10 +91,10 @@ pub fn start_pipe_server() {
                 PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
                 PIPE_UNLIMITED_INSTANCES,
-                512,   // output buffer size (small – commands are short)
-                512,   // input buffer size
-                0,     // default timeout (blocking)
-                None,  // default security descriptor
+                512,  // output buffer size (small – commands are short)
+                512,  // input buffer size
+                0,    // default timeout (blocking)
+                None, // default security descriptor
             )
         };
 
@@ -140,10 +136,7 @@ pub fn start_pipe_server() {
                         operation_id: None,
                         data: None,
                     };
-                    let _ = write_frame(
-                        pipe.raw(),
-                        &serde_json::to_vec(&resp).unwrap_or_default(),
-                    );
+                    let _ = write_frame(pipe.raw(), &serde_json::to_vec(&resp).unwrap_or_default());
                     continue;
                 }
             };
@@ -181,21 +174,22 @@ pub fn start_pipe_server() {
             };
 
             // 4. Send the response back to the DLL.
-            let response_bytes =
-                match serde_json::to_vec(&response) {
-                    Ok(b) => b,
-                    Err(e) => {
-                        tracing::error!("Response serialization failed: {}", e);
-                        break;
-                    }
-                };
+            let response_bytes = match serde_json::to_vec(&response) {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::error!("Response serialization failed: {}", e);
+                    break;
+                }
+            };
             if let Err(e) = write_frame(pipe.raw(), &response_bytes) {
                 tracing::error!("Write response failed: {}", e);
                 break;
             }
             // Ensure the response is pushed to the wire before waiting for
             // the next command.
-            unsafe { FlushFileBuffers(pipe.raw()).ok(); }
+            unsafe {
+                FlushFileBuffers(pipe.raw()).ok();
+            }
         }
     }
 }

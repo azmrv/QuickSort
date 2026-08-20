@@ -11,9 +11,9 @@
 //! serialization formats and allows the domain model to evolve
 //! without affecting persistence code.
 
+use crate::errors::UseCaseError;
 use async_trait::async_trait;
 use quicksort_domain::{Operation, OperationId};
-use crate::errors::UseCaseError;
 
 /// Persistence port for operation aggregates.
 ///

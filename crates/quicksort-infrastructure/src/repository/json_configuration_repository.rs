@@ -1,14 +1,14 @@
 //! JSON-based implementation of ConfigurationRepository.
 //! Stores folders in a JSON file at the given path.
 
-use std::fs;
-use std::path::PathBuf;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
 
-use quicksort_domain::{Folder, FolderId, FolderStats, WindowsPath};
-use quicksort_application::ports::outbound::ConfigurationRepository;
 use quicksort_application::errors::UseCaseError;
+use quicksort_application::ports::outbound::ConfigurationRepository;
+use quicksort_domain::{Folder, FolderId, WindowsPath};
 
 #[derive(Serialize, Deserialize)]
 struct ConfigFile {
@@ -59,18 +59,20 @@ impl JsonConfigurationRepository {
     fn save_to_file(&self, folders: &[Folder]) -> Result<(), UseCaseError> {
         let config = ConfigFile {
             version: 1,
-            folders: folders.iter().map(|f| FolderData {
-                id: f.id.to_string(),
-                name: f.name.clone(),
-                path: f.path.to_string(),
-                is_favorite: f.favorite,
-                sort_order: f.order,
-            }).collect(),
+            folders: folders
+                .iter()
+                .map(|f| FolderData {
+                    id: f.id.to_string(),
+                    name: f.name.clone(),
+                    path: f.path.to_string(),
+                    is_favorite: f.favorite,
+                    sort_order: f.order,
+                })
+                .collect(),
         };
         let content = serde_json::to_string_pretty(&config)
             .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
-        fs::write(&self.path, content)
-            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+        fs::write(&self.path, content).map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
         Ok(())
     }
 }
@@ -113,7 +115,7 @@ impl ConfigurationRepository for JsonConfigurationRepository {
         // Look for an existing "Documents" folder by path
         let documents_path = WindowsPath::new("C:\\Users\\Public\\Documents")
             .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
-        
+
         if let Some(folder) = self.find_by_path(&documents_path.to_string()).await? {
             return Ok(folder.id);
         }

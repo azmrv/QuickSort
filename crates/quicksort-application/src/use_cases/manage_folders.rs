@@ -10,12 +10,12 @@
 //!   For larger sets, a dedicated `update` method on the repository should be added.
 //! - `toggle_favorite` is a stub awaiting the SQLite migration (see TASK-015).
 
-use async_trait::async_trait;
-use std::sync::Arc;
-use quicksort_domain::{Folder, FolderId};
 use crate::errors::UseCaseError;
-use crate::ports::outbound::ConfigurationRepository;
 use crate::ports::inbound::ManageFolders;
+use crate::ports::outbound::ConfigurationRepository;
+use async_trait::async_trait;
+use quicksort_domain::{Folder, FolderId};
+use std::sync::Arc;
 
 /// Use case for managing the folder configuration.
 pub struct ManageFoldersUseCase {
@@ -64,7 +64,8 @@ impl ManageFolders for ManageFoldersUseCase {
     /// atomically.
     async fn rename_folder(&self, id: FolderId, new_name: String) -> Result<(), UseCaseError> {
         // Load current state
-        let mut folders = self.config_repo
+        let mut folders = self
+            .config_repo
             .load_all()
             .await
             .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;

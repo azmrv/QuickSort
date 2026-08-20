@@ -70,11 +70,15 @@ parking_lot = "0.12"
 # Windows context menu integration (for registering the COM server)
 win-ctx = "1.4.1"
 
-# Low-level Windows API (ShellExecuteW, MessageBoxW, etc.)
-windows = { version = "0.58", features = [
+# Low-level Windows API (ShellExecuteW, MessageBoxW, Named Pipes, etc.)
+windows = { version = "0.62.2", features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Pipes",
+    "Win32_System_IO",
+    "Win32_Security",
 ] }
 
 # ========== Application layer – main dependency ==========
@@ -89,6 +93,9 @@ quicksort-application = { path = "../crates/quicksort-application" }
 # StdFileSystem, SystemClock, etc.). These are constructed here and injected
 # into Use Cases.
 quicksort-infrastructure = { path = "../crates/quicksort-infrastructure" }
+
+# IPC contract – shared types between the Tauri adapter and the DLL.
+quicksort-ipc-contract = { path = "../crates/quicksort-ipc-contract" }
 
 # REMOVED: Adapters must not depend directly on the Domain layer.
 # All domain types (Folder, OperationId, WindowsPath) are accessed

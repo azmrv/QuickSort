@@ -21,9 +21,8 @@ use serde::{Deserialize, Serialize};
 // Re-export from the canonical crate so that any code importing from here
 // continues to work.  New code should import directly from `quicksort_ipc_contract`.
 pub use quicksort_ipc_contract::{
-    PROTOCOL_VERSION, MAGIC,
-    CommandMessage, ExecuteOperationData, OperationType, OverwritePolicy,
-    ResponseMessage, ResponseStatus,
+    CommandMessage, ExecuteOperationData, OperationType, OverwritePolicy, ResponseMessage,
+    ResponseStatus, MAGIC, PROTOCOL_VERSION,
 };
 
 // The old types below are no longer used, but are kept as comments for

@@ -38,25 +38,15 @@ impl FolderId {
         self.0
     }
 
-    /// Returns the string representation of the UUID.
-    // The standard way to get a string from an ID is through `Display`.
-    // Keeping `to_string` as a convenience method is fine, but it should
-    // just delegate to the `Display` implementation for consistency.
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
-    }
-
     /// Creates a `FolderId` from a string representation of a UUID.
     ///
     /// # Errors
     /// Returns a `DomainError` if the string is not a valid UUID.
     // added a safe constructor that validates the input
     pub fn from_string(s: &str) -> Result<Self, crate::errors::DomainError> {
-        Uuid::parse_str(s)
-            .map(Self)
-            .map_err(|_| crate::errors::DomainError::InvalidPath(
-                format!("Invalid UUID string: {}", s)
-            ))
+        Uuid::parse_str(s).map(Self).map_err(|_| {
+            crate::errors::DomainError::InvalidPath(format!("Invalid UUID string: {}", s))
+        })
     }
 }
 
@@ -100,21 +90,14 @@ impl OperationId {
     /// Returns a `DomainError` if the string is not a valid UUID.
     // returns `Result<Self, DomainError>` for uniformity.
     pub fn from_string(s: &str) -> Result<Self, crate::errors::DomainError> {
-        Uuid::parse_str(s)
-            .map(Self)
-            .map_err(|_| crate::errors::DomainError::InvalidPath(
-                format!("Invalid UUID string: {}", s)
-            ))
+        Uuid::parse_str(s).map(Self).map_err(|_| {
+            crate::errors::DomainError::InvalidPath(format!("Invalid UUID string: {}", s))
+        })
     }
 
     /// Returns the underlying `Uuid`.
     pub fn as_uuid(&self) -> Uuid {
         self.0
-    }
-
-    /// Returns the string representation of the UUID.
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
     }
 }
 
@@ -168,14 +151,18 @@ mod tests {
 
     #[test]
     fn test_windows_path() {
-        let Ok(p) = WindowsPath::new("C:\\Folder") else { return };
+        let Ok(p) = WindowsPath::new("C:\\Folder") else {
+            return;
+        };
         assert_eq!(p.as_str(), Some("C:\\Folder"));
         assert!(p.is_absolute());
     }
 
     #[test]
     fn test_windows_path_unc() {
-        let Ok(p) = WindowsPath::new("\\\\server\\share") else { return };
+        let Ok(p) = WindowsPath::new("\\\\server\\share") else {
+            return;
+        };
         assert_eq!(p.as_str(), Some("\\\\server\\share"));
         assert!(p.is_absolute());
     }

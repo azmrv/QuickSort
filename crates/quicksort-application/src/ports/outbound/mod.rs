@@ -15,20 +15,20 @@
 //! | `Clock` | Obtain current timestamp | `ExecuteOperationUseCase`, `UndoOperationUseCase` |
 //! | `ConflictResolver` | Resolve file conflicts interactively | `ExecuteOperationUseCase` (future) |
 
-mod configuration_repository;   // ConfigurationRepository – folder CRUD
-mod operation_repository;      // OperationRepository – operation history persistence
-mod file_system;               // FileSystem – file I/O operations
-mod id_generator;              // IdGenerator – unique identifier generation
-mod clock;                     // Clock – current time
-mod conflict_resolver;         // ConflictResolver – interactive conflict resolution
+mod clock; // Clock – current time
+mod configuration_repository; // ConfigurationRepository – folder CRUD
+mod conflict_resolver;
+mod file_system; // FileSystem – file I/O operations
+mod id_generator; // IdGenerator – unique identifier generation
+mod operation_repository; // OperationRepository – operation history persistence // ConflictResolver – interactive conflict resolution
 
 // Re-export all port traits for use by other modules.
+pub use clock::Clock;
 pub use configuration_repository::ConfigurationRepository;
-pub use operation_repository::OperationRepository;
+pub use conflict_resolver::ConflictResolver;
 pub use file_system::FileSystem;
 pub use id_generator::IdGenerator;
-pub use clock::Clock;
-pub use conflict_resolver::ConflictResolver;
+pub use operation_repository::OperationRepository;
 
 // ---------------------------------------------------------------------------
 // Notes for Infrastructure implementors:

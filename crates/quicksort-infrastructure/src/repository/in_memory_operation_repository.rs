@@ -3,13 +3,13 @@
 //! Stores operations in a `HashMap<String, Operation>` keyed by the
 //! string representation of `OperationId`.  Not intended for production use.
 
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use async_trait::async_trait;
 
-use quicksort_domain::{Operation, OperationId};
-use quicksort_application::ports::outbound::OperationRepository;
 use quicksort_application::errors::UseCaseError;
+use quicksort_application::ports::outbound::OperationRepository;
+use quicksort_domain::{Operation, OperationId};
 
 /// In-memory repository for operation history.
 ///

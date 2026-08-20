@@ -17,17 +17,16 @@
 //! to keep them simple and synchronous. Since all test scenarios are
 //! single-threaded or use `tokio::task::spawn_blocking`, this is safe.
 
+use crate::dtos::OperationCommand;
+use crate::errors::UseCaseError;
+use crate::ports::outbound::{
+    Clock, ConfigurationRepository, ConflictResolver, FileSystem, IdGenerator, OperationRepository,
+};
+use async_trait::async_trait;
+use quicksort_domain::{Folder, FolderId, Operation, OperationId, WindowsPath};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use async_trait::async_trait;
-use quicksort_domain::{Folder, FolderId, Operation, OperationId, WindowsPath};
-use crate::errors::UseCaseError;
-use crate::ports::outbound::{
-    ConfigurationRepository, OperationRepository, FileSystem,
-    IdGenerator, Clock, ConflictResolver,
-};
-use crate::dtos::OperationCommand;
 
 // ============================================================================
 // Mock ConfigurationRepository
@@ -99,12 +98,16 @@ impl ConfigurationRepository for MockConfigurationRepository {
 
     async fn find_by_path(&self, path: &str) -> Result<Option<Folder>, UseCaseError> {
         let folders = self.folders.lock().unwrap();
-        Ok(folders.iter().find(|f| f.path.to_string_lossy() == path).cloned())
+        Ok(folders
+            .iter()
+            .find(|f| f.path.to_string_lossy() == path)
+            .cloned())
     }
 
     async fn get_default_folder_id(&self) -> Result<FolderId, UseCaseError> {
         let folders = self.folders.lock().unwrap();
-        folders.first()
+        folders
+            .first()
             .map(|f| f.id.clone())
             .ok_or_else(|| UseCaseError::FolderNotFound("No default folder configured".to_string()))
     }
@@ -132,7 +135,9 @@ impl MockOperationRepository {
 
     /// Pre-loads an operation for testing.
     pub fn set_operation(&self, operation: Operation) {
-        self.operations.lock().unwrap()
+        self.operations
+            .lock()
+            .unwrap()
             .insert(operation.id.to_string(), operation);
     }
 
@@ -145,11 +150,18 @@ impl MockOperationRepository {
 #[async_trait]
 impl OperationRepository for MockOperationRepository {
     async fn find_by_id(&self, id: &OperationId) -> Result<Option<Operation>, UseCaseError> {
-        Ok(self.operations.lock().unwrap().get(&id.to_string()).cloned())
+        Ok(self
+            .operations
+            .lock()
+            .unwrap()
+            .get(&id.to_string())
+            .cloned())
     }
 
     async fn save(&self, operation: &Operation) -> Result<(), UseCaseError> {
-        self.operations.lock().unwrap()
+        self.operations
+            .lock()
+            .unwrap()
             .insert(operation.id.to_string(), operation.clone());
         Ok(())
     }
@@ -201,7 +213,13 @@ impl MockFileSystem {
 impl FileSystem for MockFileSystem {
     async fn exists(&self, path: &WindowsPath) -> Result<bool, UseCaseError> {
         let path = Self::to_pathbuf(path);
-        Ok(self.files.lock().unwrap().get(&path).map(|(exists, _)| *exists).unwrap_or(false))
+        Ok(self
+            .files
+            .lock()
+            .unwrap()
+            .get(&path)
+            .map(|(exists, _)| *exists)
+            .unwrap_or(false))
     }
 
     async fn get_file_size(&self, path: &WindowsPath) -> Result<u64, UseCaseError> {
@@ -209,7 +227,10 @@ impl FileSystem for MockFileSystem {
         let files = self.files.lock().unwrap();
         match files.get(&path) {
             Some((true, size)) => Ok(*size),
-            _ => Err(UseCaseError::FileNotFound(format!("File not found: {}", path.display()))),
+            _ => Err(UseCaseError::FileNotFound(format!(
+                "File not found: {}",
+                path.display()
+            ))),
         }
     }
 
@@ -219,9 +240,12 @@ impl FileSystem for MockFileSystem {
         let mut files = self.files.lock().unwrap();
 
         // Check that the source exists and retrieve its size
-        let (_, size) = files.get(&from_path)
+        let (_, size) = files
+            .get(&from_path)
             .filter(|(exists, _)| *exists)
-            .ok_or_else(|| UseCaseError::FileNotFound(format!("Source not found: {}", from_path.display())))?;
+            .ok_or_else(|| {
+                UseCaseError::FileNotFound(format!("Source not found: {}", from_path.display()))
+            })?;
         let size = *size;
 
         // Remove the source entry and create the destination
@@ -237,9 +261,12 @@ impl FileSystem for MockFileSystem {
         let mut files = self.files.lock().unwrap();
 
         // Check that the source exists and retrieve its size
-        let (_, size) = files.get(&from_path)
+        let (_, size) = files
+            .get(&from_path)
             .filter(|(exists, _)| *exists)
-            .ok_or_else(|| UseCaseError::FileNotFound(format!("Source not found: {}", from_path.display())))?;
+            .ok_or_else(|| {
+                UseCaseError::FileNotFound(format!("Source not found: {}", from_path.display()))
+            })?;
         let size = *size;
 
         // Create the copy at the destination
@@ -252,7 +279,10 @@ impl FileSystem for MockFileSystem {
         let path = Self::to_pathbuf(path);
         let mut files = self.files.lock().unwrap();
         if !files.contains_key(&path) {
-            return Err(UseCaseError::FileNotFound(format!("File not found: {}", path.display())));
+            return Err(UseCaseError::FileNotFound(format!(
+                "File not found: {}",
+                path.display()
+            )));
         }
         files.remove(&path);
         Ok(())
@@ -264,9 +294,12 @@ impl FileSystem for MockFileSystem {
         let mut files = self.files.lock().unwrap();
 
         // Check that the source exists
-        let (_, size) = files.get(&from_path)
+        let (_, size) = files
+            .get(&from_path)
             .filter(|(exists, _)| *exists)
-            .ok_or_else(|| UseCaseError::FileNotFound(format!("Source not found: {}", from_path.display())))?;
+            .ok_or_else(|| {
+                UseCaseError::FileNotFound(format!("Source not found: {}", from_path.display()))
+            })?;
         let size = *size;
 
         // Remove the old entry and create the new one

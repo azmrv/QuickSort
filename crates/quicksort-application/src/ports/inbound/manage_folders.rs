@@ -4,8 +4,8 @@
 //! perform CRUD operations on the folder configuration.
 //! It is implemented by `ManageFoldersUseCase`.
 
-use async_trait::async_trait;
 use crate::errors::UseCaseError;
+use async_trait::async_trait;
 use quicksort_domain::{Folder, FolderId};
 
 /// Inbound port for modifying the folder configuration.

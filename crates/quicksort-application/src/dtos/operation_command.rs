@@ -7,8 +7,8 @@
 //!
 //! # Design Decisions
 //! - Uses domain types (`OperationType`, `WindowsPath`, `FolderId`) directly
-//!   to avoid anemic DTOs and unnecessary mapping.  The Adapter layer is
-//!   allowed to depend on domain value objects.
+//!   to avoid anemic DTOs and unnecessary mapping.  Per the Dependency Rule
+//!   (ADR-002), adapters depend on domain types via the Application Layer.
 //! - All fields are public but the struct is not `Copy` – this prevents
 //!   accidental duplication of commands that may lead to double-processing.
 //! - `target_folder_id` and `target_paths` are mutually exclusive depending
@@ -17,8 +17,8 @@
 //!   - Rename → `target_paths` is required, `target_folder_id` is `None`.
 //!   - Delete → both are `None`.
 
+use quicksort_domain::{FolderId, OperationType, WindowsPath};
 use serde::{Deserialize, Serialize};
-use quicksort_domain::{FolderId, WindowsPath, OperationType};
 
 /// Command to execute a file operation.
 ///

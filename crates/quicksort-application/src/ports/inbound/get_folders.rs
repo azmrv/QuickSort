@@ -4,8 +4,8 @@
 //! It is implemented by `GetFoldersUseCase` and called by adapters
 //! (Tauri commands, IPC handlers) to obtain the list of configured folders.
 
-use async_trait::async_trait;
 use crate::errors::UseCaseError;
+use async_trait::async_trait;
 use quicksort_domain::Folder;
 
 /// Inbound port for reading the folder configuration.

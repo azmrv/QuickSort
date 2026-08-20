@@ -40,17 +40,25 @@ pub enum InfrastructureError {
 /// Конвертер инфраструктурных ошибок в UseCaseError.
 /// Этот trait должен быть реализован для каждого адаптера.
 pub trait ErrorConverter: Send + Sync {
-    fn convert_error(&self, error: InfrastructureError) -> quicksort_application::errors::UseCaseError;
+    fn convert_error(
+        &self,
+        error: InfrastructureError,
+    ) -> quicksort_application::errors::UseCaseError;
 }
 
 impl ErrorConverter for () {
-    fn convert_error(&self, error: InfrastructureError) -> quicksort_application::errors::UseCaseError {
+    fn convert_error(
+        &self,
+        error: InfrastructureError,
+    ) -> quicksort_application::errors::UseCaseError {
         use quicksort_application::errors::UseCaseError;
 
         match error {
             InfrastructureError::FileNotFound(path) => UseCaseError::FileNotFound(path),
             InfrastructureError::PermissionDenied(path) => UseCaseError::PermissionDenied(path),
-            InfrastructureError::Io(io_error) => UseCaseError::FileSystemError(io_error.to_string()),
+            InfrastructureError::Io(io_error) => {
+                UseCaseError::FileSystemError(io_error.to_string())
+            }
             InfrastructureError::Serialization(msg) => UseCaseError::RepositoryError(msg),
             InfrastructureError::Repository(msg) => UseCaseError::RepositoryError(msg),
             InfrastructureError::InvalidPath(path) => UseCaseError::FileNotFound(path),

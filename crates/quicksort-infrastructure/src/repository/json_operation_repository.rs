@@ -1,15 +1,13 @@
 //! JSON implementation of OperationRepository.
 //! Stores operation history in a JSON file for audit and undo support.
 
-use std::fs;
-use std::path::{Path, PathBuf};
 use async_trait::async_trait;
+use std::fs;
+use std::path::PathBuf;
 
-use quicksort_domain::{
-    Operation, OperationId, OperationType, OperationState, WindowsPath,
-};
-use quicksort_application::ports::outbound::OperationRepository;
 use quicksort_application::errors::UseCaseError;
+use quicksort_application::ports::outbound::OperationRepository;
+use quicksort_domain::{Operation, OperationId};
 
 /// Repository that persists operations to a JSON file.
 ///
@@ -92,8 +90,9 @@ impl OperationRepository for JsonOperationRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use chrono::Utc;
+    use quicksort_domain::{OperationState, WindowsPath};
+    use tempfile::tempdir;
 
     fn test_path(path: &str) -> WindowsPath {
         WindowsPath::new(path).unwrap()
@@ -131,7 +130,10 @@ mod tests {
         let operations = repo.load_all().unwrap();
         assert_eq!(operations.len(), 1);
         assert_eq!(operations[0].id, op.id);
-        assert!(matches!(operations[0].state, OperationState::Completed { .. }));
+        assert!(matches!(
+            operations[0].state,
+            OperationState::Completed { .. }
+        ));
     }
 
     #[test]
@@ -169,10 +171,7 @@ mod tests {
         let file_path = temp_dir.path().join("operations.json");
         let repo = JsonOperationRepository::new(file_path);
 
-        let op = Operation::new_delete(
-            vec![test_path("C:\\trash.txt")],
-            Utc::now(),
-        );
+        let op = Operation::new_delete(vec![test_path("C:\\trash.txt")], Utc::now());
         repo.save(&op).unwrap();
 
         let found = repo.find_by_id(&op.id).unwrap().unwrap();

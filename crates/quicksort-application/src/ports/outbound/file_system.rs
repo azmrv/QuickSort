@@ -9,9 +9,9 @@
 //! to ensure that only validated domain paths are accepted. This prevents
 //! malformed or unsafe paths from reaching the file system adapter.
 
+use crate::errors::UseCaseError;
 use async_trait::async_trait;
 use quicksort_domain::WindowsPath;
-use crate::errors::UseCaseError;
 
 /// Port for performing file operations on the local file system.
 ///

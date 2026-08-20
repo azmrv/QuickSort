@@ -1,9 +1,9 @@
 //! Default conflict resolver that passes commands through unchanged.
 
 use async_trait::async_trait;
-use quicksort_application::ports::outbound::ConflictResolver;
 use quicksort_application::dtos::OperationCommand;
 use quicksort_application::errors::UseCaseError;
+use quicksort_application::ports::outbound::ConflictResolver;
 
 pub struct DefaultConflictResolver;
 

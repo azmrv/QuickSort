@@ -7,9 +7,6 @@ use quicksort_domain::{Folder, FolderId, OperationId};
 use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
 use crate::ports::inbound::{ExecuteOperation, GetFolders, ManageFolders, UndoOperation};
-use crate::use_cases::{
-    ExecuteOperationUseCase, UndoOperationUseCase, GetFoldersUseCase, ManageFoldersUseCase,
-};
 
 /// Unified facade combining all inbound operations.
 pub struct ApplicationFacade {
@@ -34,11 +31,17 @@ impl ApplicationFacade {
         }
     }
 
-    pub async fn execute_operation(&self, command: OperationCommand) -> Result<OperationResult, UseCaseError> {
+    pub async fn execute_operation(
+        &self,
+        command: OperationCommand,
+    ) -> Result<OperationResult, UseCaseError> {
         self.execute_operation.execute(command).await
     }
 
-    pub async fn undo_operation(&self, operation_id: OperationId) -> Result<OperationResult, UseCaseError> {
+    pub async fn undo_operation(
+        &self,
+        operation_id: OperationId,
+    ) -> Result<OperationResult, UseCaseError> {
         self.undo_operation.undo(operation_id).await
     }
 
