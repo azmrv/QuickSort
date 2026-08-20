@@ -6,7 +6,8 @@
 .app-container {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     background: var(--qs-bg-primary);
 }
 
@@ -20,10 +21,8 @@
     padding: var(--qs-space-lg) var(--qs-space-xl);
     border-bottom: 1px solid var(--qs-border);
     background: var(--qs-bg-secondary);
-    position: sticky;
-    top: 0;
+    flex-shrink: 0;
     z-index: 100;
-    backdrop-filter: blur(12px);
 }
 
 .app-logo {
@@ -106,25 +105,7 @@
     margin: 0 auto;
     padding: var(--qs-space-xl);
     min-height: 0;
-}
-
-.app-content .ant-tabs {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-}
-
-.app-content .ant-tabs-content {
-    flex: 1;
-    min-height: 0;
-}
-
-.app-content .ant-tabs-tabpane {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
+    overflow: hidden;
 }
 
 /* ================================
@@ -149,6 +130,7 @@
     font-family: var(--qs-font-mono);
     font-size: 12px;
     color: var(--qs-text-secondary);
+    flex-shrink: 0;
 }
 
 .status-dot {
