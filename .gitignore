@@ -1,45 +1,23 @@
-# ==========================================
 # Rust / Cargo
-# ==========================================
 target/
-src-tauri/target/
 *.pdb
 *.rs.bk
-Cargo.lock  # ДЛЯ БИНАРНЫХ ПРИЛОЖЕНИЙ — ХРАНИМ!
 
-# ==========================================
-# Frontend (React + Vite)
-# ==========================================
+# Frontend
 node_modules/
-.npm/
-.yarn/
 dist/
 dist-ssr/
 build/
 *.tgz
 
-# ==========================================
-# Package lock files (храним для стабильности)
-# ==========================================
-# package-lock.json    # Рекомендуется хранить!
-# yarn.lock            # Рекомендуется хранить!
-# bun.lockb            # Рекомендуется хранить!
-
-# ==========================================
 # Logs
-# ==========================================
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-debug.log
 
-# ==========================================
-# Environment & Runtime Data
-# ==========================================
+# Environment
 .env
 .env*.local
 pids/
@@ -47,81 +25,26 @@ pids/
 *.seed
 *.pid.lock
 
-# ==========================================
-# IDEs (RustRover, VS Code, IntelliJ)
-# ==========================================
+# IDEs
 .idea/
 *.iml
 .vscode/
-!.vscode/extensions.json
+!*.vscode/extensions.json
 /.vs/
 *.sublime-*
 *.sw?
 
-# ==========================================
-# Operating System files
-# ==========================================
+# OS
 .DS_Store
-.AppleDouble
-.LSOverride
 Thumbs.db
 Desktop.ini
-**/.DS_Store
 
-# ==========================================
-# Temporary / backup files
-# ==========================================
+# Temp / backup
 *.tmp
 *.bak
 *.swp
 *~
 
-# ==========================================
-# Project-specific
-# ==========================================
-TODO.md
-.aider*
-streaming_example_test_video.mp4
-
-# ==========================================
-# Tauri generated folders (examples/bench)
-# ==========================================
+# Tauri gen
 /examples/**/src-tauri/gen/
 /bench/**/src-tauri/gen/
-
-
-# ==========================================
-# AI Agent development rules & data
-# ==========================================
-ai
-agents.md
-agent.md
-airules.md
-.ai
-adr
-opencode
-.omo
-docs/
-docs
-.omo/run-continuation/
-.clinerules/
-.omo/
-docs/*
-tasks
-tasks/
-tasks/*
-.omo/run-continuation/*
-.clinerules/*
-.omo/*
-.clinerules
-crates/quicksort-application/.cargo_check_output.txt
-# Added by goreleaser init:
-.intentionally-empty-file.o
-bean
-.bean
-.beans
-.beans/*
-.beans.yml
-beans.yml
-.opencode
-.gorealeser.yaml
