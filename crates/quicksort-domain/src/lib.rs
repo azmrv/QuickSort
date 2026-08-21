@@ -33,7 +33,7 @@ pub use entities::{
 };
 pub use errors::DomainError;
 pub use events::DomainEvent;
-pub use value_objects::{FolderId, OperationId, WindowsPath};
+pub use value_objects::{DateFilter, FolderId, OperationId, SearchFilter, SearchQuery, SizeOp, WindowsPath};
 
 // DTOs are no longer re-exported from the domain layer.
 // Adapters and Application should obtain them from `quicksort-application`.
