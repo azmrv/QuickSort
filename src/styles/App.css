@@ -485,6 +485,20 @@
     border: 1px solid var(--qs-border);
 }
 
+.selector-section {
+    padding: 0 var(--qs-space-sm);
+}
+
+.selector-section-label {
+    font-family: var(--qs-font-display);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--qs-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 8px 12px 4px;
+}
+
 /* ================================
    Empty State
    ================================ */
