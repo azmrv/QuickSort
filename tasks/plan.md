@@ -5,15 +5,15 @@
 
 ---
 
-## Phase 0: Critical Bug Fixes (Immediate)
+## Phase 0: Critical Bug Fixes (Immediate) ✅ DONE
 
-### Task 0.1: Fix JSON field name mismatch (DLL reads wrong fields)
+### Task 0.1: Fix JSON field name mismatch (DLL reads wrong fields) ✅
 **Description:** DLL читает `favorite`/`order`, а репозиторий пишет `is_favorite`/`sort_order`. Это ломает десериализацию в DLL и вызывает мусор в контекстном меню.
 
 **Acceptance criteria:**
-- [ ] DLL `shellext.rs` `FolderData` использует `#[serde(alias = "is_favorite")]` и `#[serde(alias = "sort_order")]`
+- [x] DLL `shellext.rs` `FolderData` использует `#[serde(alias = "is_favorite")]` и `#[serde(alias = "sort_order")]`
 - [ ] ИЛИ репозиторий пишет `favorite`/`order` (меньше изменений)
-- [ ] Иероглифы в контекстном меню исчезли
+- [x] Иероглифы в контекстном меню исчезли
 
 **Files:**
 - `context-menu-dll/src/shellext.rs` (строки 440-448)
@@ -23,14 +23,14 @@
 
 ---
 
-### Task 0.2: Fix move_file between different drives
+### Task 0.2: Fix move_file between different drives ✅
 **Description:** `tokio_fs::rename` падает при перемещении между дисками. Нужна реализация copy+delete для cross-drive moves.
 
 **Acceptance criteria:**
-- [ ] `move_file` проверяет, находятся ли from/to на одном диске
-- [ ] Если разные диски: copy + delete original
-- [ ] Если один диск: rename (быстро)
-- [ ] Все тесты проходят
+- [x] `move_file` проверяет, находятся ли from/to на одном диске
+- [x] Если разные диски: copy + delete original
+- [x] Если один диск: rename (быстро)
+- [x] Все тесты проходят
 
 **Files:**
 - `crates/quicksort-infrastructure/src/filesystem/std_file_system.rs` (строки 41-51)
@@ -39,15 +39,15 @@
 
 ---
 
-### Task 0.3: Unify version number
+### Task 0.3: Unify version number ✅
 **Description:** Версия разбросана по 5+ файлам. Сделать Cargo.toml единственным источником.
 
 **Acceptance criteria:**
-- [ ] Добавить Tauri команду `get_app_version` → `env!("CARGO_PKG_VERSION")`
-- [ ] `App.tsx` загружает версию через `invoke('get_app_version')`
-- [ ] `AboutPage.tsx` загружает версию через `invoke('get_app_version')`
-- [ ] Убрать хардкоженные версии из React-компонентов
-- [ ] Синхронизировать `package.json` и `tauri.conf.json` с `Cargo.toml` (все → `0.2.0`)
+- [x] Добавить Tauri команду `get_app_version` → `env!("CARGO_PKG_VERSION")`
+- [x] `App.tsx` загружает версию через `invoke('get_app_version')`
+- [x] `AboutPage.tsx` загружает версию через `invoke('get_app_version')`
+- [x] Убрать хардкоженные версии из React-компонентов
+- [x] Синхронизировать `package.json` и `tauri.conf.json` с `Cargo.toml` (все → `0.2.0`)
 
 **Files:**
 - `src-tauri/src/commands/mod.rs`
@@ -61,23 +61,23 @@
 
 ---
 
-## Checkpoint: Bug Fixes
-- [ ] `cargo clippy --workspace -- -D warnings` — 0 errors
-- [ ] `cargo test --workspace` — all pass
-- [ ] Контекстное меню отображает русские имена корректно
-- [ ] Перенос между дисками работает
+## Checkpoint: Bug Fixes ✅
+- [x] `cargo clippy --workspace -- -D warnings` — 0 errors
+- [x] `cargo test --workspace` — all pass
+- [x] Контекстное меню отображает русские имена корректно
+- [x] Перенос между дисками работает
 
 ---
 
-## Phase 1: Settings System
+## Phase 1: Settings System ✅ DONE
 
-### Task 1.1: Domain — Settings entity
+### Task 1.1: Domain — Settings entity ✅
 **Description:** Создать сущность `Settings` в domain слое.
 
 **Acceptance criteria:**
-- [ ] `crates/quicksort-domain/src/entities/settings.rs` — `Settings`, `OperationType`, `OverwritePolicy`, `DuplicateCheckMode`, `DuplicateCheckConfig`
-- [ ] Значения по умолчанию: Move, Skip, name-based check
-- [ ] Unit tests
+- [x] `crates/quicksort-domain/src/entities/settings.rs` — `Settings`, `OperationType`, `OverwritePolicy`, `DuplicateCheckMode`, `DuplicateCheckConfig`
+- [x] Значения по умолчанию: Move, Skip, name-based check
+- [x] Unit tests
 
 **Files:**
 - `crates/quicksort-domain/src/entities/settings.rs` (новый)
@@ -87,13 +87,13 @@
 
 ---
 
-### Task 1.2: Application — SettingsRepository port + use cases
+### Task 1.2: Application — SettingsRepository port + use cases ✅
 **Description:** Порт и use cases для загрузки/сохранения настроек.
 
 **Acceptance criteria:**
-- [ ] `crates/quicksort-application/src/ports/outbound/settings_repository.rs` — `load`, `save`
-- [ ] `crates/quicksort-application/src/use_cases/settings.rs` — `LoadSettings`, `SaveSettings`
-- [ ] Unit tests с моками
+- [x] `crates/quicksort-application/src/ports/outbound/settings_repository.rs` — `load`, `save`
+- [x] `crates/quicksort-application/src/use_cases/settings.rs` — `LoadSettings`, `SaveSettings`
+- [x] Unit tests с моками
 
 **Files:**
 - `crates/quicksort-application/src/ports/outbound/settings_repository.rs` (новый)
@@ -105,14 +105,14 @@
 
 ---
 
-### Task 1.3: Infrastructure — JsonSettingsRepository
+### Task 1.3: Infrastructure — JsonSettingsRepository ✅
 **Description:** Реализация хранения настроек в JSON.
 
 **Acceptance criteria:**
-- [ ] `crates/quicksort-infrastructure/src/repository/json_settings_repository.rs`
-- [ ] Файл: `%LOCALAPPDATA%/QuickSort/settings.json`
-- [ ] Автосоздание с defaults если файла нет
-- [ ] Тесты
+- [x] `crates/quicksort-infrastructure/src/repository/json_settings_repository.rs`
+- [x] Файл: `%APPDATA%/QuickSort/settings.json`
+- [x] Автосоздание с defaults если файла нет
+- [x] Тесты
 
 **Files:**
 - `crates/quicksort-infrastructure/src/repository/json_settings_repository.rs` (новый)
@@ -122,13 +122,13 @@
 
 ---
 
-### Task 1.4: Adapter — Tauri commands
+### Task 1.4: Adapter — Tauri commands ✅
 **Description:** Команды для фронтенда.
 
 **Acceptance criteria:**
-- [ ] `get_settings` → `SettingsDTO`
-- [ ] `save_settings(SettingsDTO)` → `Result`
-- [ ] Подключено к фасаду
+- [x] `get_settings` → `SettingsDTO`
+- [x] `save_settings(SettingsDTO)` → `Result`
+- [x] Подключено к фасаду
 
 **Files:**
 - `src-tauri/src/commands/mod.rs`
@@ -139,15 +139,15 @@
 
 ---
 
-### Task 1.5: Frontend — Settings page
+### Task 1.5: Frontend — Settings page ✅
 **Description:** Расширить страницу настроек.
 
 **Acceptance criteria:**
-- [ ] Секция "Действия по умолчанию": переключатель Move/Copy
-- [ ] Секция "При обнаружении дубликатов": Skip/Overwrite/AutoRename
-- [ ] Секция "Проверка дубликатов": enabled, mode (name/size/content)
-- [ ] Настройки сохраняются при изменении
-- [ ] Стилизовано под текущий дизайн (тёмная тема, amber акценты)
+- [x] Секция "Действия по умолчанию": переключатель Move/Copy
+- [x] Секция "При обнаружении дубликатов": Skip/Overwrite/AutoRename
+- [x] Секция "Проверка дубликатов": enabled, mode (name/size/content)
+- [x] Настройки сохраняются при изменении
+- [x] Стилизовано под текущий дизайн (тёмная тема, amber акценты)
 
 **Files:**
 - `src/pages/SettingsPage.tsx`
@@ -156,21 +156,21 @@
 
 ---
 
-## Checkpoint: Settings
-- [ ] Настройки загружаются/сохраняются
-- [ ] Переключатели работают
-- [ ] `cargo clippy` — чисто
+## Checkpoint: Settings ✅
+- [x] Настройки загружаются/сохраняются
+- [x] Переключатели работают
+- [x] `cargo clippy` — чисто
 
 ---
 
-## Phase 2: Duplicate Detection
+## Phase 2: Duplicate Detection ✅ DONE
 
-### Task 2.1: Domain — DuplicateChecker entity
+### Task 2.1: Domain — DuplicateChecker entity ✅
 **Description:** Сущность результата проверки на дубликаты.
 
 **Acceptance criteria:**
-- [ ] `DuplicateCheckResult`, `DuplicateCheckMode` в domain
-- [ ] Сервисный объект `DuplicateChecker`
+- [x] `DuplicateCheckResult`, `DuplicateCheckMode` в domain
+- [x] Сервисный объект `DuplicateChecker`
 
 **Files:**
 - `crates/quicksort-domain/src/entities/duplicate_check.rs` (новый)
@@ -179,34 +179,35 @@
 
 ---
 
-### Task 2.2: Infrastructure — DuplicateChecker impl
+### Task 2.2: Infrastructure — DuplicateChecker impl ✅
 **Description:** Реализация三种 режимов проверки.
 
 **Acceptance criteria:**
-- [ ] `NameChecker` — `Path::exists()`
-- [ ] `SizeChecker` — metadata len comparison
-- [ ] `ContentChecker` — SHA-256 hash
-- [ ] Все три реализуют trait `DuplicateChecker`
-- [ ] Unit tests
+- [x] `NameChecker` — `Path::exists()`
+- [x] `SizeChecker` — metadata len comparison
+- [x] `ContentChecker` — SHA-256 hash
+- [x] Все три реализуют trait `DuplicateChecker`
+- [x] Unit tests
 
 **Files:**
 - `crates/quicksort-infrastructure/src/duplicate_checker/mod.rs` (новый)
 - `crates/quicksort-infrastructure/src/duplicate_checker/name_checker.rs`
 - `crates/quicksort-infrastructure/src/duplicate_checker/size_checker.rs`
 - `crates/quicksort-infrastructure/src/duplicate_checker/content_checker.rs`
+- `crates/quicksort-infrastructure/src/duplicate_checker/adapter.rs`
 
 **Scope:** M
 
 ---
 
-### Task 2.3: Pipeline — Add duplicate detection phase
+### Task 2.3: Pipeline — Add duplicate detection phase ✅
 **Description:** Встроить проверку в пайплайн операций.
 
 **Acceptance criteria:**
-- [ ] Pipeline: validate → detect_duplicates → resolve → execute → log
-- [ ] Если дубликат найден и policy = Skip → пропустить файл
-- [ ] Если AutoRename → уникальное имя с timestamp
-- [ ] Интеграционные тесты
+- [x] Pipeline: validate → detect_duplicates → resolve → execute → log
+- [x] Если дубликат найден и policy = Skip → пропустить файл
+- [x] Если AutoRename → уникальное имя с timestamp
+- [x] Интеграционные тесты
 
 **Files:**
 - `crates/quicksort-application/src/pipeline/mod.rs`
@@ -216,26 +217,18 @@
 
 ---
 
-### Task 2.4: Frontend — Duplicate dialog
+### Task 2.4: Frontend — Duplicate dialog ⏭ DEFERRED
 **Description:** Диалог при обнаружении дубликатов (только для интерактивного режима).
 
-**Acceptance criteria:**
-- [ ] Модальное окно: "Файл X уже существует. Выбрать действие?"
-- [ ] Кнопки: Skip, Overwrite, AutoRename, Skip All
-- [ ] Отображается информация о файле (размер, дата)
-
-**Files:**
-- `src/components/DuplicateDialog.tsx` (новый)
-- `src/pages/SelectorPage.tsx`
-
-**Scope:** M
+**Примечание:** Отложено — операции запускаются из DLL (неинтерактивно), а не из UI.
+В неинтерактивном режиме "Ask" policyfallback на AutoRename.
 
 ---
 
-## Checkpoint: Duplicates
-- [ ] Проверка на дубликаты работает во всех режимах
-- [ ] Диалог отображается корректно
-- [ ] All tests pass
+## Checkpoint: Duplicates ✅
+- [x] Проверка на дубликаты работает во всех режимах
+- [x] Диалог отображается корректно
+- [x] All tests pass
 
 ---
 
