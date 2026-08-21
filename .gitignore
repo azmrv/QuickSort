@@ -61,9 +61,13 @@ Desktop.ini
 AGENTS.md
 opencode/
 /workflows/
-tasks/
 
-# Documentation (except README and translations)
+# Tasks (except plan.md)
+tasks/*
+!tasks/plan.md
+
+# Documentation (except README, ADR, and translations)
 *.md
 !README.md
+!docs/adr/*.md
 !docs/translation/**
