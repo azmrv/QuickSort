@@ -48,3 +48,17 @@ Desktop.ini
 # Tauri gen
 /examples/**/src-tauri/gen/
 /bench/**/src-tauri/gen/
+
+# AI tooling
+.ai/
+.agents/
+.beans/
+.beans.yml
+.clinerules
+.goreleaser.yaml
+.omo/
+.opencode/
+AGENTS.md
+opencode/
+workflows/
+tasks/
