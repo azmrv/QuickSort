@@ -2,10 +2,11 @@ use crate::dtos::{OperationCommand, OperationResult, OverwritePolicy};
 use crate::errors::UseCaseError;
 use crate::ports::inbound::ExecuteOperation;
 use crate::ports::outbound::{
-    Clock, ConfigurationRepository, FileSystem, IdGenerator, OperationRepository,
+    Clock, ConfigurationRepository, DuplicateDetectionPort, FileSystem, IdGenerator,
+    OperationRepository,
 };
 use async_trait::async_trait;
-use quicksort_domain::{Operation, OperationState, OperationType, WindowsPath};
+use quicksort_domain::{DuplicateCheckMode, Operation, OperationState, OperationType, WindowsPath};
 
 pub struct ExecuteOperationUseCase {
     operation_repository: Box<dyn OperationRepository>,
@@ -13,6 +14,7 @@ pub struct ExecuteOperationUseCase {
     file_system: Box<dyn FileSystem>,
     id_generator: Box<dyn IdGenerator>,
     clock: Box<dyn Clock>,
+    duplicate_detector: Box<dyn DuplicateDetectionPort>,
 }
 
 impl ExecuteOperationUseCase {
@@ -22,6 +24,7 @@ impl ExecuteOperationUseCase {
         file_system: Box<dyn FileSystem>,
         id_generator: Box<dyn IdGenerator>,
         clock: Box<dyn Clock>,
+        duplicate_detector: Box<dyn DuplicateDetectionPort>,
     ) -> Self {
         Self {
             operation_repository,
@@ -29,6 +32,7 @@ impl ExecuteOperationUseCase {
             file_system,
             id_generator,
             clock,
+            duplicate_detector,
         }
     }
 }
@@ -111,25 +115,83 @@ impl ExecuteOperationUseCase {
         target_folder: &Option<WindowsPath>,
     ) -> Result<u64, UseCaseError> {
         match command.operation_type {
-            OperationType::Move => {
+            OperationType::Move | OperationType::Copy => {
                 let dest = self.build_destination(source, target_folder)?;
-                let resolved = self
-                    .resolve_conflict(&dest, &command.overwrite_policy)
-                    .await?;
-                self.file_system
-                    .move_file(source, &resolved)
+
+                // Duplicate detection phase
+                let dup_result = self
+                    .duplicate_detector
+                    .check_duplicate(source, &dest, &command.duplicate_check_mode)
                     .await
-                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))
-            }
-            OperationType::Copy => {
-                let dest = self.build_destination(source, target_folder)?;
-                let resolved = self
-                    .resolve_conflict(&dest, &command.overwrite_policy)
-                    .await?;
-                self.file_system
-                    .copy_file(source, &resolved)
-                    .await
-                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))
+                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+
+                // If duplicate found, apply overwrite policy
+                if dup_result.exists {
+                    match command.overwrite_policy {
+                        OverwritePolicy::Skip => {
+                            return Err(UseCaseError::Conflict(format!(
+                                "Duplicate found ({} mode): {}",
+                                match command.duplicate_check_mode {
+                                    DuplicateCheckMode::Name => "name",
+                                    DuplicateCheckMode::Size => "size",
+                                    DuplicateCheckMode::Content => "content",
+                                },
+                                dest
+                            )));
+                        }
+                        OverwritePolicy::Overwrite => {
+                            // Proceed with the operation
+                        }
+                        OverwritePolicy::AutoRename => {
+                            let resolved = self.unique_name(&dest).await?;
+                            return match command.operation_type {
+                                OperationType::Move => self
+                                    .file_system
+                                    .move_file(source, &resolved)
+                                    .await
+                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                                OperationType::Copy => self
+                                    .file_system
+                                    .copy_file(source, &resolved)
+                                    .await
+                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                                _ => unreachable!(),
+                            };
+                        }
+                        OverwritePolicy::Ask => {
+                            // In non-interactive mode (IPC from DLL), fall back to AutoRename
+                            let resolved = self.unique_name(&dest).await?;
+                            return match command.operation_type {
+                                OperationType::Move => self
+                                    .file_system
+                                    .move_file(source, &resolved)
+                                    .await
+                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                                OperationType::Copy => self
+                                    .file_system
+                                    .copy_file(source, &resolved)
+                                    .await
+                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                                _ => unreachable!(),
+                            };
+                        }
+                    }
+                }
+
+                // No duplicate or Overwrite policy — proceed
+                match command.operation_type {
+                    OperationType::Move => self
+                        .file_system
+                        .move_file(source, &dest)
+                        .await
+                        .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                    OperationType::Copy => self
+                        .file_system
+                        .copy_file(source, &dest)
+                        .await
+                        .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                    _ => unreachable!(),
+                }
             }
             OperationType::Delete => self
                 .file_system
@@ -166,31 +228,6 @@ impl ExecuteOperationUseCase {
             .file_name()
             .ok_or_else(|| UseCaseError::InvalidCommand("Cannot extract file name".to_string()))?;
         Ok(folder.join(file_name))
-    }
-
-    async fn resolve_conflict(
-        &self,
-        path: &WindowsPath,
-        policy: &OverwritePolicy,
-    ) -> Result<WindowsPath, UseCaseError> {
-        if !self
-            .file_system
-            .exists(path)
-            .await
-            .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
-        {
-            return Ok(path.clone());
-        }
-
-        match policy {
-            OverwritePolicy::Overwrite => Ok(path.clone()),
-            OverwritePolicy::Skip => Err(UseCaseError::Conflict(format!(
-                "File already exists: {}",
-                path
-            ))),
-            OverwritePolicy::AutoRename => self.unique_name(path).await,
-            OverwritePolicy::Ask => self.unique_name(path).await,
-        }
     }
 
     async fn unique_name(&self, path: &WindowsPath) -> Result<WindowsPath, UseCaseError> {

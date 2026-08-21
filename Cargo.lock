@@ -2792,6 +2792,7 @@ name = "quicksort-domain"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "serde",
  "serde_json",
@@ -2810,6 +2811,7 @@ dependencies = [
  "quicksort-domain",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",

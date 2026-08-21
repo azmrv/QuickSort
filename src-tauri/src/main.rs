@@ -118,6 +118,9 @@ fn start_tauri() {
         Box::new(quicksort_infrastructure::StdFileSystem::new()),
         Box::new(quicksort_infrastructure::UuidGenerator),
         Box::new(quicksort_infrastructure::SystemClock),
+        Box::new(quicksort_infrastructure::DuplicateDetectionAdapter::new(
+            quicksort_infrastructure::NameChecker,
+        )),
     );
 
     let get_folders_use_case = GetFoldersUseCase::new(config_repo.clone());

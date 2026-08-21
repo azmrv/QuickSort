@@ -17,7 +17,7 @@
 //!   - Rename → `target_paths` is required, `target_folder_id` is `None`.
 //!   - Delete → both are `None`.
 
-use quicksort_domain::{FolderId, OperationType, WindowsPath};
+use quicksort_domain::{DuplicateCheckMode, FolderId, OperationType, WindowsPath};
 use serde::{Deserialize, Serialize};
 
 /// Command to execute a file operation.
@@ -55,6 +55,10 @@ pub struct OperationCommand {
 
     /// Conflict resolution strategy when a target file already exists.
     pub overwrite_policy: OverwritePolicy,
+
+    /// Duplicate detection mode from user settings.
+    /// Controls how duplicates are checked (by name, size, or content hash).
+    pub duplicate_check_mode: DuplicateCheckMode,
 }
 
 impl OperationCommand {
@@ -74,6 +78,7 @@ impl OperationCommand {
             target_folder_id: Some(target_folder_id),
             target_paths: None,
             overwrite_policy: policy,
+            duplicate_check_mode: DuplicateCheckMode::default(),
         }
     }
 
@@ -90,6 +95,7 @@ impl OperationCommand {
             target_folder_id: Some(target_folder_id),
             target_paths: None,
             overwrite_policy: policy,
+            duplicate_check_mode: DuplicateCheckMode::default(),
         }
     }
 
@@ -102,6 +108,7 @@ impl OperationCommand {
             target_folder_id: None,
             target_paths: None,
             overwrite_policy: OverwritePolicy::Skip, // not relevant for Delete
+            duplicate_check_mode: DuplicateCheckMode::default(),
         }
     }
 
@@ -125,6 +132,7 @@ impl OperationCommand {
             target_folder_id: None,
             target_paths: Some(target_paths),
             overwrite_policy: policy,
+            duplicate_check_mode: DuplicateCheckMode::default(),
         }
     }
 }

@@ -19,7 +19,7 @@ use windows::Win32::System::Pipes::{
 };
 
 use quicksort_application::{
-    ApplicationFacadeImpl, ExecuteOperation, FolderId, OperationCommand,
+    ApplicationFacadeImpl, DuplicateCheckMode, ExecuteOperation, FolderId, OperationCommand,
     OperationType as DomainOpType, OverwritePolicy as AppOverwritePolicy, WindowsPath,
 };
 use quicksort_ipc_contract::{
@@ -94,6 +94,7 @@ fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> 
         target_folder_id,
         target_paths: None,
         overwrite_policy: convert_overwrite_policy(data.overwrite_policy),
+        duplicate_check_mode: DuplicateCheckMode::default(),
     })
 }
 
