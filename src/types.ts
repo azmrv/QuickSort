@@ -35,3 +35,24 @@ export interface ConflictContext {
     files_renamed: number;
     files_overwritten: number;
 }
+
+// ---------------------------------------------------------------------------
+// Plugin types
+// ---------------------------------------------------------------------------
+
+export type PluginType = 'Archive' | 'Content' | 'FileSystem' | 'Lister';
+
+export interface PluginInfoDto {
+    id: string;
+    name: string;
+    version: string;
+    plugin_type: PluginType;
+    enabled: boolean;
+    path: string;
+}
+
+export interface PluginConfig {
+    enabled: boolean;
+    priority: number;
+    custom_settings: Record<string, unknown>;
+}

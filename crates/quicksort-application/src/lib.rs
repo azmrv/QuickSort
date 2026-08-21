@@ -54,7 +54,7 @@ pub use dtos::{OperationCommand, OperationResult, OverwritePolicy};
 // Inbound ports – the contracts that adapters call.
 pub use ports::inbound::{
     ApplicationFacade, ApplicationFacadeImpl, ExecuteOperation, GetFolders, GetOperationHistory,
-    LoadSettings, ManageFolders, SaveSettings, UndoOperation,
+    LoadSettings, ManageFolders, PluginInfoDto, PluginManager, SaveSettings, UndoOperation,
 };
 
 // Domain types – re-exported so adapters can construct domain entities
@@ -62,7 +62,7 @@ pub use ports::inbound::{
 // which depends on Domain).
 pub use quicksort_domain::{
     DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, DuplicateCheckMode, Folder,
-    FolderId, Operation, OperationId, OperationType, Settings, WindowsPath,
+    FolderId, Operation, OperationId, OperationType, PluginConfig, Settings, WindowsPath,
 };
 
 // Pipeline is intentionally NOT re-exported – it is an internal mechanism

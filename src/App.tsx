@@ -8,6 +8,7 @@ import LogPage from './pages/LogPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
+import PluginsPage from './pages/PluginsPage';
 import './styles/App.css';
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
     const TABS = [
         { key: 'folders', label: 'Папки', content: <EditorPage /> },
         { key: 'history', label: 'История', content: <HistoryPage /> },
+        { key: 'plugins', label: 'Плагины', content: <PluginsPage /> },
         { key: 'log', label: 'Лог', content: <LogPage /> },
         { key: 'settings', label: 'Настройки', content: <SettingsPage /> },
         { key: 'about', label: 'О программе', content: <AboutPage /> },

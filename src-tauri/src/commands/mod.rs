@@ -1,7 +1,8 @@
 use crate::state::AppState;
 use quicksort_application::{
     ExecuteOperation, Folder, FolderId, GetFolders, GetOperationHistory, LoadSettings,
-    ManageFolders, OperationId, SaveSettings, Settings, UndoOperation, WindowsPath,
+    ManageFolders, OperationId, PluginConfig, PluginInfoDto, PluginManager, SaveSettings, Settings,
+    UndoOperation, WindowsPath,
 };
 use std::path::PathBuf;
 use tauri::State;
@@ -296,4 +297,95 @@ pub async fn create_new_folder(parent_path: String, folder_name: String) -> Resu
     let path_str = new_folder.to_string_lossy().to_string();
     tracing::info!(command = "create_new_folder", path = %path_str, "OK");
     Ok(path_str)
+}
+
+// ---------------------------------------------------------------------------
+// Plugin management commands
+// ---------------------------------------------------------------------------
+
+/// List all discovered plugins.
+#[tauri::command]
+pub async fn list_plugins(state: State<'_, AppState>) -> Result<Vec<PluginInfoDto>, String> {
+    tracing::info!(command = "list_plugins", "handling");
+    let result = state.facade.list_plugins().await.map_err(|e| e.to_string());
+    match &result {
+        Ok(plugins) => tracing::info!(command = "list_plugins", count = plugins.len(), "OK"),
+        Err(e) => tracing::error!(command = "list_plugins", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Get plugin configuration.
+#[tauri::command]
+pub async fn get_plugin_config(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<PluginConfig, String> {
+    tracing::info!(command = "get_plugin_config", plugin_id = %plugin_id, "handling");
+    let result = state
+        .facade
+        .get_plugin_config(&plugin_id)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(_) => tracing::info!(command = "get_plugin_config", "OK"),
+        Err(e) => tracing::error!(command = "get_plugin_config", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Save plugin configuration.
+#[tauri::command]
+pub async fn save_plugin_config(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    config: PluginConfig,
+) -> Result<(), String> {
+    tracing::info!(command = "save_plugin_config", plugin_id = %plugin_id, "handling");
+    let result = state
+        .facade
+        .save_plugin_config(&plugin_id, config)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "save_plugin_config", "OK"),
+        Err(e) => tracing::error!(command = "save_plugin_config", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Enable or disable a plugin.
+#[tauri::command]
+pub async fn set_plugin_enabled(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    tracing::info!(command = "set_plugin_enabled", plugin_id = %plugin_id, enabled = enabled, "handling");
+    let result = state
+        .facade
+        .set_plugin_enabled(&plugin_id, enabled)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "set_plugin_enabled", "OK"),
+        Err(e) => tracing::error!(command = "set_plugin_enabled", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Rescan plugin directory.
+#[tauri::command]
+pub async fn rescan_plugins(state: State<'_, AppState>) -> Result<Vec<PluginInfoDto>, String> {
+    tracing::info!(command = "rescan_plugins", "handling");
+    let result = state
+        .facade
+        .rescan_plugins()
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(plugins) => tracing::info!(command = "rescan_plugins", count = plugins.len(), "OK"),
+        Err(e) => tracing::error!(command = "rescan_plugins", error = %e, "FAIL"),
+    }
+    result
 }

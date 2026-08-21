@@ -24,14 +24,14 @@ use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
 
 use super::{
-    ExecuteOperation, GetFolders, GetOperationHistory, LoadSettings, ManageFolders, SaveSettings,
-    UndoOperation,
+    ExecuteOperation, GetFolders, GetOperationHistory, LoadSettings, ManageFolders,
+    PluginInfoDto, PluginManager, SaveSettings, UndoOperation,
 };
 use crate::use_cases::{
     ExecuteOperationUseCase, GetFoldersUseCase, GetOperationHistoryUseCase, LoadSettingsUseCase,
-    ManageFoldersUseCase, SaveSettingsUseCase, UndoOperationUseCase,
+    ManageFoldersUseCase, PluginManagerUseCase, SaveSettingsUseCase, UndoOperationUseCase,
 };
-use quicksort_domain::{Folder, FolderId, Operation, OperationId, Settings};
+use quicksort_domain::{Folder, FolderId, Operation, OperationId, PluginConfig, Settings};
 
 /// Combined implementation of all inbound ports.
 ///
@@ -54,6 +54,7 @@ pub struct ApplicationFacadeImpl {
     get_operation_history: Arc<GetOperationHistoryUseCase>,
     load_settings: Arc<LoadSettingsUseCase>,
     save_settings: Arc<SaveSettingsUseCase>,
+    plugin_manager: Option<Arc<PluginManagerUseCase>>,
 }
 
 impl ApplicationFacadeImpl {
@@ -74,7 +75,13 @@ impl ApplicationFacadeImpl {
             get_operation_history,
             load_settings,
             save_settings,
+            plugin_manager: None,
         }
+    }
+
+    pub fn with_plugin_manager(mut self, plugin_manager: Arc<PluginManagerUseCase>) -> Self {
+        self.plugin_manager = Some(plugin_manager);
+        self
     }
 }
 
@@ -150,5 +157,69 @@ impl SaveSettings for ApplicationFacadeImpl {
     /// Delegates to `SaveSettingsUseCase::save_settings`.
     async fn save_settings(&self, settings: Settings) -> Result<(), UseCaseError> {
         self.save_settings.save_settings(settings).await
+    }
+}
+
+#[async_trait]
+impl PluginManager for ApplicationFacadeImpl {
+    async fn list_plugins(&self) -> Result<Vec<PluginInfoDto>, UseCaseError> {
+        self.plugin_manager
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Plugin manager not configured".to_string(),
+            ))?
+            .list_plugins()
+            .await
+    }
+
+    async fn get_plugin_config(
+        &self,
+        plugin_id: &str,
+    ) -> Result<PluginConfig, UseCaseError> {
+        self.plugin_manager
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Plugin manager not configured".to_string(),
+            ))?
+            .get_plugin_config(plugin_id)
+            .await
+    }
+
+    async fn save_plugin_config(
+        &self,
+        plugin_id: &str,
+        config: PluginConfig,
+    ) -> Result<(), UseCaseError> {
+        self.plugin_manager
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Plugin manager not configured".to_string(),
+            ))?
+            .save_plugin_config(plugin_id, config)
+            .await
+    }
+
+    async fn set_plugin_enabled(
+        &self,
+        plugin_id: &str,
+        enabled: bool,
+    ) -> Result<(), UseCaseError> {
+        self.plugin_manager
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Plugin manager not configured".to_string(),
+            ))?
+            .set_plugin_enabled(plugin_id, enabled)
+            .await
+    }
+
+    async fn rescan_plugins(&self) -> Result<Vec<PluginInfoDto>, UseCaseError> {
+        self.plugin_manager
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Plugin manager not configured".to_string(),
+            ))?
+            .rescan_plugins()
+            .await
     }
 }
