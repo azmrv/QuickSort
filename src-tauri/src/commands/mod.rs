@@ -3,6 +3,7 @@ use quicksort_application::{
     ExecuteOperation, Folder, FolderId, GetFolders, GetOperationHistory, LoadSettings,
     ManageFolders, OperationId, SaveSettings, Settings, UndoOperation, WindowsPath,
 };
+use std::path::PathBuf;
 use tauri::State;
 
 #[tauri::command]
@@ -216,4 +217,83 @@ pub async fn get_operations(
         Err(e) => tracing::error!(command = "get_operations", error = %e, "FAIL"),
     }
     result
+}
+
+/// Launch TeraCopy with the given file list.
+///
+/// Writes file paths to a temp file and invokes TeraCopy.
+/// Supports TeraCopy 3.17 and 4.0.
+#[tauri::command]
+pub async fn launch_teracopy(files: Vec<String>) -> Result<(), String> {
+    tracing::info!(command = "launch_teracopy", count = files.len(), "handling");
+
+    // Default TeraCopy paths
+    let teracopy_paths = [
+        "C:\\Program Files\\TeraCopy\\TeraCopy.exe",
+        "C:\\Program Files (x86)\\TeraCopy\\TeraCopy.exe",
+    ];
+
+    let teracopy_exe = teracopy_paths
+        .iter()
+        .find(|p| PathBuf::from(p).exists())
+        .ok_or("TeraCopy not found at standard paths")?;
+
+    // Write file list to temp file (Windows-1251 encoding for TeraCopy compatibility)
+    let temp_dir = std::env::temp_dir();
+    let list_path = temp_dir.join("quicksort_tc_list.txt");
+    let content = files.join("\n");
+    std::fs::write(&list_path, &content)
+        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+    // Launch TeraCopy
+    std::process::Command::new(teracopy_exe)
+        .arg("AddList")
+        .arg(format!("*\"{}\"", list_path.to_string_lossy()))
+        .spawn()
+        .map_err(|e| format!("Failed to launch TeraCopy: {}", e))?;
+
+    tracing::info!(command = "launch_teracopy", "OK");
+    Ok(())
+}
+
+/// Check if TeraCopy is installed on the system.
+#[tauri::command]
+pub fn check_teracopy_installed() -> bool {
+    let teracopy_paths = [
+        "C:\\Program Files\\TeraCopy\\TeraCopy.exe",
+        "C:\\Program Files (x86)\\TeraCopy\\TeraCopy.exe",
+    ];
+    teracopy_paths
+        .iter()
+        .any(|p| PathBuf::from(p).exists())
+}
+
+/// Create a new folder in the specified parent directory.
+///
+/// Returns the path of the created folder.
+#[tauri::command]
+pub async fn create_new_folder(parent_path: String, folder_name: String) -> Result<String, String> {
+    tracing::info!(
+        command = "create_new_folder",
+        parent = %parent_path,
+        name = %folder_name,
+        "handling"
+    );
+
+    let parent = PathBuf::from(&parent_path);
+    if !parent.exists() {
+        return Err(format!("Parent directory does not exist: {}", parent_path));
+    }
+
+    let new_folder = parent.join(&folder_name);
+    if new_folder.exists() {
+        return Err(format!("Folder already exists: {}", new_folder.display()));
+    }
+
+    std::fs::create_dir(&new_folder)
+        .map_err(|e| format!("Failed to create folder: {}", e))?;
+
+    let path_str = new_folder.to_string_lossy().to_string();
+    tracing::info!(command = "create_new_folder", path = %path_str, "OK");
+    Ok(path_str)
 }

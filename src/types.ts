@@ -24,3 +24,14 @@ export interface OperationResult {
     processed_files: number;
     bytes_moved: number;
 }
+
+export type ConflictResolution = 'Skip' | 'AddWithTimestamp' | 'Replace' | 'Rename' | 'Cancel' | 'Ask';
+
+export interface ConflictContext {
+    remembered: ConflictResolution | null;
+    is_chosen: boolean;
+    files_processed: number;
+    files_skipped: number;
+    files_renamed: number;
+    files_overwritten: number;
+}

@@ -25,9 +25,9 @@ pub mod events;
 pub mod value_objects;
 
 pub use entities::{
-    DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, DuplicateCheckMode,
-    DuplicateCheckResult, DuplicateChecker, Folder, Operation, OperationState, OperationType,
-    Settings,
+    ConflictContext, ConflictResolution, ConflictStats, DefaultOperation, DefaultOverwritePolicy,
+    DuplicateCheckConfig, DuplicateCheckMode, DuplicateCheckResult, DuplicateChecker, Folder,
+    Operation, OperationState, OperationType, Settings,
 };
 pub use errors::DomainError;
 pub use events::DomainEvent;

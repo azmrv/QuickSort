@@ -178,6 +178,9 @@ fn start_tauri() {
             commands::get_settings,
             commands::save_settings,
             commands::get_operations,
+            commands::launch_teracopy,
+            commands::check_teracopy_installed,
+            commands::create_new_folder,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());
