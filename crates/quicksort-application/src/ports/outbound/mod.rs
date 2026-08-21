@@ -19,6 +19,7 @@ mod clock; // Clock – current time
 mod configuration_repository; // ConfigurationRepository – folder CRUD
 mod conflict_resolver;
 mod duplicate_detection; // DuplicateDetectionPort – duplicate file checking
+mod file_search; // FileSearchPort – file system search
 mod file_system; // FileSystem – file I/O operations
 mod id_generator; // IdGenerator – unique identifier generation
 mod operation_repository; // OperationRepository – operation history persistence
@@ -30,6 +31,7 @@ pub use clock::Clock;
 pub use configuration_repository::ConfigurationRepository;
 pub use conflict_resolver::ConflictResolver;
 pub use duplicate_detection::DuplicateDetectionPort;
+pub use file_search::{FileSearchPort, FileSearchResult, SearchResult};
 pub use file_system::FileSystem;
 pub use id_generator::IdGenerator;
 pub use operation_repository::OperationRepository;

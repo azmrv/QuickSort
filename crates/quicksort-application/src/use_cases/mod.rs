@@ -12,6 +12,7 @@
 //! - `manage_folders`     – CRUD operations on folders
 //! - `settings`           – Load and save user settings
 //! - `plugin_manager`     – List, enable, disable plugins
+//! - `search_files`       – Search files by query
 //!
 //! All use cases are re-exported for convenient access by the application facade.
 
@@ -22,6 +23,7 @@ mod get_folders; // GetFoldersUseCase – list all configured folders
 mod get_operation_history; // GetOperationHistoryUseCase – retrieve operation history
 mod manage_folders;
 mod plugin_manager; // PluginManagerUseCase – plugin lifecycle management
+mod search_files; // SearchFilesUseCase – search files by query
 mod settings; // LoadSettingsUseCase, SaveSettingsUseCase – user settings
 mod undo_operation; // UndoOperationUseCase – revert completed operations
 
@@ -32,5 +34,6 @@ pub use get_folders::GetFoldersUseCase;
 pub use get_operation_history::GetOperationHistoryUseCase;
 pub use manage_folders::ManageFoldersUseCase;
 pub use plugin_manager::{PluginConfigRepository, PluginLoader, PluginManagerUseCase};
+pub use search_files::{SearchFiles, SearchFilesUseCase};
 pub use settings::{LoadSettingsUseCase, SaveSettingsUseCase};
 pub use undo_operation::UndoOperationUseCase;

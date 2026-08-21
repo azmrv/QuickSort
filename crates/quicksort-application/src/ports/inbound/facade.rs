@@ -10,6 +10,8 @@ use crate::ports::inbound::{
     ExecuteOperation, GetFolders, GetOperationHistory, ManageFolders, PluginInfoDto, PluginManager,
     UndoOperation,
 };
+use crate::ports::outbound::SearchResult;
+use crate::use_cases::SearchFiles;
 
 /// Unified facade combining all inbound operations.
 pub struct ApplicationFacade {
@@ -21,6 +23,7 @@ pub struct ApplicationFacade {
     load_settings: Option<Arc<dyn crate::ports::inbound::LoadSettings>>,
     save_settings: Option<Arc<dyn crate::ports::inbound::SaveSettings>>,
     plugin_manager: Option<Arc<dyn PluginManager>>,
+    search_files: Option<Arc<dyn SearchFiles>>,
 }
 
 impl ApplicationFacade {
@@ -40,6 +43,7 @@ impl ApplicationFacade {
             load_settings: None,
             save_settings: None,
             plugin_manager: None,
+            search_files: None,
         }
     }
 
@@ -58,6 +62,14 @@ impl ApplicationFacade {
         plugin_manager: Arc<dyn PluginManager>,
     ) -> Self {
         self.plugin_manager = Some(plugin_manager);
+        self
+    }
+
+    pub fn with_search_files(
+        mut self,
+        search_files: Arc<dyn SearchFiles>,
+    ) -> Self {
+        self.search_files = Some(search_files);
         self
     }
 
@@ -173,6 +185,20 @@ impl ApplicationFacade {
                 "Plugin manager not configured".to_string(),
             ))?
             .rescan_plugins()
+            .await
+    }
+
+    pub async fn search_files(
+        &self,
+        query: &str,
+        directories: &[String],
+    ) -> Result<SearchResult, UseCaseError> {
+        self.search_files
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Search not configured".to_string(),
+            ))?
+            .search(query, directories)
             .await
     }
 }
