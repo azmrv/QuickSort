@@ -1,4 +1,4 @@
-QuickSort License (Non-Commercial)
+QuickSort License (No-Sell)
 
 Copyright (c) 2025 azmrv (https://github.com/azmrv)
 Telegram: https://t.me/Fib511
@@ -9,12 +9,16 @@ in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, subject to the following conditions:
 
-1. NON-COMMERCIAL USE ONLY
-   The Software may not be used for commercial purposes or for profit.
-   "Commercial purposes" include but are not limited to:
-   - Selling the Software or derivative works
-   - Using the Software in a product or service that generates revenue
-   - Using the Software in a business or enterprise environment
+1. NO SELLING OR PROFIT
+   You may NOT sell the Software or derivative works, or receive any
+   financial gain from its distribution. This includes but is not limited to:
+   - Selling copies of the Software
+   - Selling products that include the Software
+   - Receiving payment for providing the Software as a service
+
+   You ARE allowed to use the Software in commercial companies and
+   business environments for internal use, provided you comply with
+   the attribution requirement below.
 
 2. ATTRIBUTION REQUIREMENT
    The above copyright notice and this permission notice must be included
@@ -34,4 +38,4 @@ copies of the Software, subject to the following conditions:
    ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
    OTHER DEALINGS IN THE SOFTWARE.
 
-For commercial licensing inquiries, contact: https://t.me/Fib511
+For licensing inquiries, contact: https://t.me/Fib511
