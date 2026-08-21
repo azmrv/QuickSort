@@ -4,6 +4,7 @@ use thiserror::Error;
 use windows::core::Error as WindowsError;
 
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum PipeError {
     #[error("Pipe not available")]
     Unavailable,

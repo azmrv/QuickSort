@@ -34,7 +34,7 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreatePopupMenu, InsertMenuItemW, InsertMenuW, MessageBoxW, HMENU, MB_OK, MENUITEMINFOW,
-    MFS_ENABLED, MF_BYPOSITION, MF_POPUP, MFT_SEPARATOR, MIIM_FTYPE, MIIM_ID, MIIM_STATE,
+    MFS_ENABLED, MFT_SEPARATOR, MF_BYPOSITION, MF_POPUP, MIIM_FTYPE, MIIM_ID, MIIM_STATE,
     MIIM_STRING,
 };
 
@@ -80,6 +80,7 @@ pub const CLSID_QUICKSORT: GUID = GUID::from_u128(0x12345678_1234_1234_1234_1234
 
 // Simple folder struct for menu building
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct MenuFolder {
     id: String,
     name: String,
@@ -263,7 +264,10 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         let separator_and_all = if has_all_folders_entry { 2 } else { 0 };
         let available = max_cmd_id.saturating_sub(min_cmd_id) + 1;
 
-        let max_fav = std::cmp::min(favorites.len() as u32, available.saturating_sub(separator_and_all));
+        let max_fav = std::cmp::min(
+            favorites.len() as u32,
+            available.saturating_sub(separator_and_all),
+        );
 
         unsafe {
             let h_submenu = CreatePopupMenu().unwrap();
@@ -271,8 +275,16 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
 
             for folder in favorites.iter().take(max_fav as usize) {
                 let label = format!("\u{2605} {}", folder.name);
-                let wide: Vec<u16> = OsString::from(&label).encode_wide().chain(Some(0)).collect();
-                let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &make_menu_item(current_id, &wide));
+                let wide: Vec<u16> = OsString::from(&label)
+                    .encode_wide()
+                    .chain(Some(0))
+                    .collect();
+                let _ = InsertMenuItemW(
+                    h_submenu,
+                    0xFFFFFFFF,
+                    true,
+                    &make_menu_item(current_id, &wide),
+                );
                 current_id += 1;
                 used += 1;
             }
@@ -284,12 +296,27 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             }
 
             if has_all_folders_entry && used < available {
-                let all_wide: Vec<u16> = w!("Все папки...").as_wide().iter().copied().chain(Some(0)).collect();
-                let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &make_menu_item(current_id, &all_wide));
+                let all_wide: Vec<u16> = w!("Все папки...")
+                    .as_wide()
+                    .iter()
+                    .copied()
+                    .chain(Some(0))
+                    .collect();
+                let _ = InsertMenuItemW(
+                    h_submenu,
+                    0xFFFFFFFF,
+                    true,
+                    &make_menu_item(current_id, &all_wide),
+                );
                 used += 1;
             }
 
-            let root_wide: Vec<u16> = w!("QuickSort").as_wide().iter().copied().chain(Some(0)).collect();
+            let root_wide: Vec<u16> = w!("QuickSort")
+                .as_wide()
+                .iter()
+                .copied()
+                .chain(Some(0))
+                .collect();
             let root_pwstr = PWSTR::from_raw(root_wide.as_ptr() as *mut _);
             let _ = InsertMenuW(
                 menu,
@@ -339,7 +366,8 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 Err(e) => {
                     log::error!("Move failed: {}", e);
                     let msg = format!("QuickSort: {}", e);
-                    let wide_msg: Vec<u16> = OsString::from(&msg).encode_wide().chain(Some(0)).collect();
+                    let wide_msg: Vec<u16> =
+                        OsString::from(&msg).encode_wide().chain(Some(0)).collect();
                     unsafe {
                         MessageBoxW(None, PCWSTR(wide_msg.as_ptr()), w!("QuickSort"), MB_OK);
                     }
@@ -348,9 +376,13 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         } else if verb == all_folders_cmd {
             for path in self.this.item_paths.borrow().iter() {
                 let exe_path = get_quicksort_exe_path();
-                let exe_wide: Vec<u16> = exe_path.as_os_str().encode_wide().chain(Some(0)).collect();
+                let exe_wide: Vec<u16> =
+                    exe_path.as_os_str().encode_wide().chain(Some(0)).collect();
                 let params = format!("select-folder --file \"{}\"", path.display());
-                let params_wide: Vec<u16> = OsString::from(&params).encode_wide().chain(Some(0)).collect();
+                let params_wide: Vec<u16> = OsString::from(&params)
+                    .encode_wide()
+                    .chain(Some(0))
+                    .collect();
                 unsafe {
                     let _ = windows::Win32::UI::Shell::ShellExecuteW(
                         None,
@@ -406,6 +438,7 @@ fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
     }
 
     #[derive(serde::Deserialize)]
+    #[allow(dead_code)]
     struct FolderData {
         id: String,
         name: String,

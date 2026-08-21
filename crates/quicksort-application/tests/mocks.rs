@@ -17,12 +17,12 @@
 //! to keep them simple and synchronous. Since all test scenarios are
 //! single-threaded or use `tokio::task::spawn_blocking`, this is safe.
 
-use quicksort_application::OperationCommand;
-use quicksort_application::UseCaseError;
+use async_trait::async_trait;
 use quicksort_application::ports::outbound::{
     Clock, ConfigurationRepository, ConflictResolver, FileSystem, IdGenerator, OperationRepository,
 };
-use async_trait::async_trait;
+use quicksort_application::OperationCommand;
+use quicksort_application::UseCaseError;
 use quicksort_domain::{Folder, FolderId, Operation, OperationId, WindowsPath};
 use std::collections::HashMap;
 use std::path::PathBuf;

@@ -146,7 +146,10 @@ mod tests {
         OperationCommand {
             operation_type: OperationType::Move,
             source_paths: vec![WindowsPath::new("C:\\test.txt").unwrap()],
-            target_folder_id: Some(quicksort_domain::FolderId::from_string("00000000-0000-0000-0000-000000000001").unwrap()),
+            target_folder_id: Some(
+                quicksort_domain::FolderId::from_string("00000000-0000-0000-0000-000000000001")
+                    .unwrap(),
+            ),
             overwrite_policy: OverwritePolicy::Skip,
             target_paths: None,
         }

@@ -1,5 +1,7 @@
 //! Windows Shell Extension DLL entry points.
 
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 mod pipe_client;
 mod shellext;
 
@@ -20,27 +22,23 @@ pub extern "system" fn DllGetClassObject(
     ppv: *mut *mut core::ffi::c_void,
 ) -> HRESULT {
     if ppv.is_null() {
-        return E_POINTER.into();
+        return E_POINTER;
     }
     unsafe {
         *ppv = ptr::null_mut();
     }
 
     if rclsid.is_null() || riid.is_null() {
-        return E_INVALIDARG.into();
+        return E_INVALIDARG;
     }
 
     if unsafe { *rclsid } != CLSID_QUICKSORT {
-        return CLASS_E_CLASSNOTAVAILABLE.into();
+        return CLASS_E_CLASSNOTAVAILABLE;
     }
 
-    // 1. Create the class factory
-    let factory = QuickSortClassFactory::default();
-
-    // 2. Convert to IUnknown
+    let factory = QuickSortClassFactory;
     let unknown: IUnknown = factory.into();
 
-    // 3. Query the requested interface using the official method
     unsafe { unknown.query(riid, ppv) }
 }
 

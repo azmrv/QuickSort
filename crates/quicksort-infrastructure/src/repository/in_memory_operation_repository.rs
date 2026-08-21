@@ -28,6 +28,12 @@ impl InMemoryOperationRepository {
     }
 }
 
+impl Default for InMemoryOperationRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl OperationRepository for InMemoryOperationRepository {
     async fn find_by_id(&self, id: &OperationId) -> Result<Option<Operation>, UseCaseError> {

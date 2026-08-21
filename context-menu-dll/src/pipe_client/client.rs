@@ -70,6 +70,7 @@ pub fn move_to_folder(
     send_command(&cmd)
 }
 
+#[allow(dead_code)]
 pub fn ping() -> Result<ResponseMessage, PipeError> {
     send_command(&CommandMessage::Ping)
 }

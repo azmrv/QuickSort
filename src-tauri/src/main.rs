@@ -84,20 +84,10 @@ fn ensure_dll_copied() {
     };
 
     match std::fs::copy(&source, &dest) {
-        Ok(bytes) => tracing::info!(source = %source.display(), dest = %dest.display(), bytes, "DLL copied"),
+        Ok(bytes) => {
+            tracing::info!(source = %source.display(), dest = %dest.display(), bytes, "DLL copied")
+        }
         Err(e) => tracing::error!(error = %e, "failed to copy DLL"),
-    }
-}
-
-fn ensure_com_registered() {
-    if com::is_registered() {
-        tracing::info!("COM already registered");
-        return;
-    }
-    tracing::info!("COM not registered — registering now");
-    match com::register() {
-        Ok(()) => tracing::info!("COM registered successfully (auto)"),
-        Err(e) => tracing::error!(error = %e, "auto COM registration failed"),
     }
 }
 

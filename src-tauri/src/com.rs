@@ -13,7 +13,11 @@ pub fn is_registered() -> bool {
 
 pub fn dll_path() -> Option<PathBuf> {
     let appdata = std::env::var("APPDATA").ok()?;
-    Some(PathBuf::from(appdata).join("QuickSort").join("context_menu_dll.dll"))
+    Some(
+        PathBuf::from(appdata)
+            .join("QuickSort")
+            .join("context_menu_dll.dll"),
+    )
 }
 
 pub fn register() -> Result<(), String> {

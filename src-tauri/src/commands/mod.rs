@@ -98,7 +98,9 @@ pub async fn execute_operation_v2(
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(r) => tracing::info!(command = "execute_operation_v2", state = ?r.state, files = r.processed_files, "OK"),
+        Ok(r) => {
+            tracing::info!(command = "execute_operation_v2", state = ?r.state, files = r.processed_files, "OK")
+        }
         Err(e) => tracing::error!(command = "execute_operation_v2", error = %e, "FAIL"),
     }
     result

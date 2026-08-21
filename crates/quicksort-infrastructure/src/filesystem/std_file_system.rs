@@ -17,6 +17,12 @@ impl StdFileSystem {
     }
 }
 
+impl Default for StdFileSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl FileSystem for StdFileSystem {
     async fn exists(&self, path: &WindowsPath) -> Result<bool, UseCaseError> {
