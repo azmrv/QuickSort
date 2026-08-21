@@ -6,6 +6,7 @@ pub mod duplicate_checker;
 pub mod errors;
 pub mod filesystem;
 pub mod id_generator;
+pub mod plugin;
 pub mod repository;
 
 // Re-export commonly used implementations.
@@ -15,6 +16,7 @@ pub use duplicate_checker::{ContentChecker, DuplicateDetectionAdapter, NameCheck
 pub use errors::{ErrorConverter, InfrastructureError};
 pub use filesystem::StdFileSystem;
 pub use id_generator::UuidGenerator;
+pub use plugin::{WcxPluginAdapter, WcxPluginLoader};
 pub use repository::{
     JsonConfigurationRepository, JsonOperationRepository, JsonSettingsRepository,
 };
