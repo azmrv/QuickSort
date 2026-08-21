@@ -4,12 +4,15 @@ We utilize distinct error handling patterns tailored specifically to the require
 
 ## Domain Layer
 
-Within the Domain layer, we rely exclusively on our own custom `DomainError` type. This is a pure Rust enum containing variants that explicitly describe business rule violations. Examples include:
+Within the Domain layer, we rely exclusively on our own custom `DomainError` type. This is a pure Rust enum containing variants that explicitly describe business rule violations. We use the `thiserror` crate for `Display` derivation. Examples include:
 - `InvalidFolderName`
 - `FolderNotFound`
-- `OperationNotAllowed`
+- `OperationNotFound`
+- `Conflict`
+- `PermissionDenied`
+- `InvalidStateTransition`
 
-This enum is completely self-contained and must not depend on any third-party external crates (relying solely on the Rust standard library). We strictly prohibit the use of helper crates like `anyhow` or `thiserror` within the Domain boundary.
+This enum is completely self-contained and must not depend on any infrastructure-specific crates (no `uuid`, `chrono`, `serde`, or framework dependencies). We strictly prohibit the use of helper crates like `anyhow` within the Domain boundary.
 
 ## Application Layer
 

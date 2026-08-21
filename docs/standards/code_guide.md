@@ -50,4 +50,4 @@
 
 ## 5. Форматирование
 - `cargo fmt`, `cargo clippy -- -D warnings`
-- `npm run prettier`, `npm run lint`
+- Фронтенд: нет npm-скриптов для lint/format; используй IDE-плагины или вызывай форматирование вручную

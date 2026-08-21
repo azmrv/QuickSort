@@ -1,6 +1,6 @@
 # Domain Models & Invariants Specification
 
-This document defines the core aggregates, entities, and value objects within the pure Domain layer. These structures are business‑rule driven and have zero technical dependencies (no `uuid`, `chrono`, `serde`, etc.). All identifiers are plain strings; generation is delegated to the `IdGenerator` port (infrastructure).
+This document defines the core aggregates, entities, and value objects within the Domain layer. These structures are business‑rule driven and depend only on well-known crates (`chrono`, `serde`, `thiserror`) that do not impose architectural constraints. All identifiers are plain strings; generation is delegated to the `IdGenerator` port (infrastructure).
 
 ---
 
@@ -65,28 +65,22 @@ impl WindowsPath {
 Identifiers are plain strings. The domain does not generate them; generation is injected via the `IdGenerator` port. This keeps the domain independent of any specific ID generation strategy (UUID, ULID, snowflake, etc.).
 
 ```rust
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FolderId(String);
 
 impl FolderId {
-    pub fn from_string(s: impl Into<String>) -> Self {
-        Self(s.into())
-    }
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
+    pub fn new() -> Self { /* generates UUID v7 */ }
+    pub fn from_string(s: impl Into<String>) -> Self { Self(s.into()) }
+    pub fn as_str(&self) -> &str { &self.0 }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct OperationId(String);
 
 impl OperationId {
-    pub fn from_string(s: impl Into<String>) -> Self {
-        Self(s.into())
-    }
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
+    pub fn new() -> Self { /* generates UUID v7 */ }
+    pub fn from_string(s: impl Into<String>) -> Self { Self(s.into()) }
+    pub fn as_str(&self) -> &str { &self.0 }
 }
 ```
 
@@ -96,48 +90,48 @@ impl OperationId {
 
 ### `Folder`
 
-A folder is a configuration asset. It has a name, a path, and a favourite flag. It is not an aggregate root; it is managed by the configuration repository.
+A folder is a configuration asset. It has a name, a path, usage statistics, and timestamps. It is not an aggregate root; it is managed by the configuration repository.
 
 ```rust
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Folder {
     pub id: FolderId,
     pub name: String,
     pub path: WindowsPath,
-    pub is_favorite: bool,
-    pub sort_order: i32,
+    #[serde(default)]
+    pub favorite: bool,
+    #[serde(default)]
+    pub order: u32,
+    #[serde(default)]
+    pub stats: FolderStats,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FolderStats {
+    pub use_count: u64,
+    pub last_used: Option<DateTime<Utc>>,
 }
 
 impl Folder {
-    pub fn new(id: FolderId, name: String, path: WindowsPath) -> Self {
-        Self {
-            id,
-            name,
-            path,
-            is_favorite: false,
-            sort_order: 0,
-        }
-    }
+    /// Creates a new folder with a generated ID and current timestamps.
+    pub fn new(name: impl Into<String>, path: WindowsPath) -> Self { /* ... */ }
 
-    /// Business invariant: a folder cannot be a root drive (e.g., "C:\").
-    /// This prevents the user from accidentally selecting the entire drive.
-    pub fn validate(&self) -> Result<(), DomainError> {
-        if self.path.is_root() {
-            return Err(DomainError::IllegalDirectoryTarget);
-        }
-        Ok(())
-    }
+    /// Creates a new folder with an explicit ID (useful for testing).
+    pub fn with_id(id: FolderId, name: impl Into<String>, path: WindowsPath) -> Self { /* ... */ }
 
-    /// Toggles the favourite status and updates the sort order.
-    pub fn toggle_favorite(&mut self, order: i32) {
-        self.is_favorite = !self.is_favorite;
-        self.sort_order = if self.is_favorite { order } else { 0 };
-    }
+    /// Updates the folder name. Returns DomainError::InvalidFolderName if empty.
+    pub fn update_name(&mut self, name: impl Into<String>) -> Result<(), DomainError> { /* ... */ }
 
-    /// Renames the folder.
-    pub fn rename(&mut self, new_name: String) {
-        self.name = new_name;
-    }
+    /// Updates the folder path. Returns DomainError::IllegalDirectoryTarget if root.
+    pub fn update_path(&mut self, new_path: WindowsPath) -> Result<(), DomainError> { /* ... */ }
+
+    /// Toggles the favorite status.
+    pub fn toggle_favorite(&mut self) { /* ... */ }
+
+    /// Records that this folder was used for an operation.
+    pub fn record_usage(&mut self) { /* ... */ }
 }
 ```
 
@@ -146,7 +140,7 @@ impl Folder {
 The operation is the central entity of the system. It tracks its own state machine, lifecycle, and collects domain events for later dispatch.
 
 ```rust
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OperationType {
     Move,
     Copy,
@@ -154,13 +148,13 @@ pub enum OperationType {
     Rename,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OperationState {
     Pending,
     Executing,
     Completed {
         processed_files: u32,
-        bytes_moved: u64,
+        bytes_processed: u64,  // renamed from bytes_moved for Copy support
     },
     Failed {
         reason: String,
@@ -168,116 +162,36 @@ pub enum OperationState {
     Undone,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Operation {
     pub id: OperationId,
     pub operation_type: OperationType,
     pub state: OperationState,
     pub source_paths: Vec<WindowsPath>,
-    pub target_folder_path: Option<WindowsPath>, // None for Delete operations
-    pub created_at: std::time::SystemTime,
-    pub updated_at: std::time::SystemTime,
-    events: Vec<DomainEvent>,
+    pub target_folder_path: Option<WindowsPath>,    // for Move/Copy
+    pub target_paths: Option<Vec<WindowsPath>>,      // for Rename
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    #[serde(skip)]
+    pub(crate) events: Vec<DomainEvent>,
 }
 
 impl Operation {
-    /// Creates a new operation in the Pending state.
-    pub fn new(
-        id: OperationId,
-        op_type: OperationType,
-        source_paths: Vec<WindowsPath>,
-        target: Option<WindowsPath>,
-        now: std::time::SystemTime,
-    ) -> Self {
-        Self {
-            id,
-            operation_type: op_type,
-            state: OperationState::Pending,
-            source_paths,
-            target_folder_path: target,
-            created_at: now,
-            updated_at: now,
-            events: Vec::new(),
-        }
-    }
+    pub fn new(id, op_type, source_paths, target, target_paths, now: DateTime<Utc>) -> Self { /* ... */ }
 
-    /// Clears and returns all collected domain events (Clear-on-Read Pattern).
-    pub fn pull_events(&mut self) -> Vec<DomainEvent> {
-        std::mem::take(&mut self.events)
-    }
+    /// Factory methods for each operation type:
+    pub fn new_move(source: Vec<WindowsPath>, target: WindowsPath, now: DateTime<Utc>) -> Self { /* ... */ }
+    pub fn new_copy(source: Vec<WindowsPath>, target: WindowsPath, now: DateTime<Utc>) -> Self { /* ... */ }
+    pub fn new_delete(source: Vec<WindowsPath>, now: DateTime<Utc>) -> Self { /* ... */ }
+    pub fn new_rename(source: Vec<WindowsPath>, target: WindowsPath, now: DateTime<Utc>) -> Self { /* ... */ }
 
-    /// Returns true if the operation can be undone (only when Completed).
-    pub fn can_undo(&self) -> bool {
-        matches!(self.state, OperationState::Completed { .. })
-    }
+    pub fn pull_events(&mut self) -> Vec<DomainEvent> { /* ... */ }
 
-    /// Transitions the operation to Executing state.
-    pub fn start(&mut self, now: std::time::SystemTime) -> Result<(), DomainError> {
-        if !matches!(self.state, OperationState::Pending) {
-            return Err(DomainError::InvalidStateTransition);
-        }
-        self.state = OperationState::Executing;
-        self.updated_at = now;
-
-        self.events.push(DomainEvent::OperationStarted {
-            operation_id: self.id.clone(),
-            op_type: self.operation_type.clone(),
-        });
-        Ok(())
-    }
-
-    /// Transitions the operation to Completed state.
-    pub fn complete(
-        &mut self,
-        files: u32,
-        bytes: u64,
-        now: std::time::SystemTime,
-    ) -> Result<(), DomainError> {
-        if !matches!(self.state, OperationState::Executing) {
-            return Err(DomainError::InvalidStateTransition);
-        }
-        self.state = OperationState::Completed {
-            processed_files: files,
-            bytes_moved: bytes,
-        };
-        self.updated_at = now;
-
-        self.events.push(DomainEvent::OperationCompleted {
-            operation_id: self.id.clone(),
-            files,
-            bytes,
-        });
-        Ok(())
-    }
-
-    /// Transitions the operation to Failed state.
-    pub fn fail(&mut self, reason: String, now: std::time::SystemTime) -> Result<(), DomainError> {
-        if !matches!(self.state, OperationState::Pending | OperationState::Executing) {
-            return Err(DomainError::InvalidStateTransition);
-        }
-        self.state = OperationState::Failed { reason: reason.clone() };
-        self.updated_at = now;
-
-        self.events.push(DomainEvent::OperationFailed {
-            operation_id: self.id.clone(),
-            reason,
-        });
-        Ok(())
-    }
-
-    /// Transitions the operation to Undone state.
-    pub fn mark_undone(&mut self, now: std::time::SystemTime) -> Result<(), DomainError> {
-        if !matches!(self.state, OperationState::Completed { .. }) {
-            return Err(DomainError::InvalidStateTransition);
-        }
-        self.state = OperationState::Undone;
-        self.updated_at = now;
-
-        self.events.push(DomainEvent::OperationUndone {
-            operation_id: self.id.clone(),
-        });
-        Ok(())
-    }
+    // State transitions — no `now` parameter, uses Utc::now() internally:
+    pub fn start(&mut self) -> Result<(), DomainError> { /* ... */ }
+    pub fn complete(&mut self, files: u32, bytes: u64) -> Result<(), DomainError> { /* ... */ }
+    pub fn fail(&mut self, reason: String) -> Result<(), DomainError> { /* ... */ }
+    pub fn mark_undone(&mut self) -> Result<(), DomainError> { /* ... */ }
 }
 ```
 
@@ -328,15 +242,40 @@ pub enum DomainEvent {
 
 ## 4. Domain Errors
 
-Core domain errors representing business rule violations.
+Core domain errors representing business rule violations. Uses `thiserror` for Display derivation.
 
 ```rust
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum DomainError {
+    #[error("Path is empty")]
     EmptyPath,
+
+    #[error("Invalid path: {0}")]
     InvalidPath(String),
+
+    #[error("Invalid folder name")]
+    InvalidFolderName,
+
+    #[error("Illegal target directory (root)")]
     IllegalDirectoryTarget,
+
+    #[error("Invalid operation state transition")]
     InvalidStateTransition,
+
+    #[error("Operation not found")]
+    OperationNotFound,
+
+    #[error("Folder not found")]
+    FolderNotFound,
+
+    #[error("Conflict: {0}")]
+    Conflict(String),
+
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
+
+    #[error("Internal domain error: {0}")]
+    Internal(String),
 }
 ```
 
@@ -344,11 +283,12 @@ pub enum DomainError {
 
 ## 5. Why This Design
 
-- **Zero external dependencies** – the domain crate contains only `std` and its own types. No `uuid`, `chrono`, `serde`, or any framework. This makes it trivial to test and reason about.
+- **Minimal external dependencies** – the domain crate depends only on well-known crates (`chrono`, `serde`, `thiserror`) that do not impose architectural constraints. No `uuid`, no framework dependencies.
 - **Plain identifiers** – `FolderId` and `OperationId` are strings. Generation is injected via a port, which allows swapping between UUID, ULID, or sequential IDs without touching domain code.
 - **State machine** – `Operation` has explicit state transitions (`start` → `complete` / `fail` → `undone`). This makes the lifecycle explicit and prevents invalid states.
 - **Domain events** – all events are in one enum. The Application layer produces these events based on state changes and returns them to the infrastructure.
 - **Event collection inside aggregate** – the operation collects events during state changes. The `pull_events()` method clears them, following the clear-on-read pattern.
+- **Serde support** – entities derive `Serialize`/`Deserialize` for JSON persistence, while keeping domain logic pure.
 
 ---
 

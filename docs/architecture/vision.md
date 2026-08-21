@@ -16,7 +16,7 @@ Currently, the system is capable of moving files. In the near future, it will ex
 
 ## High-Level Component Mapping
 
-*   **Domain:** Contains concrete entity models (`Operation`, `Folder`, `OperationHistory`), semantic Value Objects, `Domain Events`, and pure Domain Services.
+*   **Domain:** Contains concrete entity models (`Operation`, `Folder`), semantic Value Objects (`WindowsPath`, `FolderId`, `OperationId`), `Domain Events`, and pure Domain Services.
 *   **Application:** Exposes executable Use Cases (`ExecuteOperation`, `GetConfiguration`), declares stable abstract Ports (repositories, file-system interfaces, ID generators, internal system clocks), and manages the unified execution `Pipeline` (validation → conflict mitigation → execution).
 *   **Infrastructure:** Packs the physical adapters fulfilling the port agreements (flat-file JSON storage engines, OS operations routed via `std::fs`, background IPC channels, and system loggers).
 *   **Adapters:** Houses the consumer interfaces driving or consuming the app core: the React-based Tauri GUI, native Windows Explorer COM Shell Extensions, a command-line interface (CLI), and potential future REST APIs.

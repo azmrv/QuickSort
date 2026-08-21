@@ -17,6 +17,9 @@ Immutable log of strategic technical choices.
 *   **[004: Operations Primary](./adr/004-operations-primary.md):** Use-case orchestration rules.
 *   **[005: Domain Events](./adr/005-domain-events.md):** Decoupling side effects via internal publish-subscribe.
 *   **[006: Stable Ports](./adr/006-stable-ports.md):** Design principles for inbound and outbound abstractions.
+*   **[007: ApplicationFacade](./adr/007-application-facade.md):** Single entry point for all adapters.
+*   **[008: DTO Design](./adr/008-dto-design.md):** OperationCommand and OperationResult contracts.
+*   **[009: Legacy Migration](./adr/009-legacy-migration.md):** Incremental migration from monolith.
 *   **[Decisions Log](../decisions-log.md):** High-level chronological index of all approved ADRs.
 
 ### 📋 [Specifications](./specs/)
@@ -30,10 +33,11 @@ Coding rules and constraints enforced across the workspace.
 *   **[Testing](./standards/testing.md):** Unit testing rules for domain models and architecture validation (ArchUnit-like patterns).
 *   **[Architecture Guard](./standards/architecture_guard.py):** Automated Python script to enforce dependency rules in CI.
 
-### 🤖 [AI & Automation Context](./ai/)
+### 🤖 [AI & Automation Context](../opencode/)
 Prompts, instructions, and rules dedicated to AI agents working on this codebase.
-*   **[AI Guidelines](./ai/ai.md):** How LLMs must interact with this repository.
-*   **[Dev Rules](./ai/devrules/):** Automated rules injected into context windows for code generation.
+*   **[Agent Guide](../AGENTS.md):** Main entry document for AI agents.
+*   **[Agent Roles](./opencode/agents/roles/):** Specialized agent roles (architect, implementation, debug, etc.).
+*   **[Constitution](./opencode/agents/constitution.md):** Core thinking principles and engineering invariants (NOMAD).
 
 ---
 

@@ -169,24 +169,25 @@ Inbound ports use DTOs that are defined in the Application Layer. These DTOs are
 ```rust
 // File: crates/quicksort-application/src/dtos/operation_command.rs
 
-use quicksort_domain::value_objects::{FolderId, WindowsPath};
-use quicksort_domain::OperationType;
+use serde::{Deserialize, Serialize};
+use quicksort_domain::{FolderId, WindowsPath, OperationType};
 
 /// Command to execute a file operation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationCommand {
     pub operation_type: OperationType,
     pub source_paths: Vec<WindowsPath>,
-    pub target_folder_id: Option<FolderId>, // None for Delete or Rename
+    pub target_folder_id: Option<FolderId>,  // for Move/Copy
+    pub target_paths: Option<Vec<WindowsPath>>,  // for Rename
     pub overwrite_policy: OverwritePolicy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OverwritePolicy {
-    Skip,      // Do nothing if target exists
-    Overwrite, // Replace existing file
-    AutoRename,// Append suffix (e.g., "file (1).txt")
-    Ask,       // Defer to user (handled by ConflictResolver)
+    Skip,       // Do nothing if target exists
+    Overwrite,  // Replace existing file
+    AutoRename, // Append suffix (e.g., "file (1).txt")
+    Ask,        // Defer to user (handled by ConflictResolver)
 }
 ```
 
@@ -195,17 +196,16 @@ pub enum OverwritePolicy {
 ```rust
 // File: crates/quicksort-application/src/dtos/operation_result.rs
 
-use quicksort_domain::value_objects::OperationId;
-use quicksort_domain::OperationState;
+use serde::{Deserialize, Serialize};
+use quicksort_domain::{OperationId, OperationState};
 
 /// Result of a completed or failed operation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationResult {
     pub operation_id: OperationId,
     pub state: OperationState,
     pub processed_files: u32,
-    pub bytes_moved: u64,
-    // Additional details can be added (e.g., list of successful/failed paths)
+    pub bytes_moved: u64,  // retained for backward compatibility; may rename to bytes_processed
 }
 ```
 
