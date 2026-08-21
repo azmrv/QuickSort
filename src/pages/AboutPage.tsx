@@ -42,7 +42,7 @@ const AboutPage = () => {
                 color: 'var(--qs-text-muted)',
                 marginBottom: 'var(--qs-space-lg)',
             }}>
-                v0.2.0
+                v0.1.0
             </div>
             
             <p style={{
@@ -52,7 +52,7 @@ const AboutPage = () => {
                 marginBottom: 'var(--qs-space-xl)',
             }}>
                 Быстрая утилита для управления файлами через контекстное меню Проводника.
-                Перемещайте, копируйте и组织 файлы одним кликом.
+                Перемещайте файлы одним кликом.
             </p>
             
             <div style={{
@@ -62,7 +62,7 @@ const AboutPage = () => {
                 justifyContent: 'center',
             }}>
                 <a
-                    href="https://github.com/pr0math3us/quicksort"
+                    href="https://github.com/azmrv/QuickSort"
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
@@ -87,6 +87,32 @@ const AboutPage = () => {
                 >
                     GitHub
                 </a>
+                <a
+                    href="https://t.me/Fib511"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                        padding: 'var(--qs-space-sm) var(--qs-space-md)',
+                        background: 'var(--qs-bg-tertiary)',
+                        border: '1px solid var(--qs-border)',
+                        borderRadius: 'var(--qs-radius-md)',
+                        color: 'var(--qs-text-secondary)',
+                        fontFamily: 'var(--qs-font-mono)',
+                        fontSize: '12px',
+                        textDecoration: 'none',
+                        transition: 'all var(--qs-transition-fast)',
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--qs-accent)';
+                        e.currentTarget.style.color = 'var(--qs-accent)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--qs-border)';
+                        e.currentTarget.style.color = 'var(--qs-text-secondary)';
+                    }}
+                >
+                    Telegram
+                </a>
             </div>
             
             <div style={{
@@ -100,7 +126,7 @@ const AboutPage = () => {
                     fontSize: '11px',
                     color: 'var(--qs-text-muted)',
                 }}>
-                    Автор: pr0math3us
+                    Автор: azmrv (https://github.com/azmrv)
                 </div>
             </div>
         </div>
