@@ -20,6 +20,8 @@ No more dragging windows or hunting for directories.
 
 - **Cascading context menu** - favorite folders appear directly in Explorer (no UAC)
 - **Instant move** - one click moves files via atomic `rename`
+- **Duplicate detection** - pre-operation checks (by name, size, or SHA-256 hash)
+- **Configurable defaults** - default operation type, overwrite policy, and duplicate check mode
 - **All folders access** - "All folders..." opens the full folder list
 - **Folder editor** - add, rename, toggle favorites in a clean GUI
 - **Event log** - local history of all operations
@@ -64,7 +66,15 @@ The installer will be in `src-tauri/target/release/bundle`.
 1. Launch `QuickSort.exe` - icon appears in system tray
 2. Add folders, mark favorites with a star, click Apply
 3. Right-click any file in Explorer - pick a folder from the QuickSort menu
-4. Files move instantly. Close the window - app keeps running in tray.
+4. Files move instantly. Duplicate detection runs automatically.
+5. Close the window - app keeps running in tray.
+
+### Settings
+
+Configure defaults in the Settings tab:
+- **Default operation**: Move or Copy
+- **Overwrite policy**: Skip, Overwrite, or Auto-rename
+- **Duplicate check mode**: Name (fast), Size (medium), or Content/SHA-256 (thorough)
 
 ## Project Structure
 
