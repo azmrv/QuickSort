@@ -41,3 +41,6 @@ tempfile = "3"
 
 # Convenience error handling (used in tests; production code uses specific errors)
 anyhow = "1.0"
+
+# SHA-256 hashing for content-based duplicate detection
+sha2 = "0.10"
