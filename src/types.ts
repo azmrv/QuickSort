@@ -56,3 +56,22 @@ export interface PluginConfig {
     priority: number;
     custom_settings: Record<string, unknown>;
 }
+
+// ---------------------------------------------------------------------------
+// Search types
+// ---------------------------------------------------------------------------
+
+export interface FileSearchResult {
+    path: string;
+    name: string;
+    size: number;
+    is_directory: boolean;
+    modified_at: number | null;
+}
+
+export interface SearchResult {
+    files: FileSearchResult[];
+    total_count: number;
+    search_time_ms: number;
+    truncated: boolean;
+}
