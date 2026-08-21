@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
-    Manager,
+    Emitter, Manager,
 };
 
 use quicksort_application::{
@@ -105,7 +105,6 @@ fn start_tauri() {
     tracing::info!("startup");
 
     ensure_dll_copied();
-    ensure_com_registered();
 
     let config_dir = dirs::config_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -169,6 +168,30 @@ fn start_tauri() {
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());
+
+            let handle = app.handle().clone();
+            std::thread::Builder::new()
+                .name("com-register".into())
+                .spawn(move || {
+                    if com::is_registered() {
+                        tracing::info!("COM already registered");
+                        let _ = handle.emit("com-status", "active");
+                        return;
+                    }
+                    tracing::info!("COM not registered — registering now");
+                    let _ = handle.emit("com-status", "registering");
+                    match com::register() {
+                        Ok(()) => {
+                            tracing::info!("COM registered successfully");
+                            let _ = handle.emit("com-status", "active");
+                        }
+                        Err(e) => {
+                            tracing::error!(error = %e, "auto COM registration failed");
+                            let _ = handle.emit("com-status", "error");
+                        }
+                    }
+                })
+                .expect("failed to spawn COM register thread");
 
             let open = MenuItemBuilder::with_id("open", "Open editor").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Exit").build(app)?;

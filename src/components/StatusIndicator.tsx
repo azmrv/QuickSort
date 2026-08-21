@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '../lib/invoke';
 import { logger } from '../lib/logger';
+import { listen } from '@tauri-apps/api/event';
 
 const StatusIndicator: React.FC = () => {
     const [active, setActive] = useState(false);
@@ -12,6 +13,18 @@ const StatusIndicator: React.FC = () => {
                 logger.info('StatusIndicator', `menu: ${active ? 'active' : 'inactive'}`);
             })
             .catch(err => logger.error('StatusIndicator', 'check_menu_status failed', err));
+
+        const unlisten = listen<string>('com-status', (event) => {
+            const status = event.payload;
+            logger.info('StatusIndicator', `COM status event: ${status}`);
+            if (status === 'active') {
+                setActive(true);
+            } else if (status === 'error') {
+                setActive(false);
+            }
+        });
+
+        return () => { unlisten.then(fn => fn()); };
     }, []);
 
     return (
