@@ -60,7 +60,7 @@ Desktop.ini
 .opencode/
 AGENTS.md
 opencode/
-workflows/
+/workflows/
 tasks/
 
 # Documentation (except README and translations)
