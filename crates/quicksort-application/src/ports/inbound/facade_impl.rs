@@ -3,7 +3,7 @@
 //! # Design Decision
 //! The `ApplicationFacadeImpl` is a **single class** that implements all
 //! inbound ports (`ExecuteOperation`, `UndoOperation`, `GetFolders`,
-//! `ManageFolders`). This is intentional:
+//! `ManageFolders`, `LoadSettings`, `SaveSettings`). This is intentional:
 //! - Adapters (Tauri commands, IPC handlers) need only a single reference to
 //!   the facade, not to individual use cases.
 //! - It simplifies dependency injection and lifetime management.
@@ -23,12 +23,14 @@ use std::sync::Arc;
 use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
 
-// Импорт типов UseCase через прямые ре-экспорты из crate::use_cases
-use super::{ExecuteOperation, GetFolders, ManageFolders, UndoOperation};
-use crate::use_cases::{
-    ExecuteOperationUseCase, GetFoldersUseCase, ManageFoldersUseCase, UndoOperationUseCase,
+use super::{
+    ExecuteOperation, GetFolders, LoadSettings, ManageFolders, SaveSettings, UndoOperation,
 };
-use quicksort_domain::{Folder, FolderId, OperationId};
+use crate::use_cases::{
+    ExecuteOperationUseCase, GetFoldersUseCase, LoadSettingsUseCase, ManageFoldersUseCase,
+    SaveSettingsUseCase, UndoOperationUseCase,
+};
+use quicksort_domain::{Folder, FolderId, OperationId, Settings};
 
 /// Combined implementation of all inbound ports.
 ///
@@ -41,11 +43,15 @@ use quicksort_domain::{Folder, FolderId, OperationId};
 /// - `undo` – Reverts completed operations.
 /// - `get_folders` – Retrieves the list of configured folders.
 /// - `manage_folders` – CRUD operations for folder configuration.
+/// - `load_settings` – Loads user settings.
+/// - `save_settings` – Saves user settings.
 pub struct ApplicationFacadeImpl {
     execute: Arc<ExecuteOperationUseCase>,
     undo: Arc<UndoOperationUseCase>,
     get_folders: Arc<GetFoldersUseCase>,
     manage_folders: Arc<ManageFoldersUseCase>,
+    load_settings: Arc<LoadSettingsUseCase>,
+    save_settings: Arc<SaveSettingsUseCase>,
 }
 
 impl ApplicationFacadeImpl {
@@ -54,12 +60,16 @@ impl ApplicationFacadeImpl {
         undo: Arc<UndoOperationUseCase>,
         get_folders: Arc<GetFoldersUseCase>,
         manage_folders: Arc<ManageFoldersUseCase>,
+        load_settings: Arc<LoadSettingsUseCase>,
+        save_settings: Arc<SaveSettingsUseCase>,
     ) -> Self {
         Self {
             execute,
             undo,
             get_folders,
             manage_folders,
+            load_settings,
+            save_settings,
         }
     }
 }
@@ -110,8 +120,23 @@ impl ManageFolders for ApplicationFacadeImpl {
     }
 
     /// Delegates to `ManageFoldersUseCase::toggle_favorite`.
-    /// Currently a stub – see TASK-015 for full implementation.
     async fn toggle_favorite(&self, id: FolderId) -> Result<(), UseCaseError> {
         self.manage_folders.toggle_favorite(id).await
+    }
+}
+
+#[async_trait]
+impl LoadSettings for ApplicationFacadeImpl {
+    /// Delegates to `LoadSettingsUseCase::load_settings`.
+    async fn load_settings(&self) -> Result<Settings, UseCaseError> {
+        self.load_settings.load_settings().await
+    }
+}
+
+#[async_trait]
+impl SaveSettings for ApplicationFacadeImpl {
+    /// Delegates to `SaveSettingsUseCase::save_settings`.
+    async fn save_settings(&self, settings: Settings) -> Result<(), UseCaseError> {
+        self.save_settings.save_settings(settings).await
     }
 }

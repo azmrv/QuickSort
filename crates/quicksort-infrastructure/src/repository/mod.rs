@@ -1,7 +1,9 @@
 mod in_memory_operation_repository;
 pub mod json_configuration_repository;
 pub mod json_operation_repository;
+pub mod json_settings_repository;
 
 pub use in_memory_operation_repository::InMemoryOperationRepository;
 pub use json_configuration_repository::JsonConfigurationRepository;
 pub use json_operation_repository::JsonOperationRepository;
+pub use json_settings_repository::JsonSettingsRepository;

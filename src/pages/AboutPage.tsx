@@ -1,4 +1,13 @@
+import { useState, useEffect } from 'react';
+import { invoke } from '../lib/invoke';
+
 const AboutPage = () => {
+    const [version, setVersion] = useState('0.0.0');
+
+    useEffect(() => {
+        invoke<string>('get_app_version').then(setVersion);
+    }, []);
+
     return (
         <div style={{ 
             display: 'flex', 
@@ -42,7 +51,7 @@ const AboutPage = () => {
                 color: 'var(--qs-text-muted)',
                 marginBottom: 'var(--qs-space-lg)',
             }}>
-                v0.1.0
+                v{version}
             </div>
             
             <p style={{

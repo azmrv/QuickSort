@@ -43,12 +43,21 @@ impl FileSystem for StdFileSystem {
             .await
             .map_err(|e| UseCaseError::FileNotFound(e.to_string()))?;
         let size = metadata.len();
-        // Perform the move
-        tokio_fs::rename(from.to_path_buf(), to.to_path_buf())
-            .await
-            .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
-        // If the move was successful, return the original file size
-        Ok(size)
+
+        // Try rename first (fast, works on same drive)
+        match tokio_fs::rename(from.to_path_buf(), to.to_path_buf()).await {
+            Ok(()) => Ok(size),
+            Err(_) => {
+                // Cross-drive move: copy + delete
+                tokio_fs::copy(from.to_path_buf(), to.to_path_buf())
+                    .await
+                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+                tokio_fs::remove_file(from.to_path_buf())
+                    .await
+                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+                Ok(size)
+            }
+        }
     }
 
     async fn copy_file(&self, from: &WindowsPath, to: &WindowsPath) -> Result<u64, UseCaseError> {

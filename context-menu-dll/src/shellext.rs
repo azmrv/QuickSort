@@ -443,7 +443,9 @@ fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
         id: String,
         name: String,
         path: String,
+        #[serde(alias = "is_favorite")]
         favorite: bool,
+        #[serde(alias = "sort_order")]
         order: i32,
     }
 

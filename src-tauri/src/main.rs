@@ -19,7 +19,8 @@ use tauri::{
 
 use quicksort_application::{
     use_cases::{
-        ExecuteOperationUseCase, GetFoldersUseCase, ManageFoldersUseCase, UndoOperationUseCase,
+        ExecuteOperationUseCase, GetFoldersUseCase, LoadSettingsUseCase, ManageFoldersUseCase,
+        SaveSettingsUseCase, UndoOperationUseCase,
     },
     ApplicationFacadeImpl,
 };
@@ -96,13 +97,18 @@ fn start_tauri() {
 
     ensure_dll_copied();
 
-    let config_dir = dirs::config_local_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
+    let config_dir = std::env::var("APPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("."))
         .join("QuickSort");
     std::fs::create_dir_all(&config_dir).unwrap_or(());
     let config_path = config_dir.join("folders.json");
+    let settings_path = config_dir.join("settings.json");
 
     let config_repo = Arc::new(JsonConfigurationRepository::new(config_path.clone()));
+    let settings_repo = Arc::new(quicksort_infrastructure::JsonSettingsRepository::new(
+        settings_path,
+    ));
 
     let execute_use_case = ExecuteOperationUseCase::new(
         Box::new(quicksort_infrastructure::repository::InMemoryOperationRepository::new()),
@@ -116,6 +122,8 @@ fn start_tauri() {
 
     let get_folders_use_case = GetFoldersUseCase::new(config_repo.clone());
     let manage_folders_use_case = ManageFoldersUseCase::new(config_repo.clone());
+    let load_settings_use_case = LoadSettingsUseCase::new(settings_repo.clone());
+    let save_settings_use_case = SaveSettingsUseCase::new(settings_repo.clone());
 
     let undo_use_case = UndoOperationUseCase::new(
         Box::new(quicksort_infrastructure::repository::InMemoryOperationRepository::new()),
@@ -127,6 +135,8 @@ fn start_tauri() {
         Arc::new(undo_use_case),
         Arc::new(get_folders_use_case),
         Arc::new(manage_folders_use_case),
+        Arc::new(load_settings_use_case),
+        Arc::new(save_settings_use_case),
     ));
 
     let facade_for_ipc = Arc::clone(&facade);
@@ -155,6 +165,9 @@ fn start_tauri() {
             commands::get_logs,
             commands::register_com_server,
             commands::unregister_com_server,
+            commands::get_app_version,
+            commands::get_settings,
+            commands::save_settings,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());

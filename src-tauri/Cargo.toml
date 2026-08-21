@@ -103,8 +103,5 @@ quicksort-ipc-contract = { path = "../crates/quicksort-ipc-contract" }
 
 # ========== Miscellaneous ==========
 
-# Directory utilities (for finding config/log paths)
-dirs = "5"
-
 # Async runtime for Tauri commands and pipe server
 tokio = { workspace = true, features = ["rt", "net", "time", "macros", "io-util"] }

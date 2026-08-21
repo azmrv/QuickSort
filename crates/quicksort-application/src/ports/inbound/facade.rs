@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use quicksort_domain::{Folder, FolderId, OperationId};
+use quicksort_domain::{Folder, FolderId, OperationId, Settings};
 
 use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
@@ -14,6 +14,8 @@ pub struct ApplicationFacade {
     undo_operation: Arc<dyn UndoOperation>,
     get_folders: Arc<dyn GetFolders>,
     manage_folders: Arc<dyn ManageFolders>,
+    load_settings: Option<Arc<dyn crate::ports::inbound::LoadSettings>>,
+    save_settings: Option<Arc<dyn crate::ports::inbound::SaveSettings>>,
 }
 
 impl ApplicationFacade {
@@ -28,7 +30,19 @@ impl ApplicationFacade {
             undo_operation,
             get_folders,
             manage_folders,
+            load_settings: None,
+            save_settings: None,
         }
+    }
+
+    pub fn with_settings(
+        mut self,
+        load_settings: Arc<dyn crate::ports::inbound::LoadSettings>,
+        save_settings: Arc<dyn crate::ports::inbound::SaveSettings>,
+    ) -> Self {
+        self.load_settings = Some(load_settings);
+        self.save_settings = Some(save_settings);
+        self
     }
 
     pub async fn execute_operation(
@@ -59,5 +73,25 @@ impl ApplicationFacade {
 
     pub async fn rename_folder(&self, id: FolderId, new_name: String) -> Result<(), UseCaseError> {
         self.manage_folders.rename_folder(id, new_name).await
+    }
+
+    pub async fn load_settings(&self) -> Result<Settings, UseCaseError> {
+        self.load_settings
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Settings not configured".to_string(),
+            ))?
+            .load_settings()
+            .await
+    }
+
+    pub async fn save_settings(&self, settings: Settings) -> Result<(), UseCaseError> {
+        self.save_settings
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Settings not configured".to_string(),
+            ))?
+            .save_settings(settings)
+            .await
     }
 }

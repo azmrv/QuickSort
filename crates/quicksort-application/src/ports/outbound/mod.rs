@@ -20,7 +20,8 @@ mod configuration_repository; // ConfigurationRepository – folder CRUD
 mod conflict_resolver;
 mod file_system; // FileSystem – file I/O operations
 mod id_generator; // IdGenerator – unique identifier generation
-mod operation_repository; // OperationRepository – operation history persistence // ConflictResolver – interactive conflict resolution
+mod operation_repository; // OperationRepository – operation history persistence
+mod settings_repository; // SettingsRepository – user settings persistence
 
 // Re-export all port traits for use by other modules.
 pub use clock::Clock;
@@ -29,6 +30,7 @@ pub use conflict_resolver::ConflictResolver;
 pub use file_system::FileSystem;
 pub use id_generator::IdGenerator;
 pub use operation_repository::OperationRepository;
+pub use settings_repository::SettingsRepository;
 
 // ---------------------------------------------------------------------------
 // Notes for Infrastructure implementors:

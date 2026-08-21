@@ -13,4 +13,6 @@ pub use conflict_resolver::DefaultConflictResolver;
 pub use errors::{ErrorConverter, InfrastructureError};
 pub use filesystem::StdFileSystem;
 pub use id_generator::UuidGenerator;
-pub use repository::{JsonConfigurationRepository, JsonOperationRepository};
+pub use repository::{
+    JsonConfigurationRepository, JsonOperationRepository, JsonSettingsRepository,
+};

@@ -10,6 +10,7 @@
 //! - `undo_operation`     – Revert a completed operation
 //! - `get_folders`        – Retrieve all configured folders
 //! - `manage_folders`     – CRUD operations on folders
+//! - `settings`           – Load and save user settings
 //!
 //! All use cases are re-exported for convenient access by the application facade.
 
@@ -18,11 +19,13 @@
 mod execute_operation; // ExecuteOperationUseCase – Move, Copy, Delete, Rename
 mod get_folders; // GetFoldersUseCase – list all configured folders
 mod manage_folders;
-mod undo_operation; // UndoOperationUseCase – revert completed operations // ManageFoldersUseCase – add, remove, rename folders
+mod settings; // LoadSettingsUseCase, SaveSettingsUseCase – user settings
+mod undo_operation; // UndoOperationUseCase – revert completed operations
 
 // Re-export the concrete use case types so they can be used directly
 // from `crate::use_cases::*`.
 pub use execute_operation::ExecuteOperationUseCase;
 pub use get_folders::GetFoldersUseCase;
 pub use manage_folders::ManageFoldersUseCase;
+pub use settings::{LoadSettingsUseCase, SaveSettingsUseCase};
 pub use undo_operation::UndoOperationUseCase;

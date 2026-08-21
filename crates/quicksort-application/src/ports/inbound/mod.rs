@@ -18,13 +18,15 @@ mod facade; // ApplicationFacade – combined inbound port interface
 mod facade_impl;
 mod get_folders; // GetFolders – retrieve all configured folders
 mod manage_folders; // ManageFolders – add, remove, rename, toggle favorite
-mod undo_operation; // UndoOperation – revert completed operations // ApplicationFacadeImpl – concrete facade implementation
+mod settings; // LoadSettings, SaveSettings – user settings
+mod undo_operation; // UndoOperation – revert completed operations
 
 // Re-export all port traits so that adapters can depend on them directly.
 pub use execute_operation::ExecuteOperation;
 pub use facade::ApplicationFacade;
 pub use get_folders::GetFolders;
 pub use manage_folders::ManageFolders;
+pub use settings::{LoadSettings, SaveSettings};
 pub use undo_operation::UndoOperation;
 // ApplicationFacadeImpl is now re-exported for adapters that need
 // to construct the facade (e.g., during dependency injection in main.rs).

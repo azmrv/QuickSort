@@ -40,3 +40,4 @@ thiserror = "1.0"
 # anyhow is used in tests for convenience when constructing test fixtures.
 # It is NOT used in production domain code – domain uses specific errors.
 anyhow = "1.0"
+serde_json = "1.0"

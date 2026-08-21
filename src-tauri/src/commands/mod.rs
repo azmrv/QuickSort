@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use quicksort_application::{
-    ExecuteOperation, Folder, FolderId, GetFolders, ManageFolders, OperationId, UndoOperation,
-    WindowsPath,
+    ExecuteOperation, Folder, FolderId, GetFolders, LoadSettings, ManageFolders, OperationId,
+    SaveSettings, Settings, UndoOperation, WindowsPath,
 };
 use tauri::State;
 
@@ -164,4 +164,39 @@ pub fn unregister_com_server() -> Result<String, String> {
     crate::com::unregister()?;
     tracing::info!(command = "unregister_com_server", "OK — Explorer restarted");
     Ok("COM server unregistered successfully.".to_string())
+}
+
+#[tauri::command]
+pub fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
+    tracing::info!(command = "get_settings", "handling");
+    let result = state
+        .facade
+        .load_settings()
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(_) => tracing::info!(command = "get_settings", "OK"),
+        Err(e) => tracing::error!(command = "get_settings", error = %e, "FAIL"),
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn save_settings(state: State<'_, AppState>, settings: Settings) -> Result<(), String> {
+    tracing::info!(command = "save_settings", "handling");
+    let result = state
+        .facade
+        .save_settings(settings)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "save_settings", "OK"),
+        Err(e) => tracing::error!(command = "save_settings", error = %e, "FAIL"),
+    }
+    result
 }

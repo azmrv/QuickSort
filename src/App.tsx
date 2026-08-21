@@ -14,9 +14,11 @@ function App() {
     const [selectFile, setSelectFile] = useState<string | null>(null);
     const [isDark, setIsDark] = useState(true);
     const [activeTab, setActiveTab] = useState('folders');
+    const [version, setVersion] = useState('0.0.0');
 
     useEffect(() => {
         logger.info('App', 'startup');
+        invoke<string>('get_app_version').then(setVersion);
         invoke<string | null>('get_pending_file').then((file) => {
             if (file) {
                 logger.info('App', `pending file: ${file}`);
@@ -61,7 +63,7 @@ function App() {
                             <div className="app-logo">
                                 <div className="app-logo-icon">Q</div>
                                 <span className="app-logo-text">QuickSort</span>
-                                <span className="app-logo-version">v0.2.0</span>
+                                <span className="app-logo-version">v{version}</span>
                             </div>
                             <div className="theme-toggle" onClick={() => setIsDark(!isDark)}>
                                 <span className="theme-toggle-icon">{isDark ? '🌙' : '☀️'}</span>

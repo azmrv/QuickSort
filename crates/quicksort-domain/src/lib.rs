@@ -24,7 +24,10 @@ pub mod errors;
 pub mod events;
 pub mod value_objects;
 
-pub use entities::{Folder, Operation, OperationState, OperationType};
+pub use entities::{
+    DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, DuplicateCheckMode, Folder,
+    Operation, OperationState, OperationType, Settings,
+};
 pub use errors::DomainError;
 pub use events::DomainEvent;
 pub use value_objects::{FolderId, OperationId, WindowsPath};
