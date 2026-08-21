@@ -25,9 +25,11 @@ pub mod events;
 pub mod value_objects;
 
 pub use entities::{
-    ConflictContext, ConflictResolution, ConflictStats, DefaultOperation, DefaultOverwritePolicy,
-    DuplicateCheckConfig, DuplicateCheckMode, DuplicateCheckResult, DuplicateChecker, Folder,
-    Operation, OperationState, OperationType, Settings,
+    ArchiveEntry, ArchivePlugin, ConflictContext, ConflictResolution, ConflictStats,
+    ContentPlugin, DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig,
+    DuplicateCheckMode, DuplicateCheckResult, DuplicateChecker, FileSystemPlugin, Folder,
+    ListerPlugin, Operation, OperationState, OperationType, Plugin, PluginCapabilities,
+    PluginConfig, PluginError, PluginInfo, PluginType, Settings,
 };
 pub use errors::DomainError;
 pub use events::DomainEvent;
