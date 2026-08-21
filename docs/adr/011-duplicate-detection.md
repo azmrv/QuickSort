@@ -1,7 +1,7 @@
 # ADR-011: Duplicate Detection Strategy
 
 ## Status
-Proposed
+Accepted (implemented 2026-08-21)
 
 ## Context
 When moving/copying files, conflicts occur when a file with the same name already exists at the destination. Current behavior is hardcoded `OverwritePolicy::Skip` in both DLL and frontend. Users need:
