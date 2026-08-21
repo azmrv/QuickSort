@@ -62,3 +62,8 @@ AGENTS.md
 opencode/
 workflows/
 tasks/
+
+# Documentation (except README and translations)
+*.md
+!README.md
+!docs/translation/**
