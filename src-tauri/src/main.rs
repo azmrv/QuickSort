@@ -21,7 +21,8 @@ use tauri::{
 use quicksort_application::{
     use_cases::{
         ExecuteOperationUseCase, GetFoldersUseCase, GetOperationHistoryUseCase,
-        LoadSettingsUseCase, ManageFoldersUseCase, SaveSettingsUseCase, UndoOperationUseCase,
+        LoadSettingsUseCase, ManageFoldersUseCase, SaveSettingsUseCase, SearchFilesUseCase,
+        UndoOperationUseCase,
     },
     ApplicationFacadeImpl,
 };
@@ -138,15 +139,22 @@ fn start_tauri() {
         quicksort_infrastructure::repository::InMemoryOperationRepository::new(),
     ));
 
-    let facade = Arc::new(ApplicationFacadeImpl::new(
-        Arc::new(execute_use_case),
-        Arc::new(undo_use_case),
-        Arc::new(get_folders_use_case),
-        Arc::new(manage_folders_use_case),
-        Arc::new(get_operation_history_use_case),
-        Arc::new(load_settings_use_case),
-        Arc::new(save_settings_use_case),
+    let search_files_use_case = SearchFilesUseCase::new(Arc::new(
+        quicksort_infrastructure::FsFileSearch::new(),
     ));
+
+    let facade = Arc::new(
+        ApplicationFacadeImpl::new(
+            Arc::new(execute_use_case),
+            Arc::new(undo_use_case),
+            Arc::new(get_folders_use_case),
+            Arc::new(manage_folders_use_case),
+            Arc::new(get_operation_history_use_case),
+            Arc::new(load_settings_use_case),
+            Arc::new(save_settings_use_case),
+        )
+        .with_search_files(Arc::new(search_files_use_case)),
+    );
 
     let facade_for_ipc = Arc::clone(&facade);
     std::thread::Builder::new()
@@ -186,6 +194,7 @@ fn start_tauri() {
             commands::save_plugin_config,
             commands::set_plugin_enabled,
             commands::rescan_plugins,
+            commands::search_files,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());

@@ -14,7 +14,7 @@ pub use clock::SystemClock;
 pub use conflict_resolver::DefaultConflictResolver;
 pub use duplicate_checker::{ContentChecker, DuplicateDetectionAdapter, NameChecker, SizeChecker};
 pub use errors::{ErrorConverter, InfrastructureError};
-pub use filesystem::StdFileSystem;
+pub use filesystem::{FsFileSearch, StdFileSystem};
 pub use id_generator::UuidGenerator;
 pub use plugin::{WcxPluginAdapter, WcxPluginLoader};
 pub use repository::{

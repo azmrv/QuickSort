@@ -29,8 +29,10 @@ use super::{
 };
 use crate::use_cases::{
     ExecuteOperationUseCase, GetFoldersUseCase, GetOperationHistoryUseCase, LoadSettingsUseCase,
-    ManageFoldersUseCase, PluginManagerUseCase, SaveSettingsUseCase, UndoOperationUseCase,
+    ManageFoldersUseCase, PluginManagerUseCase, SaveSettingsUseCase, SearchFiles,
+    SearchFilesUseCase, UndoOperationUseCase,
 };
+use crate::ports::outbound::SearchResult;
 use quicksort_domain::{Folder, FolderId, Operation, OperationId, PluginConfig, Settings};
 
 /// Combined implementation of all inbound ports.
@@ -55,6 +57,7 @@ pub struct ApplicationFacadeImpl {
     load_settings: Arc<LoadSettingsUseCase>,
     save_settings: Arc<SaveSettingsUseCase>,
     plugin_manager: Option<Arc<PluginManagerUseCase>>,
+    search_files: Option<Arc<SearchFilesUseCase>>,
 }
 
 impl ApplicationFacadeImpl {
@@ -76,12 +79,32 @@ impl ApplicationFacadeImpl {
             load_settings,
             save_settings,
             plugin_manager: None,
+            search_files: None,
         }
     }
 
     pub fn with_plugin_manager(mut self, plugin_manager: Arc<PluginManagerUseCase>) -> Self {
         self.plugin_manager = Some(plugin_manager);
         self
+    }
+
+    pub fn with_search_files(mut self, search_files: Arc<SearchFilesUseCase>) -> Self {
+        self.search_files = Some(search_files);
+        self
+    }
+
+    pub async fn search_files(
+        &self,
+        query: &str,
+        directories: &[String],
+    ) -> Result<SearchResult, UseCaseError> {
+        self.search_files
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Search not configured".to_string(),
+            ))?
+            .search(query, directories)
+            .await
     }
 }
 
@@ -220,6 +243,23 @@ impl PluginManager for ApplicationFacadeImpl {
                 "Plugin manager not configured".to_string(),
             ))?
             .rescan_plugins()
+            .await
+    }
+}
+
+#[async_trait]
+impl SearchFiles for ApplicationFacadeImpl {
+    async fn search(
+        &self,
+        query: &str,
+        directories: &[String],
+    ) -> Result<SearchResult, UseCaseError> {
+        self.search_files
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Search not configured".to_string(),
+            ))?
+            .search(query, directories)
             .await
     }
 }

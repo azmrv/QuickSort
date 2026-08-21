@@ -389,3 +389,27 @@ pub async fn rescan_plugins(state: State<'_, AppState>) -> Result<Vec<PluginInfo
     }
     result
 }
+
+// ---------------------------------------------------------------------------
+// Search commands
+// ---------------------------------------------------------------------------
+
+/// Search for files matching the given query.
+#[tauri::command]
+pub async fn search_files(
+    state: State<'_, AppState>,
+    query: String,
+    directories: Vec<String>,
+) -> Result<quicksort_application::SearchResult, String> {
+    tracing::info!(command = "search_files", query = %query, dir_count = directories.len(), "handling");
+    let result = state
+        .facade
+        .search_files(&query, &directories)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(r) => tracing::info!(command = "search_files", total = r.total_count, time_ms = r.search_time_ms, "OK"),
+        Err(e) => tracing::error!(command = "search_files", error = %e, "FAIL"),
+    }
+    result
+}
