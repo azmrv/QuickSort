@@ -139,13 +139,7 @@ pub fn get_pending_file() -> Option<String> {
 #[tauri::command]
 pub fn check_menu_status() -> bool {
     tracing::debug!(command = "check_menu_status", "handling");
-    use winreg::enums::*;
-    use winreg::RegKey;
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let active = hkcu.open_subkey(r"Software\Classes\*\shellex\ContextMenuHandlers\QuickSort")
-        .is_ok();
-    tracing::info!(command = "check_menu_status", active, "OK");
-    active
+    crate::com::is_registered()
 }
 
 #[tauri::command]
@@ -157,56 +151,7 @@ pub fn get_logs() -> Vec<serde_json::Value> {
 #[tauri::command]
 pub fn register_com_server() -> Result<String, String> {
     tracing::info!(command = "register_com_server", "handling");
-    use winreg::enums::*;
-    use winreg::RegKey;
-
-    let appdata = std::env::var("APPDATA")
-        .map_err(|e| format!("APPDATA environment variable not set: {}", e))?;
-    let dll_path = std::path::PathBuf::from(&appdata)
-        .join("QuickSort")
-        .join("context_menu_dll.dll");
-    let dll_path_str = dll_path.to_string_lossy().to_string();
-    tracing::info!(command = "register_com_server", dll_path = %dll_path_str);
-
-    let clsid = "{12345678-1234-1234-1234-1234567890AB}";
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-
-    let (clsid_key, _) = hkcu
-        .create_subkey(format!("Software\\Classes\\CLSID\\{}", clsid))
-        .map_err(|e| format!("Failed to create CLSID key: {}", e))?;
-    clsid_key
-        .set_value("", &"QuickSort Context Menu Extension")
-        .map_err(|e| format!("Failed to set CLSID name: {}", e))?;
-
-    let (inproc, _) = clsid_key
-        .create_subkey("InprocServer32")
-        .map_err(|e| format!("Failed to create InprocServer32 key: {}", e))?;
-    inproc
-        .set_value("", &dll_path_str)
-        .map_err(|e| format!("Failed to set DLL path: {}", e))?;
-    inproc
-        .set_value("ThreadingModel", &"Apartment")
-        .map_err(|e| format!("Failed to set ThreadingModel: {}", e))?;
-
-    let handlers = ["*", "Directory", "Directory\\Background", "Drive"];
-    for handler in &handlers {
-        let path = format!(
-            "Software\\Classes\\{}\\shellex\\ContextMenuHandlers\\QuickSort",
-            handler
-        );
-        let (key, _) = hkcu
-            .create_subkey(&path)
-            .map_err(|e| format!("Failed to create handler key '{}': {}", path, e))?;
-        key.set_value("", &clsid)
-            .map_err(|e| format!("Failed to set CLSID for '{}': {}", handler, e))?;
-        tracing::info!(command = "register_com_server", handler = %handler, "registered");
-    }
-
-    std::process::Command::new("cmd")
-        .args(&["/C", "taskkill /f /im explorer.exe && start explorer.exe"])
-        .spawn()
-        .map_err(|e| format!("Failed to restart Explorer: {}", e))?;
-
+    crate::com::register()?;
     tracing::info!(command = "register_com_server", "OK — Explorer restarted");
     Ok("COM server registered successfully. Explorer has been restarted.".to_string())
 }
@@ -214,48 +159,7 @@ pub fn register_com_server() -> Result<String, String> {
 #[tauri::command]
 pub fn unregister_com_server() -> Result<String, String> {
     tracing::info!(command = "unregister_com_server", "handling");
-    use winreg::enums::*;
-    use winreg::RegKey;
-
-    let clsid = "{12345678-1234-1234-1234-1234567890AB}";
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-
-    for handler in &["*", "Directory", "Directory\\Background", "Drive"] {
-        let path = format!(
-            "Software\\Classes\\{}\\shellex\\ContextMenuHandlers\\QuickSort",
-            handler
-        );
-        if let Ok(key) = hkcu.open_subkey(&path) {
-            key.delete_subkey_all("")
-                .map_err(|e| format!("Failed to delete handler key '{}': {}", path, e))?;
-            tracing::info!(command = "unregister_com_server", handler = %handler, "removed");
-        }
-    }
-
-    let clsid_path = format!("Software\\Classes\\CLSID\\{}", clsid);
-    if let Ok(key) = hkcu.open_subkey(&clsid_path) {
-        key.delete_subkey_all("")
-            .map_err(|e| format!("Failed to delete CLSID key '{}': {}", clsid_path, e))?;
-    }
-
-    std::process::Command::new("cmd")
-        .args(&["/C", "taskkill /f /im explorer.exe && start explorer.exe"])
-        .spawn()
-        .map_err(|e| format!("Failed to restart Explorer: {}", e))?;
-
+    crate::com::unregister()?;
     tracing::info!(command = "unregister_com_server", "OK — Explorer restarted");
     Ok("COM server unregistered successfully.".to_string())
-}
-
-fn is_user_admin() -> bool {
-    std::process::Command::new("net")
-        .args(["session"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-#[tauri::command]
-pub fn is_admin() -> bool {
-    is_user_admin()
 }

@@ -70,30 +70,6 @@ const EditorPage: React.FC = () => {
         setFolders(newFolders);
     };
 
-    const handleRegisterComServer = async () => {
-        logger.action('EditorPage', 'register COM server');
-        try {
-            const msg = await invoke<string>('register_com_server');
-            logger.info('EditorPage', `COM registered: ${msg}`);
-            message.success(msg);
-        } catch (err) {
-            logger.error('EditorPage', 'COM register failed', err);
-            message.error(`Ошибка регистрации: ${err}`);
-        }
-    };
-
-    const handleUnregisterComServer = async () => {
-        logger.action('EditorPage', 'unregister COM server');
-        try {
-            const msg = await invoke<string>('unregister_com_server');
-            logger.info('EditorPage', `COM unregistered: ${msg}`);
-            message.success(msg);
-        } catch (err) {
-            logger.error('EditorPage', 'COM unregister failed', err);
-            message.error(`Ошибка удаления: ${err}`);
-        }
-    };
-
     return (
         <div>
             <StatusIndicator />
@@ -104,14 +80,6 @@ const EditorPage: React.FC = () => {
                 onToggleFavorite={handleToggleFavorite}
                 onApply={handleApply}
             />
-            <div className="action-bar">
-                <button className="add-folder-btn" onClick={handleRegisterComServer}>
-                    Зарегистрировать COM
-                </button>
-                <button className="add-folder-btn" onClick={handleUnregisterComServer}>
-                    Удалить COM
-                </button>
-            </div>
         </div>
     );
 };

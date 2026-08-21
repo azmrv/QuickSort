@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod com;
 mod commands;
 mod ipc;
 mod logging;
@@ -88,19 +89,23 @@ fn ensure_dll_copied() {
     }
 }
 
-fn is_user_admin() -> bool {
-    std::process::Command::new("net")
-        .args(["session"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+fn ensure_com_registered() {
+    if com::is_registered() {
+        tracing::info!("COM already registered");
+        return;
+    }
+    tracing::info!("COM not registered — registering now");
+    match com::register() {
+        Ok(()) => tracing::info!("COM registered successfully (auto)"),
+        Err(e) => tracing::error!(error = %e, "auto COM registration failed"),
+    }
 }
 
 fn start_tauri() {
-    let admin = is_user_admin();
-    tracing::info!(admin, "startup check");
+    tracing::info!("startup");
 
     ensure_dll_copied();
+    ensure_com_registered();
 
     let config_dir = dirs::config_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -161,7 +166,6 @@ fn start_tauri() {
             commands::get_logs,
             commands::register_com_server,
             commands::unregister_com_server,
-            commands::is_admin,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());
@@ -192,6 +196,7 @@ fn start_tauri() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
+                commands::unregister_com_server().ok();
                 if let Some(window) = window.app_handle().get_webview_window("main") {
                     let _ = window.hide();
                 }

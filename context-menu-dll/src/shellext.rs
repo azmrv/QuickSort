@@ -34,7 +34,8 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreatePopupMenu, InsertMenuItemW, InsertMenuW, MessageBoxW, HMENU, MB_OK, MENUITEMINFOW,
-    MFS_ENABLED, MF_BYPOSITION, MF_POPUP, MIIM_ID, MIIM_STATE, MIIM_STRING,
+    MFS_ENABLED, MF_BYPOSITION, MF_POPUP, MFT_SEPARATOR, MIIM_FTYPE, MIIM_ID, MIIM_STATE,
+    MIIM_STRING,
 };
 
 use crate::pipe_client::move_to_folder;
@@ -209,6 +210,28 @@ fn extract_files_from_dataobject(data_obj: &IDataObject) -> WinResult<Vec<PathBu
 // IContextMenu implementation
 // ============================================================================
 
+fn make_menu_item(id: u32, text: &[u16]) -> MENUITEMINFOW {
+    MENUITEMINFOW {
+        cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
+        fMask: MIIM_ID | MIIM_STATE | MIIM_STRING,
+        wID: id,
+        fState: MFS_ENABLED,
+        dwTypeData: PWSTR::from_raw(text.as_ptr() as *mut _),
+        cch: text.len() as u32,
+        ..Default::default()
+    }
+}
+
+fn make_separator(id: u32) -> MENUITEMINFOW {
+    MENUITEMINFOW {
+        cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
+        fMask: MIIM_ID | MIIM_FTYPE,
+        wID: id,
+        fType: MFT_SEPARATOR,
+        ..Default::default()
+    }
+}
+
 impl IContextMenu_Impl for QuickSortShellExt_Impl {
     fn QueryContextMenu(
         &self,
@@ -232,69 +255,41 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
 
         *self.this.folders.lock() = folders.clone();
 
+        let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
+        let all_folders: Vec<&MenuFolder> = folders.iter().collect();
+        let has_all_folders_entry = !all_folders.is_empty();
+
+        let mut used = 0u32;
+        let separator_and_all = if has_all_folders_entry { 2 } else { 0 };
+        let available = max_cmd_id.saturating_sub(min_cmd_id) + 1;
+
+        let max_fav = std::cmp::min(favorites.len() as u32, available.saturating_sub(separator_and_all));
+
         unsafe {
             let h_submenu = CreatePopupMenu().unwrap();
             let mut current_id = min_cmd_id;
 
-            let mut sorted_folders = folders.clone();
-            sorted_folders.sort_by(|a, b| b.is_favorite.cmp(&a.is_favorite));
-
-            for folder in &sorted_folders {
-                if current_id > max_cmd_id {
-                    break;
-                }
-                let label = if folder.is_favorite {
-                    format!("★ {}", folder.name)
-                } else {
-                    folder.name.clone()
-                };
-                let wide_name: Vec<u16> = OsString::from(&label)
-                    .encode_wide()
-                    .chain(Some(0))
-                    .collect();
-                let item = MENUITEMINFOW {
-                    cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
-                    fMask: MIIM_ID | MIIM_STATE | MIIM_STRING,
-                    wID: current_id,
-                    fState: MFS_ENABLED,
-                    dwTypeData: PWSTR::from_raw(wide_name.as_ptr() as *mut _),
-                    cch: (wide_name.len() - 1) as u32,
-                    ..Default::default()
-                };
-                let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &item);
+            for folder in favorites.iter().take(max_fav as usize) {
+                let label = format!("\u{2605} {}", folder.name);
+                let wide: Vec<u16> = OsString::from(&label).encode_wide().chain(Some(0)).collect();
+                let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &make_menu_item(current_id, &wide));
                 current_id += 1;
+                used += 1;
             }
 
-            if current_id <= max_cmd_id && !sorted_folders.is_empty() {
-                let sep = MENUITEMINFOW {
-                    cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
-                    fMask: MIIM_ID | MIIM_STATE,
-                    wID: current_id,
-                    fState: MFS_ENABLED,
-                    ..Default::default()
-                };
-                let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &sep);
+            if has_all_folders_entry && used < available {
+                let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &make_separator(current_id));
                 current_id += 1;
+                used += 1;
             }
 
-            if current_id <= max_cmd_id {
-                let other_text = w!("Все папки...");
-                let other_wide: Vec<u16> = other_text.as_wide().to_vec();
-                let item = MENUITEMINFOW {
-                    cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
-                    fMask: MIIM_ID | MIIM_STATE | MIIM_STRING,
-                    wID: current_id,
-                    fState: MFS_ENABLED,
-                    dwTypeData: PWSTR::from_raw(other_wide.as_ptr() as *mut _),
-                    cch: other_wide.len() as u32,
-                    ..Default::default()
-                };
-                let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &item);
-                current_id += 1;
+            if has_all_folders_entry && used < available {
+                let all_wide: Vec<u16> = w!("Все папки...").as_wide().iter().copied().chain(Some(0)).collect();
+                let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &make_menu_item(current_id, &all_wide));
+                used += 1;
             }
 
-            let root_text = w!("QuickSort");
-            let root_wide: Vec<u16> = root_text.as_wide().to_vec();
+            let root_wide: Vec<u16> = w!("QuickSort").as_wide().iter().copied().chain(Some(0)).collect();
             let root_pwstr = PWSTR::from_raw(root_wide.as_ptr() as *mut _);
             let _ = InsertMenuW(
                 menu,
@@ -304,7 +299,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 root_pwstr,
             );
 
-            HRESULT((current_id - min_cmd_id) as i32)
+            HRESULT(used as i32)
         }
     }
 
@@ -316,10 +311,9 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         let verb = (ici.lpVerb.0 as usize) & 0xFFFF;
 
         let folders = self.this.folders.lock();
-        let mut sorted_folders: Vec<&MenuFolder> = folders.iter().collect();
-        sorted_folders.sort_by(|a, b| b.is_favorite.cmp(&a.is_favorite));
-        let total_folders = sorted_folders.len();
-        let all_folder_index = total_folders + 1;
+        let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
+        let max_fav = favorites.len();
+        let all_folders_cmd = max_fav + 2;
 
         let sources: Vec<String> = self
             .this
@@ -334,46 +328,34 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             return E_FAIL.ok();
         }
 
-        if verb < total_folders {
-            let target = sorted_folders[verb];
+        if verb < max_fav {
+            let target = favorites[verb];
             log::info!("Moving to: {} ({})", target.name, target.id);
 
             match move_to_folder(sources, target.id.clone(), OverwritePolicy::Skip) {
                 Ok(resp) => {
-                    log::info!("Move response: {:?}", resp);
+                    log::info!("Move OK: {:?}", resp);
                 }
                 Err(e) => {
-                    log::error!("Failed to move: {}", e);
-                    let msg = format!("Failed to move file: {}", e);
-                    let wide_msg: Vec<u16> = OsString::from(msg).encode_wide().chain(Some(0)).collect();
+                    log::error!("Move failed: {}", e);
+                    let msg = format!("QuickSort: {}", e);
+                    let wide_msg: Vec<u16> = OsString::from(&msg).encode_wide().chain(Some(0)).collect();
                     unsafe {
-                        MessageBoxW(
-                            None,
-                            PCWSTR(wide_msg.as_ptr()),
-                            w!("QuickSort Error"),
-                            MB_OK,
-                        );
+                        MessageBoxW(None, PCWSTR(wide_msg.as_ptr()), w!("QuickSort"), MB_OK);
                     }
                 }
             }
-        } else if verb == all_folder_index {
+        } else if verb == all_folders_cmd {
             for path in self.this.item_paths.borrow().iter() {
                 let exe_path = get_quicksort_exe_path();
-                let exe_path_wide: Vec<u16> =
-                    exe_path.as_os_str().encode_wide().chain(Some(0)).collect();
-
-                let file_arg = format!("\"{}\"", path.display());
-                let params = format!("select-folder --file {}", file_arg);
-                let params_wide: Vec<u16> = OsString::from(&params)
-                    .encode_wide()
-                    .chain(Some(0))
-                    .collect();
-
+                let exe_wide: Vec<u16> = exe_path.as_os_str().encode_wide().chain(Some(0)).collect();
+                let params = format!("select-folder --file \"{}\"", path.display());
+                let params_wide: Vec<u16> = OsString::from(&params).encode_wide().chain(Some(0)).collect();
                 unsafe {
                     let _ = windows::Win32::UI::Shell::ShellExecuteW(
                         None,
                         w!("open"),
-                        PCWSTR(exe_path_wide.as_ptr()),
+                        PCWSTR(exe_wide.as_ptr()),
                         PCWSTR(params_wide.as_ptr()),
                         None,
                         windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
