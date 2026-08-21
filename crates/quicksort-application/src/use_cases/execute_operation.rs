@@ -3,7 +3,7 @@ use crate::errors::UseCaseError;
 use crate::ports::inbound::ExecuteOperation;
 use crate::ports::outbound::{
     Clock, ConfigurationRepository, DuplicateDetectionPort, FileSystem, IdGenerator,
-    OperationRepository,
+    OperationRepository, ProgressInfo, ProgressReporter,
 };
 use async_trait::async_trait;
 use quicksort_domain::{DuplicateCheckMode, Operation, OperationState, OperationType, WindowsPath};
@@ -15,6 +15,7 @@ pub struct ExecuteOperationUseCase {
     id_generator: Box<dyn IdGenerator>,
     clock: Box<dyn Clock>,
     duplicate_detector: Box<dyn DuplicateDetectionPort>,
+    progress_reporter: Option<Box<dyn ProgressReporter>>,
 }
 
 impl ExecuteOperationUseCase {
@@ -33,6 +34,25 @@ impl ExecuteOperationUseCase {
             id_generator,
             clock,
             duplicate_detector,
+            progress_reporter: None,
+        }
+    }
+
+    pub fn with_progress_reporter(mut self, reporter: Box<dyn ProgressReporter>) -> Self {
+        self.progress_reporter = Some(reporter);
+        self
+    }
+
+    async fn report_progress(&self, current: u32, total: u32, phase: &str, detail: Option<String>) {
+        if let Some(ref reporter) = self.progress_reporter {
+            reporter
+                .report(ProgressInfo {
+                    current,
+                    total,
+                    phase: phase.to_string(),
+                    detail,
+                })
+                .await;
         }
     }
 }
@@ -59,11 +79,15 @@ impl ExecuteOperation for ExecuteOperationUseCase {
             .start()
             .map_err(|e| UseCaseError::Domain(e.to_string()))?;
 
+        let total = command.source_paths.len() as u32;
         let mut total_files: u32 = 0;
         let mut total_bytes: u64 = 0;
         let mut last_error: Option<String> = None;
 
-        for source in &command.source_paths {
+        for (idx, source) in command.source_paths.iter().enumerate() {
+            self.report_progress(idx as u32, total, "processing", Some(source.to_string()))
+                .await;
+
             match self.execute_single(source, &command, &target_folder).await {
                 Ok(bytes) => {
                     total_files += 1;
@@ -75,6 +99,8 @@ impl ExecuteOperation for ExecuteOperationUseCase {
                 }
             }
         }
+
+        self.report_progress(total, total, "complete", None).await;
 
         if let Some(reason) = last_error {
             operation

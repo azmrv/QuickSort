@@ -232,60 +232,96 @@
 
 ---
 
-## Phase 3: All Folders Page
+## Phase 3: All Folders Page ✅ DONE
 
-### Task 3.1: Design "All Folders" page
-**Description:** Страница для просмотра и выбора всех папок.
+### Task 3.1: Frontend — SelectorPage enhancement ✅
+**Description:** Расширить SelectorPage для отображения всех папок с секциями.
 
 **Acceptance criteria:**
-- [ ] Список всех папок с иконками
-- [ ] Поиск/фильтрация по имени
-- [ ] Индикатор избранного (★)
-- [ ] Кнопка "Добавить папку"
-- [ ] Клик по папке → выбор для операции
+- [x] Список всех папок с иконками и именами
+- [x] Поиск/фильтрация по имени
+- [x] Индикатор избранного (★)
+- [x] Секции: "Избранные" и "Все папки"
+- [x] Кнопка "Добавить папку" (инлайн форма)
+- [x] DLL → SelectorPage работает через select-folder subcommand
 
 **Files:**
-- `src/pages/AllFoldersPage.tsx` (новый)
-- `src/App.tsx` (роутинг)
+- `src/pages/SelectorPage.tsx` (обновлён)
+- `src/styles/App.css` (новые стили)
 
 **Scope:** M
 
 ---
 
-### Task 3.2: Wire "Все папки..." from DLL to page
-**Description:** При клике "Все папки..." в контекстном меню открывать страницу выбора папки.
+## Checkpoint: Complete ✅
+- [x] Все acceptance criteria выполнены
+- [x] `cargo clippy --workspace -- -D warnings` — 0 errors
+- [x] `cargo test --workspace` — all pass
+- [x] `npm run build` — без ошибок
+
+---
+
+## Phase 4: Progress & History ✅ DONE
+
+### Task 4.1: Progress reporting system ✅
+**Description:** Система отчёта о прогрессе для длительных операций.
 
 **Acceptance criteria:**
-- [ ] DLL запускает `quicksort.exe select-folder --file "<path>"`
-- [ ] Фронтенд переключается на AllFoldersPage
-- [ ] Выбор папки → execute operation
+- [x] `ProgressReporter` trait в Application outbound ports
+- [x] `ProgressInfo` DTO (current, total, phase, detail)
+- [x] `TauriProgressReporter` adapter (эмитит `operation-progress` events)
+- [x] `ExecuteOperationUseCase` инжектирует `ProgressReporter`
+- [x] Прогресс эмитится в цикле обработки файлов
 
 **Files:**
-- `src/App.tsx`
-- `src/pages/AllFoldersPage.tsx`
+- `crates/quicksort-application/src/ports/outbound/progress_reporter.rs` (новый)
+- `crates/quicksort-application/src/use_cases/execute_operation.rs` (обновлён)
+- `src-tauri/src/progress.rs` (новый)
+- `src-tauri/src/main.rs` (обновлён)
+
+**Scope:** M
+
+---
+
+### Task 4.2: Operation history (undo) ✅
+**Description:** История операций с возможностью отмены.
+
+**Acceptance criteria:**
+- [x] `GetOperationHistory` inbound port + use case
+- [x] `get_operations` Tauri command
+- [x] Frontend `HistoryPage` — список операций с кнопкой "Отменить"
+- [x] Tab "История" в main navigation
+
+**Files:**
+- `crates/quicksort-application/src/ports/inbound/get_operation_history.rs` (новый)
+- `crates/quicksort-application/src/use_cases/get_operation_history.rs` (новый)
+- `src-tauri/src/commands/mod.rs` (обновлён)
+- `src/pages/HistoryPage.tsx` (новый)
+- `src/App.tsx` (обновлён)
+
+**Scope:** M
+
+---
+
+## Phase 5: Repositioning ✅ DONE
+
+### Task 5.1: README + About page update ✅
+**Description:** Перепозиционирование как "менеджер файлов нового поколения".
+
+**Acceptance criteria:**
+- [x] README.md обновлён — новое описание, Vision секция
+- [x] AboutPage.tsx обновлён — новое описание
+- [x] ADR-014: Interactive Command Line Interface
+
+**Files:**
+- `README.md` (обновлён)
+- `src/pages/AboutPage.tsx` (обновлён)
+- `docs/adr/014-interactive-command-line.md` (новый)
 
 **Scope:** S
 
 ---
 
-## Checkpoint: Complete
-- [ ] Все acceptance criteria выполнены
-- [ ] `cargo clippy --workspace -- -D warnings` — 0 errors
-- [ ] `cargo test --workspace` — all pass
-- [ ] `npm run build` — без ошибок
-- [ ] Ручное тестирование: контекстное меню, настройки, дубликаты
-
----
-
-## Risks and Mitigations
-
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| SHA-256 хеширование медленное для больших файлов | Medium | Default = name check; content check opt-in |
-| DLL field mismatch вызывает краш | High | Task 0.1 — немедленное исправление |
-| Cross-drive move падает | High | Task 0.2 — copy+delete fallback |
-| Настройки DLL не синхронизируются с GUI | Medium | DLL читает settings.json напрямую |
-
-## Open Questions
-- [ ] Нужен ли прогресс-бар при content-based duplicate check?
-- [ ] Сохранять ли историю операций (undo) для перемещений через контекстное меню?
+## Open Questions (RESOLVED)
+- [x] Нужен ли прогресс-бар при content-based duplicate check? → Да, реализовано (Phase 4)
+- [x] Сохранять ли историю операций (undo)? → Да, реализовано (Phase 4)

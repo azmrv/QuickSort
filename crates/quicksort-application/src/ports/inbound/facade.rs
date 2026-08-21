@@ -2,11 +2,13 @@
 
 use std::sync::Arc;
 
-use quicksort_domain::{Folder, FolderId, OperationId, Settings};
+use quicksort_domain::{Folder, FolderId, Operation, OperationId, Settings};
 
 use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
-use crate::ports::inbound::{ExecuteOperation, GetFolders, ManageFolders, UndoOperation};
+use crate::ports::inbound::{
+    ExecuteOperation, GetFolders, GetOperationHistory, ManageFolders, UndoOperation,
+};
 
 /// Unified facade combining all inbound operations.
 pub struct ApplicationFacade {
@@ -14,6 +16,7 @@ pub struct ApplicationFacade {
     undo_operation: Arc<dyn UndoOperation>,
     get_folders: Arc<dyn GetFolders>,
     manage_folders: Arc<dyn ManageFolders>,
+    get_operation_history: Arc<dyn GetOperationHistory>,
     load_settings: Option<Arc<dyn crate::ports::inbound::LoadSettings>>,
     save_settings: Option<Arc<dyn crate::ports::inbound::SaveSettings>>,
 }
@@ -24,12 +27,14 @@ impl ApplicationFacade {
         undo_operation: Arc<dyn UndoOperation>,
         get_folders: Arc<dyn GetFolders>,
         manage_folders: Arc<dyn ManageFolders>,
+        get_operation_history: Arc<dyn GetOperationHistory>,
     ) -> Self {
         Self {
             execute_operation,
             undo_operation,
             get_folders,
             manage_folders,
+            get_operation_history,
             load_settings: None,
             save_settings: None,
         }
@@ -73,6 +78,10 @@ impl ApplicationFacade {
 
     pub async fn rename_folder(&self, id: FolderId, new_name: String) -> Result<(), UseCaseError> {
         self.manage_folders.rename_folder(id, new_name).await
+    }
+
+    pub async fn get_operation_history(&self) -> Result<Vec<Operation>, UseCaseError> {
+        self.get_operation_history.get_all_operations().await
     }
 
     pub async fn load_settings(&self) -> Result<Settings, UseCaseError> {

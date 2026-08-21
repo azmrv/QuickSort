@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use quicksort_application::{
-    ExecuteOperation, Folder, FolderId, GetFolders, LoadSettings, ManageFolders, OperationId,
-    SaveSettings, Settings, UndoOperation, WindowsPath,
+    ExecuteOperation, Folder, FolderId, GetFolders, GetOperationHistory, LoadSettings,
+    ManageFolders, OperationId, SaveSettings, Settings, UndoOperation, WindowsPath,
 };
 use tauri::State;
 
@@ -197,6 +197,23 @@ pub async fn save_settings(state: State<'_, AppState>, settings: Settings) -> Re
     match &result {
         Ok(()) => tracing::info!(command = "save_settings", "OK"),
         Err(e) => tracing::error!(command = "save_settings", error = %e, "FAIL"),
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn get_operations(
+    state: State<'_, AppState>,
+) -> Result<Vec<quicksort_application::Operation>, String> {
+    tracing::info!(command = "get_operations", "handling");
+    let result = state
+        .facade
+        .get_all_operations()
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(ops) => tracing::info!(command = "get_operations", count = ops.len(), "OK"),
+        Err(e) => tracing::error!(command = "get_operations", error = %e, "FAIL"),
     }
     result
 }

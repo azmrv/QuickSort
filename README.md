@@ -2,10 +2,9 @@
 
 # QuickSort
 
-**Right-click. Pick folder. Done.**
+**A next-generation file manager for Windows.**
 
-A Windows 10/11 shell extension that adds your favorite folders to the Explorer context menu.
-No more dragging windows or hunting for directories.
+QuickSort combines the speed of a shell extension with the power of a modern file management system. Right-click any file in Explorer, pick a folder, and let QuickSort handle the rest — with duplicate detection, operation history, and undo support.
 
 [![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust)](https://www.rust-lang.org)
 [![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat&logo=tauri)](https://tauri.app)
@@ -18,22 +17,40 @@ No more dragging windows or hunting for directories.
 
 ## Features
 
-- **Cascading context menu** - favorite folders appear directly in Explorer (no UAC)
-- **Instant move** - one click moves files via atomic `rename`
-- **Duplicate detection** - pre-operation checks (by name, size, or SHA-256 hash)
-- **Configurable defaults** - default operation type, overwrite policy, and duplicate check mode
-- **All folders access** - "All folders..." opens the full folder list
-- **Folder editor** - add, rename, toggle favorites in a clean GUI
-- **Event log** - local history of all operations
-- **Dark theme** - built-in light and dark color schemes
-- **System tray** - runs in background, keeps taskbar clean
-- **Smart install** - auto-registers COM server on first launch
+### Core
+
+- **Cascading context menu** — favorite folders appear directly in Explorer (no UAC)
+- **Instant move/copy** — atomic file operations with cross-drive support
+- **Duplicate detection** — pre-operation checks by name, size, or SHA-256 content hash
+- **Operation history** — full audit trail of every file operation with undo support
+- **Configurable defaults** — default operation type, overwrite policy, and duplicate check mode
+
+### Interface
+
+- **Folder editor** — add, rename, toggle favorites in a clean GUI
+- **All folders selector** — search, filter, and pick from your entire folder library
+- **Event log** — real-time backend and frontend logging with filtering
+- **Dark theme** — built-in light and dark color schemes with amber accents
+- **System tray** — runs in background, keeps taskbar clean
+
+### Smart Install
+
+- **Zero-install deployment** — single executable, auto-registers COM server on first launch
+- **Portable mode** — no admin rights required, everything runs in user space
+
+## Vision
+
+QuickSort is evolving into a full-featured file manager with:
+
+- **Command line interface** — interactive text input with Everything-style search syntax for advanced file queries, filtering, and sorting
+- **Batch operations** — queue-based processing for large-scale file movements with progress tracking
+- **Smart file analysis** — content-based duplicate detection, file type recognition, and metadata indexing
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Core | Rust |
+| Core | Rust (Clean Architecture + DDD) |
 | GUI | Tauri 2 |
 | Frontend | React 19 + TypeScript + Ant Design |
 | Shell Extension | Windows COM (DLL) |
@@ -63,11 +80,12 @@ The installer will be in `src-tauri/target/release/bundle`.
 
 ## Usage
 
-1. Launch `QuickSort.exe` - icon appears in system tray
+1. Launch `QuickSort.exe` — icon appears in system tray
 2. Add folders, mark favorites with a star, click Apply
-3. Right-click any file in Explorer - pick a folder from the QuickSort menu
+3. Right-click any file in Explorer — pick a folder from the QuickSort menu
 4. Files move instantly. Duplicate detection runs automatically.
-5. Close the window - app keeps running in tray.
+5. Open the History tab to review or undo any operation.
+6. Close the window — app keeps running in tray.
 
 ### Settings
 
@@ -90,6 +108,18 @@ QuickSort/
   src/                 # React frontend
 ```
 
+## Architecture
+
+QuickSort follows Clean Architecture with Domain-Driven Design:
+
+```
+Domain <- Application <- Infrastructure <- Adapters (src-tauri, context-menu-dll)
+```
+
+Dependencies point inward toward the Domain layer. The Application layer exposes use cases through ports and facades. Infrastructure provides concrete implementations (JSON repositories, file system operations, duplicate checking).
+
+See `docs/adr/` for architectural decisions.
+
 ## Author
 
 **azmrv** - [@Fib511](https://t.me/Fib511) on Telegram
@@ -105,6 +135,7 @@ This project is inspired by the work of many talented Rust developers:
 - [ppound](https://github.com/ppound) - [xmp-reader](https://github.com/ppound/xmp-reader), another Shell Extension example
 - [acdvs](https://github.com/acdvs) - [winctx-rs](https://github.com/acdvs/winctx-rs) library
 - [Microsoft](https://github.com/microsoft) - [windows-rs](https://github.com/microsoft/windows-rs) WinAPI bindings
+- [voidtools](https://www.voidtools.com) - Everything search engine, inspiration for our command line interface vision
 
 ## License
 
@@ -114,6 +145,6 @@ This project is inspired by the work of many talented Rust developers:
 
 <div align="center">
 
-**QuickSort** - tidy up your files as fast as you name a folder.
+**QuickSort** — next-generation file management for Windows.
 
 </div>

@@ -5,6 +5,7 @@ import { ConfigProvider, theme, App as AntApp } from 'antd';
 import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
 import LogPage from './pages/LogPage';
+import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
 import './styles/App.css';
@@ -35,6 +36,7 @@ function App() {
 
     const TABS = [
         { key: 'folders', label: 'Папки', content: <EditorPage /> },
+        { key: 'history', label: 'История', content: <HistoryPage /> },
         { key: 'log', label: 'Лог', content: <LogPage /> },
         { key: 'settings', label: 'Настройки', content: <SettingsPage /> },
         { key: 'about', label: 'О программе', content: <AboutPage /> },

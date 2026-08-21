@@ -24,13 +24,14 @@ use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
 
 use super::{
-    ExecuteOperation, GetFolders, LoadSettings, ManageFolders, SaveSettings, UndoOperation,
+    ExecuteOperation, GetFolders, GetOperationHistory, LoadSettings, ManageFolders, SaveSettings,
+    UndoOperation,
 };
 use crate::use_cases::{
-    ExecuteOperationUseCase, GetFoldersUseCase, LoadSettingsUseCase, ManageFoldersUseCase,
-    SaveSettingsUseCase, UndoOperationUseCase,
+    ExecuteOperationUseCase, GetFoldersUseCase, GetOperationHistoryUseCase, LoadSettingsUseCase,
+    ManageFoldersUseCase, SaveSettingsUseCase, UndoOperationUseCase,
 };
-use quicksort_domain::{Folder, FolderId, OperationId, Settings};
+use quicksort_domain::{Folder, FolderId, Operation, OperationId, Settings};
 
 /// Combined implementation of all inbound ports.
 ///
@@ -50,6 +51,7 @@ pub struct ApplicationFacadeImpl {
     undo: Arc<UndoOperationUseCase>,
     get_folders: Arc<GetFoldersUseCase>,
     manage_folders: Arc<ManageFoldersUseCase>,
+    get_operation_history: Arc<GetOperationHistoryUseCase>,
     load_settings: Arc<LoadSettingsUseCase>,
     save_settings: Arc<SaveSettingsUseCase>,
 }
@@ -60,6 +62,7 @@ impl ApplicationFacadeImpl {
         undo: Arc<UndoOperationUseCase>,
         get_folders: Arc<GetFoldersUseCase>,
         manage_folders: Arc<ManageFoldersUseCase>,
+        get_operation_history: Arc<GetOperationHistoryUseCase>,
         load_settings: Arc<LoadSettingsUseCase>,
         save_settings: Arc<SaveSettingsUseCase>,
     ) -> Self {
@@ -68,6 +71,7 @@ impl ApplicationFacadeImpl {
             undo,
             get_folders,
             manage_folders,
+            get_operation_history,
             load_settings,
             save_settings,
         }
@@ -122,6 +126,14 @@ impl ManageFolders for ApplicationFacadeImpl {
     /// Delegates to `ManageFoldersUseCase::toggle_favorite`.
     async fn toggle_favorite(&self, id: FolderId) -> Result<(), UseCaseError> {
         self.manage_folders.toggle_favorite(id).await
+    }
+}
+
+#[async_trait]
+impl GetOperationHistory for ApplicationFacadeImpl {
+    /// Delegates to `GetOperationHistoryUseCase::get_all_operations`.
+    async fn get_all_operations(&self) -> Result<Vec<Operation>, UseCaseError> {
+        self.get_operation_history.get_all_operations().await
     }
 }
 
