@@ -2,6 +2,7 @@
 
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
+mod icon;
 mod pipe_client;
 mod shellext;
 

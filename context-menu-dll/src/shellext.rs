@@ -33,9 +33,9 @@ use windows::Win32::UI::Shell::{
     CMF_DEFAULTONLY, CMINVOKECOMMANDINFO, DROPFILES, GCS_VALIDATEA, GCS_VALIDATEW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreatePopupMenu, InsertMenuItemW, InsertMenuW, MessageBoxW, HMENU, MB_OK, MENUITEMINFOW,
-    MFS_ENABLED, MFT_SEPARATOR, MF_BYPOSITION, MF_POPUP, MIIM_FTYPE, MIIM_ID, MIIM_STATE,
-    MIIM_STRING,
+    CreatePopupMenu, InsertMenuItemW, InsertMenuW, MessageBoxW, SetMenuItemInfoW, HMENU, MB_OK,
+    MENUITEMINFOW, MFS_ENABLED, MFT_SEPARATOR, MF_BYPOSITION, MF_POPUP, MIIM_BITMAP, MIIM_FTYPE,
+    MIIM_ID, MIIM_STATE, MIIM_STRING,
 };
 
 use crate::pipe_client::move_to_folder;
@@ -63,7 +63,7 @@ fn init_logging() {
 
         if let Ok(file) = std::fs::File::create(&log_dir) {
             let config = simplelog::ConfigBuilder::new()
-                .add_filter_allow_str("quicksort")
+                .add_filter_allow_str("context_menu_dll")
                 .build();
             let _ = simplelog::WriteLogger::init(simplelog::LevelFilter::Debug, config, file);
             log::info!("DLL logging started.");
@@ -318,6 +318,21 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 .chain(Some(0))
                 .collect();
             let root_pwstr = PWSTR::from_raw(root_wide.as_ptr() as *mut _);
+
+            let mut root_item = MENUITEMINFOW {
+                cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
+                fMask: MIIM_ID | MIIM_STATE | MIIM_STRING | MIIM_BITMAP,
+                wID: current_id,
+                fState: MFS_ENABLED,
+                dwTypeData: root_pwstr,
+                cch: root_wide.len() as u32,
+                ..Default::default()
+            };
+
+            if let Some(bmp) = crate::icon::load_app_icon_bitmap() {
+                root_item.hbmpItem = bmp;
+            }
+
             let _ = InsertMenuW(
                 menu,
                 menu_index,
@@ -325,6 +340,9 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 h_submenu.0 as usize,
                 root_pwstr,
             );
+
+            // Apply bitmap separately via SetMenuItemInfoW (InsertMenuW ignores hbmpItem)
+            let _ = SetMenuItemInfoW(menu, menu_index, true, &root_item);
 
             HRESULT(used as i32)
         }

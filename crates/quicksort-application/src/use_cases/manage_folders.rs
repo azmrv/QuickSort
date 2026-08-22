@@ -88,15 +88,25 @@ impl ManageFolders for ManageFoldersUseCase {
 
     /// Toggles the favorite status of a folder.
     ///
-    /// **Current status:** Stub implementation.
-    ///
-    /// This functionality requires additional fields (`is_favorite`, `sort_order`)
-    /// in the `Folder` entity, which will be introduced during the SQLite migration
-    /// (see TASK-015). Once those fields exist, this method will delegate to a
-    /// `ConfigurationRepository::update` method that modifies a single folder.
-    // Translated to English with a reference to the tracking task
-    // TODO: TASK-015 – implement toggle_favorite after Folder gains is_favorite field
-    async fn toggle_favorite(&self, _id: FolderId) -> Result<(), UseCaseError> {
-        Ok(())
+    /// Loads all folders, finds the target by ID, toggles its `favorite` flag,
+    /// and persists the updated list.
+    async fn toggle_favorite(&self, id: FolderId) -> Result<(), UseCaseError> {
+        let mut folders = self
+            .config_repo
+            .load_all()
+            .await
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+
+        let folder = folders
+            .iter_mut()
+            .find(|f| f.id == id)
+            .ok_or_else(|| UseCaseError::FolderNotFound(id.to_string()))?;
+
+        folder.toggle_favorite();
+
+        self.config_repo
+            .save_all(&folders)
+            .await
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))
     }
 }

@@ -3,23 +3,68 @@
 use std::collections::HashMap;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, OnceLock};
 
 use parking_lot::RwLock;
+use windows::core::{w, Owned, Result as WinResult, PCWSTR};
 use windows::Win32::Foundation::{E_FAIL, HINSTANCE};
 use windows::Win32::Graphics::Gdi::HBITMAP;
 use windows::Win32::Graphics::GdiPlus::{
     Color as GpColor, GdipCreateBitmapFromHICON, GdipCreateHBITMAPFromBitmap, GdiplusShutdown,
     GdiplusStartup, GdiplusStartupInput, GpBitmap, Status as GpStatus,
 };
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetSystemMetrics, HICON, IMAGE_ICON, LR_DEFAULTCOLOR, LoadImageW, SM_CXSMICON, SM_CYSMICON,
+    GetSystemMetrics, LoadImageW, HICON, IMAGE_ICON, LR_DEFAULTCOLOR, SM_CXSMICON, SM_CYSMICON,
 };
-use windows::core::{Owned, PCWSTR, Result as WinResult};
 
 /// Global cache of icon [`PCWSTR`] names to [`HBITMAP`]s in raw values.
 static ICON_TO_BITMAP_CACHE: LazyLock<RwLock<HashMap<usize, usize>>> =
     LazyLock::new(Default::default);
+
+/// Cached DLL module handle (set once on first use).
+static DLL_HINSTANCE: OnceLock<SyncHINSTANCE> = OnceLock::new();
+
+/// Wrapper around HINSTANCE to make it Send+Sync (it's a process-wide constant).
+#[derive(Clone, Copy)]
+struct SyncHINSTANCE(HINSTANCE);
+unsafe impl Send for SyncHINSTANCE {}
+unsafe impl Sync for SyncHINSTANCE {}
+
+/// Returns the HINSTANCE of the current DLL module.
+///
+/// Uses `GetModuleHandleW` with the DLL file name to obtain the handle.
+/// The handle is cached for subsequent calls.
+pub fn get_dll_instance() -> HINSTANCE {
+    DLL_HINSTANCE
+        .get_or_init(|| {
+            let name = w!("context_menu_dll.dll");
+            let h = unsafe { GetModuleHandleW(name) }
+                .map(|h| HINSTANCE(h.0))
+                .unwrap_or(HINSTANCE(ptr::null_mut()));
+            SyncHINSTANCE(h)
+        })
+        .0
+}
+
+/// Loads the QuickSort app icon from DLL resources and returns an HBITMAP.
+///
+/// Returns `None` if the icon cannot be loaded (e.g., resource not found).
+pub fn load_app_icon_bitmap() -> Option<HBITMAP> {
+    let dll = get_dll_instance();
+    if dll.0.is_null() {
+        log::warn!("DLL instance not available, cannot load icon");
+        return None;
+    }
+    let icon_name = w!("QUICKSORT_ICON");
+    match resource_icon_to_bitmap(dll, icon_name) {
+        Ok(bmp) => Some(bmp),
+        Err(e) => {
+            log::error!("Failed to load app icon: {:?}", e);
+            None
+        }
+    }
+}
 
 /// Loads the given `icon_name` from `dll` and converts it to a bitmap.
 pub fn resource_icon_to_bitmap(dll: HINSTANCE, icon_name: PCWSTR) -> WinResult<HBITMAP> {
@@ -163,5 +208,9 @@ type GpResult<T> = Result<T, GpStatus>;
 /// Maps GDI+ statuses to [`GpResult`]s.
 #[inline]
 fn gp_status_ok(status: GpStatus) -> GpResult<()> {
-    if status.0 == 0 { Ok(()) } else { Err(status) }
+    if status.0 == 0 {
+        Ok(())
+    } else {
+        Err(status)
+    }
 }

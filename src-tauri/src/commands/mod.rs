@@ -71,7 +71,7 @@ pub async fn toggle_favorite_v2(
     order: Option<u32>,
 ) -> Result<(), String> {
     tracing::info!(command = "toggle_favorite_v2", id = %id, order = ?order, "handling");
-    let _ = order;
+    let _ = order; // TODO: support order reordering in toggle_favorite port
     let folder_id = FolderId::from_string(&id).map_err(|e| {
         tracing::error!(command = "toggle_favorite_v2", error = %e, "invalid folder ID");
         format!("Invalid folder ID: {}", e)

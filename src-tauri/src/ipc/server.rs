@@ -185,6 +185,12 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                             Ok(result) => {
                                 let op_id = result.operation_id.to_string();
                                 let processed = result.processed_files;
+                                tracing::info!(
+                                    "ExecuteOperation OK: op_id={}, files={}, bytes={}",
+                                    op_id,
+                                    processed,
+                                    result.bytes_moved
+                                );
                                 ResponseMessage {
                                     status: ResponseStatus::Ok,
                                     message: format!("Processed {} files", processed),
@@ -192,19 +198,25 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                                     data: None,
                                 }
                             }
-                            Err(e) => ResponseMessage {
+                            Err(e) => {
+                                tracing::error!("ExecuteOperation FAIL: {}", e);
+                                ResponseMessage {
+                                    status: ResponseStatus::Error,
+                                    message: e.to_string(),
+                                    operation_id: None,
+                                    data: None,
+                                }
+                            }
+                        },
+                        None => {
+                            tracing::error!("ExecuteOperation FAIL: no valid source paths");
+                            ResponseMessage {
                                 status: ResponseStatus::Error,
-                                message: e.to_string(),
+                                message: "Invalid command: no valid source paths".to_string(),
                                 operation_id: None,
                                 data: None,
-                            },
-                        },
-                        None => ResponseMessage {
-                            status: ResponseStatus::Error,
-                            message: "Invalid command: no valid source paths".to_string(),
-                            operation_id: None,
-                            data: None,
-                        },
+                            }
+                        }
                     };
                     response
                 }

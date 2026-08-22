@@ -142,6 +142,13 @@ impl ExecuteOperationUseCase {
     ) -> Result<u64, UseCaseError> {
         match command.operation_type {
             OperationType::Move | OperationType::Copy => {
+                // Skip files already in the target folder (same-folder protection)
+                if let (Some(src_parent), Some(ref target)) = (source.parent(), target_folder) {
+                    if src_parent == *target {
+                        return Ok(0u64);
+                    }
+                }
+
                 let dest = self.build_destination(source, target_folder)?;
 
                 // Duplicate detection phase
