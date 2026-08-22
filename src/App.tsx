@@ -5,8 +5,11 @@ import { ConfigProvider, theme, App as AntApp } from 'antd';
 import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
 import LogPage from './pages/LogPage';
+import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
+import PluginsPage from './pages/PluginsPage';
+import CommandPalette from './components/CommandPalette';
 import './styles/App.css';
 
 function App() {
@@ -15,6 +18,7 @@ function App() {
     const [isDark, setIsDark] = useState(true);
     const [activeTab, setActiveTab] = useState('folders');
     const [version, setVersion] = useState('0.0.0');
+    const [paletteOpen, setPaletteOpen] = useState(false);
 
     useEffect(() => {
         logger.info('App', 'startup');
@@ -28,6 +32,18 @@ function App() {
         });
     }, []);
 
+    // Global keyboard shortcut: Ctrl+Shift+Space opens Command Palette
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.ctrlKey && e.shiftKey && e.code === 'Space') {
+                e.preventDefault();
+                setPaletteOpen((prev) => !prev);
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, []);
+
     useEffect(() => {
         document.body.style.backgroundColor = isDark ? '#0a0a0b' : '#f8f9fa';
         document.body.style.color = isDark ? '#e8e8ec' : '#1a1a1d';
@@ -35,6 +51,8 @@ function App() {
 
     const TABS = [
         { key: 'folders', label: 'Папки', content: <EditorPage /> },
+        { key: 'history', label: 'История', content: <HistoryPage /> },
+        { key: 'plugins', label: 'Плагины', content: <PluginsPage /> },
         { key: 'log', label: 'Лог', content: <LogPage /> },
         { key: 'settings', label: 'Настройки', content: <SettingsPage /> },
         { key: 'about', label: 'О программе', content: <AboutPage /> },
@@ -65,8 +83,19 @@ function App() {
                                 <span className="app-logo-text">QuickSort</span>
                                 <span className="app-logo-version">v{version}</span>
                             </div>
-                            <div className="theme-toggle" onClick={() => setIsDark(!isDark)}>
-                                <span className="theme-toggle-icon">{isDark ? '🌙' : '☀️'}</span>
+                            <div className="header-right">
+                                <button
+                                    className="search-hint-btn"
+                                    onClick={() => setPaletteOpen(true)}
+                                    title="Search (Ctrl+Shift+Space)"
+                                >
+                                    <span className="search-hint-icon">{'>'}_</span>
+                                    <span className="search-hint-text">Search</span>
+                                    <span className="search-hint-shortcut">Ctrl+Shift+Space</span>
+                                </button>
+                                <div className="theme-toggle" onClick={() => setIsDark(!isDark)}>
+                                    <span className="theme-toggle-icon">{isDark ? '🌙' : '☀️'}</span>
+                                </div>
                             </div>
                         </header>
                         <main className="app-main">
@@ -96,6 +125,7 @@ function App() {
                 ) : (
                     <SelectorPage file={selectFile} onClose={() => setMode('editor')} />
                 )}
+                <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
             </AntApp>
         </ConfigProvider>
     );

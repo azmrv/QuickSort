@@ -17,7 +17,9 @@ mod execute_operation; // ExecuteOperation – execute file operations
 mod facade; // ApplicationFacade – combined inbound port interface
 mod facade_impl;
 mod get_folders; // GetFolders – retrieve all configured folders
+mod get_operation_history; // GetOperationHistory – retrieve operation history
 mod manage_folders; // ManageFolders – add, remove, rename, toggle favorite
+mod plugin_manager; // PluginManager – list, enable, disable plugins
 mod settings; // LoadSettings, SaveSettings – user settings
 mod undo_operation; // UndoOperation – revert completed operations
 
@@ -25,7 +27,9 @@ mod undo_operation; // UndoOperation – revert completed operations
 pub use execute_operation::ExecuteOperation;
 pub use facade::ApplicationFacade;
 pub use get_folders::GetFolders;
+pub use get_operation_history::GetOperationHistory;
 pub use manage_folders::ManageFolders;
+pub use plugin_manager::{PluginInfoDto, PluginManager};
 pub use settings::{LoadSettings, SaveSettings};
 pub use undo_operation::UndoOperation;
 // ApplicationFacadeImpl is now re-exported for adapters that need

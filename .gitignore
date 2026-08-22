@@ -62,12 +62,10 @@ AGENTS.md
 opencode/
 /workflows/
 
-# Tasks (except plan.md)
+# Tasks (all excluded — managed in docs repo)
 tasks/*
-!tasks/plan.md
 
-# Documentation (except README, ADR, and translations)
+# Documentation (all excluded — docs has its own git repo)
 *.md
 !README.md
-!docs/adr/*.md
-!docs/translation/**
+docs/*

@@ -53,16 +53,23 @@ pub use dtos::{OperationCommand, OperationResult, OverwritePolicy};
 
 // Inbound ports – the contracts that adapters call.
 pub use ports::inbound::{
-    ApplicationFacade, ApplicationFacadeImpl, ExecuteOperation, GetFolders, LoadSettings,
-    ManageFolders, SaveSettings, UndoOperation,
+    ApplicationFacade, ApplicationFacadeImpl, ExecuteOperation, GetFolders, GetOperationHistory,
+    LoadSettings, ManageFolders, PluginInfoDto, PluginManager, SaveSettings, UndoOperation,
 };
+
+// Outbound ports – for reference by adapters (not directly used).
+pub use ports::outbound::{FileSearchPort, FileSearchResult, SearchResult};
+
+// Use cases – concrete implementations.
+pub use use_cases::SearchFiles;
 
 // Domain types – re-exported so adapters can construct domain entities
 // without violating the Dependency Rule (adapters depend on Application,
 // which depends on Domain).
 pub use quicksort_domain::{
     DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, DuplicateCheckMode, Folder,
-    FolderId, OperationId, OperationType, Settings, WindowsPath,
+    FolderId, Operation, OperationId, OperationType, PluginConfig, SearchQuery, Settings,
+    WindowsPath,
 };
 
 // Pipeline is intentionally NOT re-exported – it is an internal mechanism

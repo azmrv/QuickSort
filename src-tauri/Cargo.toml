@@ -81,6 +81,9 @@ windows = { version = "0.62.2", features = [
     "Win32_Security",
 ] }
 
+# Async trait support (needed for ProgressReporter implementation)
+async-trait = "0.1"
+
 # ========== Application layer – main dependency ==========
 
 # Provides Use Cases, DTOs, and the ApplicationFacade.
