@@ -25,15 +25,17 @@ pub mod events;
 pub mod value_objects;
 
 pub use entities::{
-    ArchiveEntry, ArchivePlugin, ConflictContext, ConflictResolution, ConflictStats,
-    ContentPlugin, DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig,
-    DuplicateCheckMode, DuplicateCheckResult, DuplicateChecker, FileSystemPlugin, Folder,
-    ListerPlugin, Operation, OperationState, OperationType, Plugin, PluginCapabilities,
-    PluginConfig, PluginError, PluginInfo, PluginType, Settings,
+    ArchiveEntry, ArchivePlugin, ConflictContext, ConflictResolution, ConflictStats, ContentPlugin,
+    DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, DuplicateCheckMode,
+    DuplicateCheckResult, DuplicateChecker, FileSystemPlugin, Folder, ListerPlugin, Operation,
+    OperationState, OperationType, Plugin, PluginCapabilities, PluginConfig, PluginError,
+    PluginInfo, PluginType, Settings,
 };
 pub use errors::DomainError;
 pub use events::DomainEvent;
-pub use value_objects::{DateFilter, FolderId, OperationId, SearchFilter, SearchQuery, SizeOp, WindowsPath};
+pub use value_objects::{
+    DateFilter, FolderId, OperationId, SearchFilter, SearchQuery, SizeOp, WindowsPath,
+};
 
 // DTOs are no longer re-exported from the domain layer.
 // Adapters and Application should obtain them from `quicksort-application`.

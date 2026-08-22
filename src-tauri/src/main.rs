@@ -139,9 +139,8 @@ fn start_tauri() {
         quicksort_infrastructure::repository::InMemoryOperationRepository::new(),
     ));
 
-    let search_files_use_case = SearchFilesUseCase::new(Arc::new(
-        quicksort_infrastructure::FsFileSearch::new(),
-    ));
+    let search_files_use_case =
+        SearchFilesUseCase::new(Arc::new(quicksort_infrastructure::FsFileSearch::new()));
 
     let facade = Arc::new(
         ApplicationFacadeImpl::new(

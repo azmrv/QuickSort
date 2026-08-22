@@ -38,9 +38,8 @@ impl FileSearchPort for FsFileSearch {
     ) -> Result<SearchResult, UseCaseError> {
         let start = std::time::Instant::now();
 
-        let query = SearchQuery::parse(query_text).map_err(|e| {
-            UseCaseError::InvalidCommand(format!("Invalid search query: {}", e))
-        })?;
+        let query = SearchQuery::parse(query_text)
+            .map_err(|e| UseCaseError::InvalidCommand(format!("Invalid search query: {}", e)))?;
 
         let mut results = Vec::new();
 
@@ -73,7 +72,7 @@ impl FsFileSearch {
         query: &'a SearchQuery,
         results: &'a mut Vec<FileSearchResult>,
         max_results: usize,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             if results.len() >= max_results {
                 return;
@@ -121,7 +120,8 @@ impl FsFileSearch {
                 }
 
                 if is_directory && results.len() < max_results {
-                    self.walk_directory(&path, query, results, max_results).await;
+                    self.walk_directory(&path, query, results, max_results)
+                        .await;
                 }
             }
         })
@@ -145,11 +145,7 @@ impl FsFileSearch {
         for filter in &query.filters {
             match filter {
                 SearchFilter::Extension(ext) => {
-                    let file_ext = name
-                        .rsplit('.')
-                        .next()
-                        .unwrap_or("")
-                        .to_lowercase();
+                    let file_ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
                     if file_ext != *ext {
                         return false;
                     }
@@ -198,7 +194,9 @@ impl FsFileSearch {
         // Check OR groups (at least one group must have a matching term)
         if !query.or_groups.is_empty() {
             let any_group_matches = query.or_groups.iter().any(|group| {
-                group.iter().any(|term| self.matches_term(&name_lower, term))
+                group
+                    .iter()
+                    .any(|term| self.matches_term(&name_lower, term))
             });
             if !any_group_matches {
                 return false;
@@ -226,7 +224,13 @@ impl FsFileSearch {
         self.wildcard_match_recursive(&text, &pattern, 0, 0)
     }
 
-    fn wildcard_match_recursive(&self, text: &[char], pattern: &[char], ti: usize, pi: usize) -> bool {
+    fn wildcard_match_recursive(
+        &self,
+        text: &[char],
+        pattern: &[char],
+        ti: usize,
+        pi: usize,
+    ) -> bool {
         if pi == pattern.len() {
             return ti == text.len();
         }
@@ -257,12 +261,9 @@ impl FsFileSearch {
         let start_of_today = now - (now % day_secs);
 
         match filter {
-            DateFilter::Today => {
-                modified_secs >= start_of_today
-            }
+            DateFilter::Today => modified_secs >= start_of_today,
             DateFilter::Yesterday => {
-                modified_secs >= start_of_today - day_secs
-                    && modified_secs < start_of_today
+                modified_secs >= start_of_today - day_secs && modified_secs < start_of_today
             }
             DateFilter::PastDays(days) => {
                 let cutoff = start_of_today - (*days as i64) * day_secs;
@@ -307,7 +308,9 @@ mod tests {
     #[tokio::test]
     async fn test_search_text_term() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("report_v1.pdf"), "").await.unwrap();
+        fs::write(dir.path().join("report_v1.pdf"), "")
+            .await
+            .unwrap();
         fs::write(dir.path().join("summary.pdf"), "").await.unwrap();
 
         let search = FsFileSearch::new();
@@ -321,8 +324,12 @@ mod tests {
     #[tokio::test]
     async fn test_search_size_gt() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("big.bin"), vec![0u8; 2000]).await.unwrap();
-        fs::write(dir.path().join("small.bin"), vec![0u8; 100]).await.unwrap();
+        fs::write(dir.path().join("big.bin"), vec![0u8; 2000])
+            .await
+            .unwrap();
+        fs::write(dir.path().join("small.bin"), vec![0u8; 100])
+            .await
+            .unwrap();
 
         let search = FsFileSearch::new();
         let dirs = vec![dir.path().to_str().unwrap().to_string()];
@@ -350,7 +357,9 @@ mod tests {
     async fn test_search_max_results() {
         let dir = tempdir().unwrap();
         for i in 0..10 {
-            fs::write(dir.path().join(format!("file{}.txt", i)), "").await.unwrap();
+            fs::write(dir.path().join(format!("file{}.txt", i)), "")
+                .await
+                .unwrap();
         }
 
         let search = FsFileSearch::new();
@@ -364,7 +373,9 @@ mod tests {
     #[tokio::test]
     async fn test_search_result_metadata() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("data.bin"), vec![0u8; 42]).await.unwrap();
+        fs::write(dir.path().join("data.bin"), vec![0u8; 42])
+            .await
+            .unwrap();
 
         let search = FsFileSearch::new();
         let dirs = vec![dir.path().to_str().unwrap().to_string()];
@@ -403,8 +414,12 @@ mod tests {
     #[tokio::test]
     async fn test_search_wildcard() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("report_v1.pdf"), "").await.unwrap();
-        fs::write(dir.path().join("report_v2.pdf"), "").await.unwrap();
+        fs::write(dir.path().join("report_v1.pdf"), "")
+            .await
+            .unwrap();
+        fs::write(dir.path().join("report_v2.pdf"), "")
+            .await
+            .unwrap();
         fs::write(dir.path().join("summary.pdf"), "").await.unwrap();
 
         let search = FsFileSearch::new();

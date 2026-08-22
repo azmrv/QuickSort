@@ -28,7 +28,8 @@ pub trait PluginConfigRepository: Send + Sync {
     async fn load_config(&self, plugin_id: &str) -> Result<PluginConfig, UseCaseError>;
 
     /// Save plugin configuration.
-    async fn save_config(&self, plugin_id: &str, config: &PluginConfig) -> Result<(), UseCaseError>;
+    async fn save_config(&self, plugin_id: &str, config: &PluginConfig)
+        -> Result<(), UseCaseError>;
 
     /// Check if plugin is enabled.
     async fn is_enabled(&self, plugin_id: &str) -> Result<bool, UseCaseError>;
@@ -71,10 +72,7 @@ impl PluginManager for PluginManagerUseCase {
         Ok(plugins)
     }
 
-    async fn get_plugin_config(
-        &self,
-        plugin_id: &str,
-    ) -> Result<PluginConfig, UseCaseError> {
+    async fn get_plugin_config(&self, plugin_id: &str) -> Result<PluginConfig, UseCaseError> {
         self.config_repo.load_config(plugin_id).await
     }
 
@@ -86,11 +84,7 @@ impl PluginManager for PluginManagerUseCase {
         self.config_repo.save_config(plugin_id, &config).await
     }
 
-    async fn set_plugin_enabled(
-        &self,
-        plugin_id: &str,
-        enabled: bool,
-    ) -> Result<(), UseCaseError> {
+    async fn set_plugin_enabled(&self, plugin_id: &str, enabled: bool) -> Result<(), UseCaseError> {
         self.config_repo.set_enabled(plugin_id, enabled).await
     }
 

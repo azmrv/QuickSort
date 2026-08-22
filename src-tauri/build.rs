@@ -41,24 +41,41 @@ fn copy_dll_to_appdata() {
         return;
     }
 
-    // Determine the source path of the DLL
-    let dll_src = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        // Go up from `src-tauri` to the workspace root
+    // Determine the source path of the DLL.
+    // In a cargo workspace the DLL is output to the shared `target/` dir at the
+    // workspace root, NOT to `context-menu-dll/target/`.  We also keep the old
+    // path as a fallback for non-workspace (standalone) builds.
+    let workspace_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))
-        .join("context-menu-dll")
-        .join("target")
-        .join("release")
-        .join("context_menu_dll.dll");
+        .to_path_buf();
 
-    // Verify that the source DLL exists before attempting to copy
-    if !dll_src.exists() {
-        println!(
-            "cargo:warning=DLL not found at {} – skipping copy (build the DLL first)",
-            dll_src.display()
-        );
-        return;
-    }
+    let candidates = [
+        // Workspace build (preferred): repo/target/release/
+        workspace_root
+            .join("target")
+            .join("release")
+            .join("context_menu_dll.dll"),
+        // Standalone build fallback: repo/context-menu-dll/target/release/
+        workspace_root
+            .join("context-menu-dll")
+            .join("target")
+            .join("release")
+            .join("context_menu_dll.dll"),
+    ];
+
+    let dll_src = candidates.iter().find(|p| p.exists()).cloned();
+
+    let dll_src = match dll_src {
+        Some(path) => path,
+        None => {
+            println!(
+                "cargo:warning=DLL not found in {} – skipping copy (build the DLL first)",
+                workspace_root.display()
+            );
+            return;
+        }
+    };
 
     // Copy the DLL to the destination
     let dll_dest = appdata.join("context_menu_dll.dll");

@@ -11,7 +11,9 @@
 //! This module uses unsafe code for FFI calls with WCX plugin DLLs.
 //! All unsafe blocks are carefully audited and documented.
 
-use quicksort_domain::{ArchiveEntry, ArchivePlugin, Plugin, PluginCapabilities, PluginError, PluginType};
+use quicksort_domain::{
+    ArchiveEntry, ArchivePlugin, Plugin, PluginCapabilities, PluginError, PluginType,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -143,7 +145,8 @@ impl WcxPluginAdapter {
             Self::get_proc_address::<FnSetProcessDataProc>(dll_module, "SetProcessDataProc")?;
 
         // 3. Get optional function pointers
-        let get_packer_caps = Self::get_optional_proc::<FnGetPackerCaps>(dll_module, "GetPackerCaps");
+        let get_packer_caps =
+            Self::get_optional_proc::<FnGetPackerCaps>(dll_module, "GetPackerCaps");
         let can_handle_file =
             Self::get_optional_proc::<FnCanYouHandleThisFile>(dll_module, "CanYouHandleThisFile");
         let read_header_ex = Self::get_optional_proc::<FnReadHeaderEx>(dll_module, "ReadHeaderEx");
@@ -433,7 +436,8 @@ impl ArchivePlugin for WcxPluginAdapter {
             result != 0
         } else {
             // Fallback to extension map
-            self.extension_map.contains_key(extension.to_lowercase().as_str())
+            self.extension_map
+                .contains_key(extension.to_lowercase().as_str())
         }
     }
 
@@ -508,11 +512,7 @@ impl ArchivePlugin for WcxPluginAdapter {
         ))
     }
 
-    fn create_archive(
-        &self,
-        _archive_path: &Path,
-        _files: &[PathBuf],
-    ) -> Result<(), PluginError> {
+    fn create_archive(&self, _archive_path: &Path, _files: &[PathBuf]) -> Result<(), PluginError> {
         let caps = self.capabilities();
         if !caps.can_create {
             return Err(PluginError::Incompatible(

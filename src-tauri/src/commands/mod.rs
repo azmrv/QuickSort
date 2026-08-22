@@ -264,9 +264,7 @@ pub fn check_teracopy_installed() -> bool {
         "C:\\Program Files\\TeraCopy\\TeraCopy.exe",
         "C:\\Program Files (x86)\\TeraCopy\\TeraCopy.exe",
     ];
-    teracopy_paths
-        .iter()
-        .any(|p| PathBuf::from(p).exists())
+    teracopy_paths.iter().any(|p| PathBuf::from(p).exists())
 }
 
 /// Create a new folder in the specified parent directory.
@@ -291,8 +289,7 @@ pub async fn create_new_folder(parent_path: String, folder_name: String) -> Resu
         return Err(format!("Folder already exists: {}", new_folder.display()));
     }
 
-    std::fs::create_dir(&new_folder)
-        .map_err(|e| format!("Failed to create folder: {}", e))?;
+    std::fs::create_dir(&new_folder).map_err(|e| format!("Failed to create folder: {}", e))?;
 
     let path_str = new_folder.to_string_lossy().to_string();
     tracing::info!(command = "create_new_folder", path = %path_str, "OK");
@@ -408,7 +405,12 @@ pub async fn search_files(
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(r) => tracing::info!(command = "search_files", total = r.total_count, time_ms = r.search_time_ms, "OK"),
+        Ok(r) => tracing::info!(
+            command = "search_files",
+            total = r.total_count,
+            time_ms = r.search_time_ms,
+            "OK"
+        ),
         Err(e) => tracing::error!(command = "search_files", error = %e, "FAIL"),
     }
     result
