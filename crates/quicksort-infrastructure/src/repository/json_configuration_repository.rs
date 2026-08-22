@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use quicksort_application::errors::UseCaseError;
 use quicksort_application::ports::outbound::ConfigurationRepository;
-use quicksort_domain::{Folder, FolderId, WindowsPath};
+use quicksort_domain::{Folder, FolderId, FolderStats, WindowsPath};
 
 #[derive(Serialize, Deserialize)]
 struct ConfigFile {
@@ -21,8 +21,12 @@ struct FolderData {
     id: String,
     name: String,
     path: String,
-    is_favorite: bool,
-    sort_order: u32,
+    #[serde(default)]
+    favorite: bool,
+    #[serde(default)]
+    order: u32,
+    #[serde(default)]
+    stats: FolderStats,
 }
 
 /// Repository that stores folder configuration in a JSON file.
@@ -51,7 +55,11 @@ impl JsonConfigurationRepository {
                 .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
             let id = FolderId::from_string(&f.id)
                 .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
-            folders.push(Folder::with_id(id, f.name, path));
+            let mut folder = Folder::with_id(id, f.name, path);
+            folder.favorite = f.favorite;
+            folder.order = f.order;
+            folder.stats = f.stats;
+            folders.push(folder);
         }
         Ok(folders)
     }
@@ -65,8 +73,9 @@ impl JsonConfigurationRepository {
                     id: f.id.to_string(),
                     name: f.name.clone(),
                     path: f.path.to_string(),
-                    is_favorite: f.favorite,
-                    sort_order: f.order,
+                    favorite: f.favorite,
+                    order: f.order,
+                    stats: f.stats.clone(),
                 })
                 .collect(),
         };

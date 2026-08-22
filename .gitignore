@@ -64,10 +64,9 @@ opencode/
 
 # Tasks (except plan.md)
 tasks/*
-!tasks/plan.md
+docs/*
 
 # Documentation (except README, ADR, and translations)
 *.md
 !README.md
-!docs/adr/*.md
 !docs/translation/**

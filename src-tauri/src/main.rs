@@ -92,10 +92,43 @@ fn ensure_dll_copied() {
     }
 }
 
+fn write_owner_pid() {
+    let pid = std::process::id();
+    let appdata = match std::env::var("APPDATA") {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(error = %e, "cannot read APPDATA for PID file");
+            return;
+        }
+    };
+    let dir = PathBuf::from(&appdata).join("QuickSort");
+    let _ = std::fs::create_dir_all(&dir);
+    let pid_path = dir.join("dll_owner.pid");
+    match std::fs::write(&pid_path, pid.to_string()) {
+        Ok(()) => tracing::info!(pid, path = %pid_path.display(), "owner PID written"),
+        Err(e) => tracing::error!(error = %e, "failed to write owner PID"),
+    }
+}
+
+fn remove_owner_pid() {
+    let appdata = match std::env::var("APPDATA") {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let pid_path = PathBuf::from(&appdata)
+        .join("QuickSort")
+        .join("dll_owner.pid");
+    match std::fs::remove_file(&pid_path) {
+        Ok(()) => tracing::info!("owner PID file removed"),
+        Err(e) => tracing::debug!(error = %e, "PID file already absent"),
+    }
+}
+
 fn start_tauri() {
     tracing::info!("startup");
 
     ensure_dll_copied();
+    write_owner_pid();
 
     let config_dir = std::env::var("APPDATA")
         .map(PathBuf::from)
@@ -225,7 +258,7 @@ fn start_tauri() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
-                commands::unregister_com_server().ok();
+                remove_owner_pid();
                 if let Some(window) = window.app_handle().get_webview_window("main") {
                     let _ = window.hide();
                 }

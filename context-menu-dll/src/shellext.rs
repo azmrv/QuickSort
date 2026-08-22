@@ -24,7 +24,7 @@ use windows::Win32::Foundation::{
 use windows::Win32::System::Com::{
     IClassFactory, IClassFactory_Impl, IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL,
 };
-use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
+use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
 use windows::Win32::System::Memory::GlobalLock;
 use windows::Win32::System::Ole::{ReleaseStgMedium, CF_HDROP};
 use windows::Win32::System::Registry::HKEY;
@@ -32,10 +32,10 @@ use windows::Win32::UI::Shell::{
     Common::ITEMIDLIST, IContextMenu, IContextMenu_Impl, IShellExtInit, IShellExtInit_Impl,
     CMF_DEFAULTONLY, CMINVOKECOMMANDINFO, DROPFILES, GCS_VALIDATEA, GCS_VALIDATEW,
 };
+use windows::Win32::Graphics::Gdi::HBITMAP;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreatePopupMenu, InsertMenuItemW, InsertMenuW, MessageBoxW, HMENU, MB_OK, MENUITEMINFOW,
-    MFS_ENABLED, MFT_SEPARATOR, MF_BYPOSITION, MF_POPUP, MIIM_FTYPE, MIIM_ID, MIIM_STATE,
-    MIIM_STRING,
+    CreatePopupMenu, InsertMenuItemW, MessageBoxW, HMENU, MB_OK, MENUITEMINFOW, MFS_ENABLED,
+    MFT_SEPARATOR, MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
 };
 
 use crate::pipe_client::move_to_folder;
@@ -211,12 +211,17 @@ fn extract_files_from_dataobject(data_obj: &IDataObject) -> WinResult<Vec<PathBu
 // IContextMenu implementation
 // ============================================================================
 
-fn make_menu_item(id: u32, text: &[u16]) -> MENUITEMINFOW {
+fn make_menu_item(id: u32, text: &[u16], icon: Option<HBITMAP>) -> MENUITEMINFOW {
+    let mut mask = MIIM_ID | MIIM_STATE | MIIM_STRING;
+    if icon.is_some() {
+        mask |= MIIM_BITMAP;
+    }
     MENUITEMINFOW {
         cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
-        fMask: MIIM_ID | MIIM_STATE | MIIM_STRING,
+        fMask: mask,
         wID: id,
         fState: MFS_ENABLED,
+        hbmpItem: icon.unwrap_or_default(),
         dwTypeData: PWSTR::from_raw(text.as_ptr() as *mut _),
         cch: text.len() as u32,
         ..Default::default()
@@ -273,6 +278,8 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             let h_submenu = CreatePopupMenu().unwrap();
             let mut current_id = min_cmd_id;
 
+            let icon_bmp = get_dll_icon();
+
             for folder in favorites.iter().take(max_fav as usize) {
                 let label = format!("\u{2605} {}", folder.name);
                 let wide: Vec<u16> = OsString::from(&label)
@@ -283,7 +290,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                     h_submenu,
                     0xFFFFFFFF,
                     true,
-                    &make_menu_item(current_id, &wide),
+                    &make_menu_item(current_id, &wide, icon_bmp),
                 );
                 current_id += 1;
                 used += 1;
@@ -306,7 +313,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                     h_submenu,
                     0xFFFFFFFF,
                     true,
-                    &make_menu_item(current_id, &all_wide),
+                    &make_menu_item(current_id, &all_wide, None),
                 );
                 used += 1;
             }
@@ -317,14 +324,18 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 .copied()
                 .chain(Some(0))
                 .collect();
-            let root_pwstr = PWSTR::from_raw(root_wide.as_ptr() as *mut _);
-            let _ = InsertMenuW(
-                menu,
-                menu_index,
-                MF_BYPOSITION | MF_POPUP,
-                h_submenu.0 as usize,
-                root_pwstr,
-            );
+            let root_item = MENUITEMINFOW {
+                cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
+                fMask: MIIM_ID | MIIM_STATE | MIIM_STRING | MIIM_BITMAP | MIIM_SUBMENU,
+                wID: min_cmd_id + used,
+                fState: MFS_ENABLED,
+                hbmpItem: icon_bmp.unwrap_or_default(),
+                hSubMenu: h_submenu,
+                dwTypeData: PWSTR::from_raw(root_wide.as_ptr() as *mut _),
+                cch: 4, // "QuickSort" len
+                ..Default::default()
+            };
+            let _ = InsertMenuItemW(menu, menu_index, true, &root_item);
 
             HRESULT(used as i32)
         }
@@ -464,6 +475,22 @@ fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
         .collect();
 
     Ok(folders)
+}
+
+// ============================================================================
+// Helper: load DLL icon as HBITMAP for context menu
+// ============================================================================
+
+fn get_dll_icon() -> Option<HBITMAP> {
+    unsafe {
+        let dll_name: Vec<u16> = "context-menu-dll.dll"
+            .encode_utf16()
+            .chain(Some(0))
+            .collect();
+        let h_module = GetModuleHandleW(PCWSTR(dll_name.as_ptr())).ok()?;
+        let icon_name = PCWSTR(1 as _); // MAKEINTRESOURCE(1) = IDI_MYAPP_ICON
+        crate::icon::resource_icon_to_bitmap(h_module.into(), icon_name).ok()
+    }
 }
 
 // ============================================================================

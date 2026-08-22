@@ -15,9 +15,9 @@ pub enum DefaultOperation {
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum DefaultOverwritePolicy {
-    #[default]
     Skip,
     Overwrite,
+    #[default]
     AutoRename,
 }
 
@@ -26,9 +26,9 @@ pub enum DefaultOverwritePolicy {
 #[serde(rename_all = "lowercase")]
 pub enum DuplicateCheckMode {
     /// Quick check: file with same name exists at destination.
-    #[default]
     Name,
     /// Medium check: same name AND same file size.
+    #[default]
     Size,
     /// Deep check: SHA-256 hash comparison (slowest, most accurate).
     Content,
@@ -47,7 +47,7 @@ impl Default for DuplicateCheckConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            mode: DuplicateCheckMode::Name,
+            mode: DuplicateCheckMode::default(),
         }
     }
 }
@@ -83,10 +83,10 @@ mod tests {
         assert_eq!(settings.default_operation, DefaultOperation::Move);
         assert_eq!(
             settings.default_overwrite_policy,
-            DefaultOverwritePolicy::Skip
+            DefaultOverwritePolicy::AutoRename
         );
         assert!(settings.duplicate_check.enabled);
-        assert_eq!(settings.duplicate_check.mode, DuplicateCheckMode::Name);
+        assert_eq!(settings.duplicate_check.mode, DuplicateCheckMode::Size);
     }
 
     #[test]
@@ -102,7 +102,7 @@ mod tests {
         let settings = Settings::default();
         let json = serde_json::to_string_pretty(&settings).unwrap();
         assert!(json.contains("\"Move\""));
-        assert!(json.contains("\"Skip\""));
-        assert!(json.contains("\"name\""));
+        assert!(json.contains("\"AutoRename\""));
+        assert!(json.contains("\"size\""));
     }
 }

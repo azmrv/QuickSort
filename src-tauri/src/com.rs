@@ -65,21 +65,23 @@ pub fn register() -> Result<(), String> {
 pub fn unregister() -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
+    // Delete each handler entry from its parent key.
     for handler in HANDLERS {
-        let path = format!(
-            "Software\\Classes\\{}\\shellex\\ContextMenuHandlers\\QuickSort",
+        let parent = format!(
+            "Software\\Classes\\{}\\shellex\\ContextMenuHandlers",
             handler
         );
-        if let Ok(key) = hkcu.open_subkey(&path) {
-            key.delete_subkey_all("")
-                .map_err(|e| format!("delete handler '{}': {}", path, e))?;
+        if let Ok(parent_key) = hkcu.open_subkey_with_flags(&parent, KEY_WRITE) {
+            let _ = parent_key.delete_subkey("QuickSort");
         }
     }
 
-    let clsid_path = format!("Software\\Classes\\CLSID\\{}", CLSID);
-    if let Ok(key) = hkcu.open_subkey(&clsid_path) {
-        key.delete_subkey_all("")
-            .map_err(|e| format!("delete CLSID: {}", e))?;
+    // Delete the CLSID key and ALL its children (InprocServer32, etc.).
+    let clsid_parent = "Software\\Classes\\CLSID";
+    if let Ok(parent_key) = hkcu.open_subkey_with_flags(clsid_parent, KEY_WRITE) {
+        parent_key
+            .delete_subkey_all(CLSID)
+            .map_err(|e| format!("delete CLSID '{}': {}", CLSID, e))?;
     }
 
     restart_explorer();
