@@ -18,13 +18,14 @@ use tauri::{
     Emitter, Manager,
 };
 
+use quicksort_application::ports::inbound::PluginInfoDto;
 use quicksort_application::{
     use_cases::{
         ExecuteOperationUseCase, GetFoldersUseCase, GetOperationHistoryUseCase,
-        LoadSettingsUseCase, ManageFoldersUseCase, SaveSettingsUseCase, SearchFilesUseCase,
-        UndoOperationUseCase,
+        LoadSettingsUseCase, ManageFoldersUseCase, PluginConfigRepository, PluginLoader,
+        PluginManagerUseCase, SaveSettingsUseCase, SearchFilesUseCase, UndoOperationUseCase,
     },
-    ApplicationFacadeImpl,
+    ApplicationFacadeImpl, PluginConfig,
 };
 
 use quicksort_infrastructure::JsonConfigurationRepository;
@@ -38,6 +39,50 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     SelectFolder { file: String },
+}
+
+use quicksort_application::errors::UseCaseError;
+
+// ---------------------------------------------------------------------------
+// Stub implementations for plugin system (no real plugins yet)
+// ---------------------------------------------------------------------------
+
+struct StubPluginLoader;
+
+#[async_trait::async_trait]
+impl PluginLoader for StubPluginLoader {
+    async fn discover_plugins(&self) -> Result<Vec<PluginInfoDto>, UseCaseError> {
+        Ok(vec![])
+    }
+    fn plugin_directory(&self) -> &std::path::Path {
+        std::path::Path::new("")
+    }
+}
+
+struct StubPluginConfigRepo;
+
+#[async_trait::async_trait]
+impl PluginConfigRepository for StubPluginConfigRepo {
+    async fn load_config(&self, _plugin_id: &str) -> Result<PluginConfig, UseCaseError> {
+        Ok(PluginConfig {
+            id: String::new(),
+            enabled: false,
+            settings: serde_json::Value::Null,
+        })
+    }
+    async fn save_config(
+        &self,
+        _plugin_id: &str,
+        _config: &PluginConfig,
+    ) -> Result<(), UseCaseError> {
+        Ok(())
+    }
+    async fn is_enabled(&self, _plugin_id: &str) -> Result<bool, UseCaseError> {
+        Ok(false)
+    }
+    async fn set_enabled(&self, _plugin_id: &str, _enabled: bool) -> Result<(), UseCaseError> {
+        Ok(())
+    }
 }
 
 fn main() {
@@ -142,6 +187,9 @@ fn start_tauri() {
     let search_files_use_case =
         SearchFilesUseCase::new(Arc::new(quicksort_infrastructure::FsFileSearch::new()));
 
+    let plugin_manager_use_case =
+        PluginManagerUseCase::new(Arc::new(StubPluginLoader), Arc::new(StubPluginConfigRepo));
+
     let facade = Arc::new(
         ApplicationFacadeImpl::new(
             Arc::new(execute_use_case),
@@ -152,7 +200,8 @@ fn start_tauri() {
             Arc::new(load_settings_use_case),
             Arc::new(save_settings_use_case),
         )
-        .with_search_files(Arc::new(search_files_use_case)),
+        .with_search_files(Arc::new(search_files_use_case))
+        .with_plugin_manager(Arc::new(plugin_manager_use_case)),
     );
 
     let facade_for_ipc = Arc::clone(&facade);

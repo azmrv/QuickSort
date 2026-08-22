@@ -150,7 +150,13 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
             let data = match read_frame(pipe.raw()) {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    tracing::error!("Read error: {}", e);
+                    // ERROR_BROKEN_PIPE (0x8007006D) is expected when the DLL
+                    // client disconnects after sending a single command.
+                    if e.contains("0x8007006D") || e.contains("broken pipe") {
+                        tracing::debug!("Client disconnected: {}", e);
+                    } else {
+                        tracing::error!("Read error: {}", e);
+                    }
                     break;
                 }
             };

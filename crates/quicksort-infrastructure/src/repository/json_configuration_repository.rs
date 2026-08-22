@@ -21,8 +21,12 @@ struct FolderData {
     id: String,
     name: String,
     path: String,
-    is_favorite: bool,
-    sort_order: u32,
+    #[serde(default)]
+    favorite: bool,
+    #[serde(default)]
+    order: u32,
+    #[serde(default)]
+    stats: Option<serde_json::Value>,
 }
 
 /// Repository that stores folder configuration in a JSON file.
@@ -51,7 +55,12 @@ impl JsonConfigurationRepository {
                 .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
             let id = FolderId::from_string(&f.id)
                 .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
-            folders.push(Folder::with_id(id, f.name, path));
+            let mut folder = Folder::with_id(id, f.name, path);
+            if f.favorite {
+                folder.toggle_favorite();
+            }
+            folder.order = f.order;
+            folders.push(folder);
         }
         Ok(folders)
     }
@@ -65,8 +74,9 @@ impl JsonConfigurationRepository {
                     id: f.id.to_string(),
                     name: f.name.clone(),
                     path: f.path.to_string(),
-                    is_favorite: f.favorite,
-                    sort_order: f.order,
+                    favorite: f.favorite,
+                    order: f.order,
+                    stats: None,
                 })
                 .collect(),
         };
