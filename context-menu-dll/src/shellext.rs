@@ -33,9 +33,9 @@ use windows::Win32::UI::Shell::{
     CMF_DEFAULTONLY, CMINVOKECOMMANDINFO, DROPFILES, GCS_VALIDATEA, GCS_VALIDATEW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreatePopupMenu, InsertMenuItemW, InsertMenuW, MessageBoxW, SetMenuItemInfoW, HMENU, MB_OK,
-    MENUITEMINFOW, MFS_ENABLED, MFT_SEPARATOR, MF_BYPOSITION, MF_POPUP, MIIM_BITMAP, MIIM_FTYPE,
-    MIIM_ID, MIIM_STATE, MIIM_STRING,
+    CreatePopupMenu, InsertMenuItemW, InsertMenuW, SetMenuItemInfoW, HMENU, MENUITEMINFOW,
+    MFS_ENABLED, MFT_SEPARATOR, MF_BYPOSITION, MF_POPUP, MIIM_BITMAP, MIIM_FTYPE, MIIM_ID,
+    MIIM_STATE, MIIM_STRING,
 };
 
 use crate::pipe_client::move_to_folder;
@@ -383,12 +383,6 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 }
                 Err(e) => {
                     log::error!("Move failed: {}", e);
-                    let msg = format!("QuickSort: {}", e);
-                    let wide_msg: Vec<u16> =
-                        OsString::from(&msg).encode_wide().chain(Some(0)).collect();
-                    unsafe {
-                        MessageBoxW(None, PCWSTR(wide_msg.as_ptr()), w!("QuickSort"), MB_OK);
-                    }
                 }
             }
         } else if verb == all_folders_cmd {

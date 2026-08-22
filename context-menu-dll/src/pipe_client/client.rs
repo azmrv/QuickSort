@@ -24,28 +24,10 @@ impl<T: PipeTransport> PipeClient<T> {
         framed.extend_from_slice(&json);
         self.transport.send(&framed)?;
 
+        // transport.receive() already reads the [u32 LE length][payload] frame
+        // and returns only the payload bytes.
         let response_bytes = self.transport.receive()?;
-        if response_bytes.len() < 4 {
-            return Err(PipeError::IncompleteRead {
-                expected: 4,
-                actual: response_bytes.len() as u32,
-            });
-        }
-        let resp_len = u32::from_le_bytes([
-            response_bytes[0],
-            response_bytes[1],
-            response_bytes[2],
-            response_bytes[3],
-        ]) as usize;
-
-        if response_bytes.len() < 4 + resp_len {
-            return Err(PipeError::IncompleteRead {
-                expected: (4 + resp_len) as u32,
-                actual: response_bytes.len() as u32,
-            });
-        }
-
-        let resp: ResponseMessage = serde_json::from_slice(&response_bytes[4..4 + resp_len])?;
+        let resp: ResponseMessage = serde_json::from_slice(&response_bytes)?;
         self.transport.disconnect()?;
         Ok(resp)
     }

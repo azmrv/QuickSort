@@ -51,19 +51,68 @@ pub fn get_dll_instance() -> HINSTANCE {
 ///
 /// Returns `None` if the icon cannot be loaded (e.g., resource not found).
 pub fn load_app_icon_bitmap() -> Option<HBITMAP> {
+    // Try loading from DLL resources first
     let dll = get_dll_instance();
-    if dll.0.is_null() {
-        log::warn!("DLL instance not available, cannot load icon");
-        return None;
-    }
-    let icon_name = w!("QUICKSORT_ICON");
-    match resource_icon_to_bitmap(dll, icon_name) {
-        Ok(bmp) => Some(bmp),
-        Err(e) => {
-            log::error!("Failed to load app icon: {:?}", e);
-            None
+    if !dll.0.is_null() {
+        let icon_name = w!("QUICKSORT_ICON");
+        match resource_icon_to_bitmap(dll, icon_name) {
+            Ok(bmp) => return Some(bmp),
+            Err(e) => {
+                log::warn!(
+                    "Failed to load icon from DLL resource: {:?}, trying file",
+                    e
+                );
+            }
         }
     }
+
+    // Fallback: load from quicksort.ico next to the DLL
+    load_icon_from_dll_dir("quicksort.ico")
+}
+
+/// Loads an icon from a file next to the DLL and converts it to HBITMAP.
+fn load_icon_from_dll_dir(icon_filename: &str) -> Option<HBITMAP> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows::Win32::Foundation::HMODULE;
+    use windows::Win32::UI::WindowsAndMessaging::{LR_LOADFROMFILE, SM_CXICON};
+
+    // Get DLL directory
+    let dll = get_dll_instance();
+    let mut dll_path_buf = [0u16; 512];
+    let len = unsafe {
+        windows::Win32::System::LibraryLoader::GetModuleFileNameW(
+            Some(HMODULE(dll.0)),
+            &mut dll_path_buf,
+        )
+    };
+    if len == 0 {
+        log::warn!("GetModuleFileNameW failed");
+        return None;
+    }
+    let dll_path = OsString::from_wide(&dll_path_buf[..len as usize]);
+    let dll_dir = std::path::Path::new(&dll_path).parent()?;
+    let icon_path = dll_dir.join(icon_filename);
+
+    log::info!("Loading icon from: {}", icon_path.display());
+
+    let icon_path_wide: Vec<u16> = icon_path.as_os_str().encode_wide().chain(Some(0)).collect();
+
+    let icon_size = unsafe { GetSystemMetrics(SM_CXICON) };
+
+    let hicon = unsafe {
+        LoadImageW(
+            None,
+            PCWSTR::from_raw(icon_path_wide.as_ptr()),
+            IMAGE_ICON,
+            icon_size,
+            icon_size,
+            LR_DEFAULTCOLOR | LR_LOADFROMFILE,
+        )
+    }
+    .ok()?;
+
+    icon_to_bitmap(HICON(hicon.0)).ok()
 }
 
 /// Loads the given `icon_name` from `dll` and converts it to a bitmap.

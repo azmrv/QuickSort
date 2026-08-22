@@ -34,6 +34,10 @@ use quicksort_infrastructure::JsonConfigurationRepository;
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
+
+    /// Unregister the COM server and exit
+    #[arg(long)]
+    unregister: bool,
 }
 
 #[derive(Subcommand)]
@@ -91,6 +95,22 @@ fn main() {
 
     let cli = Cli::parse();
 
+    if cli.unregister {
+        tracing::info!("--unregister flag: unregistering COM server and exiting");
+        match com::unregister() {
+            Ok(()) => {
+                tracing::info!("COM server unregistered successfully");
+                println!("COM server unregistered successfully.");
+            }
+            Err(e) => {
+                tracing::error!("Failed to unregister COM server: {}", e);
+                eprintln!("Failed to unregister COM server: {}", e);
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+
     if let Some(Commands::SelectFolder { file }) = &cli.command {
         tracing::info!(file = %file, "select-folder subcommand");
         crate::pending::set_pending_file(file.clone());
@@ -113,15 +133,37 @@ fn ensure_dll_copied() {
     let dest_dir = PathBuf::from(&appdata).join("QuickSort");
     let dest = dest_dir.join("context_menu_dll.dll");
 
-    if dest.exists() {
-        tracing::debug!(path = %dest.display(), "DLL already present");
+    let source_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()));
+
+    let source = source_dir.as_ref().map(|p| p.join("context_menu_dll.dll"));
+
+    // Check if DLL needs updating (version mismatch or missing)
+    let needs_update = match &source {
+        Some(s) if s.exists() => {
+            if !dest.exists() {
+                true
+            } else {
+                let dest_meta = std::fs::metadata(&dest).ok();
+                let source_meta = std::fs::metadata(s).ok();
+                match (dest_meta, source_meta) {
+                    (Some(dm), Some(sm)) => {
+                        sm.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                            > dm.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                            || sm.len() != dm.len()
+                    }
+                    _ => true,
+                }
+            }
+        }
+        _ => true,
+    };
+
+    if !needs_update {
+        tracing::debug!(path = %dest.display(), "DLL up to date");
         return;
     }
-
-    let source = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .map(|p| p.join("context_menu_dll.dll"));
 
     let source = match source {
         Some(s) if s.exists() => s,
@@ -131,11 +173,25 @@ fn ensure_dll_copied() {
         }
     };
 
+    std::fs::create_dir_all(&dest_dir).unwrap_or(());
+
     match std::fs::copy(&source, &dest) {
         Ok(bytes) => {
             tracing::info!(source = %source.display(), dest = %dest.display(), bytes, "DLL copied")
         }
         Err(e) => tracing::error!(error = %e, "failed to copy DLL"),
+    }
+
+    // Copy icon file next to DLL for context menu icon
+    if let Some(ref src_dir) = source_dir {
+        let icon_source = src_dir.join("quicksort.ico");
+        let icon_dest = dest_dir.join("quicksort.ico");
+        if icon_source.exists() && (!icon_dest.exists() || needs_update) {
+            match std::fs::copy(&icon_source, &icon_dest) {
+                Ok(_) => tracing::info!("Icon copied to {}", icon_dest.display()),
+                Err(e) => tracing::warn!(error = %e, "failed to copy icon"),
+            }
+        }
     }
 }
 

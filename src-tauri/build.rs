@@ -88,4 +88,19 @@ fn copy_dll_to_appdata() {
             e
         ),
     }
+
+    // Copy icon file next to DLL for context menu icon
+    let icon_src = workspace_root
+        .join("context-menu-dll")
+        .join("quicksort.ico");
+    if icon_src.exists() {
+        let icon_dest = appdata.join("quicksort.ico");
+        if let Err(e) = std::fs::copy(&icon_src, &icon_dest) {
+            println!(
+                "cargo:warning=Failed to copy icon to {}: {}",
+                icon_dest.display(),
+                e
+            );
+        }
+    }
 }
