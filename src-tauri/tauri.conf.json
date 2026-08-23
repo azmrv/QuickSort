@@ -30,7 +30,20 @@
       "../resources/128x128@2x.png",
       "icons/icon.icns",
       "../resources/quicksort.ico"
-    ]
+    ],
+    "resources": {
+      "../target/release/context_menu_dll.dll": "context_menu_dll.dll",
+      "../resources/quicksort.ico": "resources/quicksort.ico"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "both",
+        "displayLanguageSelector": false,
+        "installerIcon": "../resources/quicksort.ico",
+        "languages": ["Russian", "English"]
+      },
+      "wix": null
+    }
   }
 }
 

@@ -123,95 +123,30 @@ fn main() {
 }
 
 fn ensure_dll_copied() {
-    let appdata = match std::env::var("APPDATA") {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::error!(error = %e, "cannot read APPDATA");
-            return;
-        }
-    };
-
-    let dest_dir = PathBuf::from(&appdata).join("QuickSort");
-    let dest = dest_dir.join("context_menu_dll.dll");
-
-    let source_dir = std::env::current_exe()
+    // DLL is expected to be next to the exe (same directory).
+    // This is handled by `cargo build` for context-menu-dll and
+    // by the installer/distribution for release builds.
+    //
+    // We just verify the DLL exists here so we can log a warning if it doesn't.
+    let exe_dir = match std::env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()));
-
-    let source = source_dir.as_ref().map(|p| p.join("context_menu_dll.dll"));
-
-    // Check if DLL needs updating (version mismatch or missing)
-    let needs_update = match &source {
-        Some(s) if s.exists() => {
-            if !dest.exists() {
-                true
-            } else {
-                let dest_meta = std::fs::metadata(&dest).ok();
-                let source_meta = std::fs::metadata(s).ok();
-                match (dest_meta, source_meta) {
-                    (Some(dm), Some(sm)) => {
-                        sm.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                            > dm.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                            || sm.len() != dm.len()
-                    }
-                    _ => true,
-                }
-            }
-        }
-        _ => true,
-    };
-
-    if !needs_update {
-        tracing::debug!(path = %dest.display(), "DLL up to date");
-        return;
-    }
-
-    let source = match source {
-        Some(s) if s.exists() => s,
-        _ => {
-            tracing::warn!("DLL not found next to exe — COM registration will fail until DLL is built and placed in {}", dest_dir.display());
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+    {
+        Some(d) => d,
+        None => {
+            tracing::warn!("Cannot determine exe directory");
             return;
         }
     };
 
-    std::fs::create_dir_all(&dest_dir).unwrap_or(());
-
-    match std::fs::copy(&source, &dest) {
-        Ok(bytes) => {
-            tracing::info!(source = %source.display(), dest = %dest.display(), bytes, "DLL copied")
-        }
-        Err(e) => tracing::error!(error = %e, "failed to copy DLL"),
-    }
-
-    // Copy icon file next to DLL for context menu icon
-    if let Some(ref src_dir) = source_dir {
-        let icon_source = src_dir.join("quicksort.ico");
-        if !icon_source.exists() {
-            // In dev mode, icon is in resources/ next to workspace root
-            let resources_icon = std::env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-                .map(|p| p.parent().unwrap_or(&p).join("resources").join("quicksort.ico"));
-            if let Some(ri) = resources_icon {
-                if ri.exists() {
-                    let icon_dest = dest_dir.join("quicksort.ico");
-                    if !icon_dest.exists() || needs_update {
-                        match std::fs::copy(&ri, &icon_dest) {
-                            Ok(_) => tracing::info!("Icon copied from resources: {}", icon_dest.display()),
-                            Err(e) => tracing::warn!(error = %e, "failed to copy icon from resources"),
-                        }
-                    }
-                }
-            }
-        } else {
-            let icon_dest = dest_dir.join("quicksort.ico");
-            if !icon_dest.exists() || needs_update {
-                match std::fs::copy(&icon_source, &icon_dest) {
-                    Ok(_) => tracing::info!("Icon copied: {}", icon_dest.display()),
-                    Err(e) => tracing::warn!(error = %e, "failed to copy icon"),
-                }
-            }
-        }
+    let dll = exe_dir.join("context_menu_dll.dll");
+    if dll.exists() {
+        tracing::debug!(path = %dll.display(), "DLL found next to exe");
+    } else {
+        tracing::warn!(
+            path = %dll.display(),
+            "DLL not found next to exe — COM registration will fail until DLL is built"
+        );
     }
 }
 
@@ -384,9 +319,8 @@ fn start_tauri() {
                         }
                     }
                     "quit" => {
-                        if let Err(e) = crate::com::unregister_and_restart_explorer() {
-                            tracing::error!(error = %e, "unregister on exit failed");
-                        }
+                        // Just exit — COM stays registered, DLL stays loaded in Explorer.
+                        // Re-registration happens automatically on next app start.
                         app.exit(0);
                     }
                     _ => {}

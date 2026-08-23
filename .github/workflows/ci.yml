@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: cargo fmt --check --all
+
+      - name: Clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Build context-menu DLL
+        run: cargo build -p context-menu-dll
+
+      - name: Build workspace
+        run: cargo build --workspace
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: cargo test --workspace

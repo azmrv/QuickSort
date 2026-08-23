@@ -1,11 +1,15 @@
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::Duration;
 use winreg::enums::*;
 use winreg::RegKey;
 
 const CLSID: &str = "{12345678-1234-1234-1234-1234567890AB}";
-const HANDLERS: &[&str] = &["*", "Directory", "Directory\\Background", "Drive"];
+const HANDLERS: &[&str] = &[
+    "AllFilesystemObjects",
+    "Directory",
+    "Directory\\Background",
+    "Drive",
+];
 
 /// Registration status returned by [`check_registration`].
 pub enum RegistrationStatus {
@@ -93,12 +97,9 @@ pub fn is_registered() -> bool {
 }
 
 pub fn dll_path() -> Option<PathBuf> {
-    let appdata = std::env::var("APPDATA").ok()?;
-    Some(
-        PathBuf::from(appdata)
-            .join("QuickSort")
-            .join("context_menu_dll.dll"),
-    )
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    Some(dir.join("context_menu_dll.dll"))
 }
 
 fn write_registry_keys() -> Result<(), String> {
@@ -151,7 +152,7 @@ pub fn register() -> Result<(), String> {
 pub fn unregister() -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
-    // 1. Delete handler keys so Explorer won't load this extension anymore.
+    // Delete handler keys so Explorer won't load this extension anymore.
     for handler in HANDLERS {
         let parent_path = format!(
             "Software\\Classes\\{}\\shellex\\ContextMenuHandlers",
@@ -166,7 +167,7 @@ pub fn unregister() -> Result<(), String> {
         }
     }
 
-    // 2. Delete CLSID key.
+    // Delete CLSID key.
     if let Ok(parent) = hkcu.open_subkey_with_flags("Software\\Classes\\CLSID", KEY_ALL_ACCESS) {
         if let Err(e) = parent.delete_subkey(CLSID) {
             tracing::warn!("delete CLSID key: {}", e);
@@ -175,61 +176,17 @@ pub fn unregister() -> Result<(), String> {
         }
     }
 
-    // 3. Try to remove the DLL file. If it is locked (Explorer has it loaded),
-    //    restart Explorer as a fallback to release the file handle.
-    let dll_locked = match dll_path() {
-        Some(path) if path.exists() => match std::fs::remove_file(&path) {
-            Ok(()) => {
-                tracing::info!("DLL removed: {}", path.display());
-                false
-            }
-            Err(e) => {
-                tracing::warn!("DLL is locked, cannot remove: {} — restarting Explorer", e);
-                true
-            }
-        },
-        _ => false,
-    };
-
-    if dll_locked {
-        kill_explorer();
-        // Give Explorer time to release file handles.
-        std::thread::sleep(Duration::from_secs(2));
-        // Retry deletion after Explorer has exited.
-        if let Some(path) = dll_path() {
-            if path.exists() {
-                match std::fs::remove_file(&path) {
-                    Ok(()) => {
-                        tracing::info!("DLL removed after Explorer restart: {}", path.display())
-                    }
-                    Err(e) => tracing::error!("DLL still locked after Explorer restart: {}", e),
-                }
-            }
-        }
-        start_explorer();
-    }
-
     Ok(())
 }
 
-/// Unregister and restart Explorer to unload the DLL from its process.
-/// Called on app exit when no background service is running.
-pub fn unregister_and_restart_explorer() -> Result<(), String> {
-    unregister()?;
-    // If unregister already restarted Explorer (DLL was locked), we're done.
-    // If not, Explorer still has the DLL in memory — force a restart.
-    kill_explorer();
-    std::thread::sleep(Duration::from_secs(1));
-    start_explorer();
-    Ok(())
-}
-
+#[allow(dead_code)]
 fn kill_explorer() {
     let _ = Command::new("taskkill")
         .args(["/f", "/im", "explorer.exe"])
         .output();
 }
 
+#[allow(dead_code)]
 fn start_explorer() {
     let _ = Command::new("explorer.exe").spawn();
 }
