@@ -177,10 +177,41 @@ fn ensure_dll_copied() {
     }
 }
 
+fn write_owner_pid() {
+    let pid = std::process::id();
+    let appdata = match std::env::var("APPDATA") {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(error = %e, "cannot read APPDATA for PID file");
+            return;
+        }
+    };
+    let dir = PathBuf::from(&appdata).join("QuickSort");
+    let _ = std::fs::create_dir_all(&dir);
+    let pid_path = dir.join("dll_owner.pid");
+    match std::fs::write(&pid_path, pid.to_string()) {
+        Ok(()) => tracing::info!(pid, path = %pid_path.display(), "owner PID written"),
+        Err(e) => tracing::error!(error = %e, "failed to write owner PID"),
+    }
+}
+
+pub(crate) fn remove_owner_pid() {
+    let pid_path = std::env::var("APPDATA")
+        .ok()
+        .map(|a| PathBuf::from(a).join("QuickSort").join("dll_owner.pid"));
+    if let Some(path) = pid_path {
+        match std::fs::remove_file(&path) {
+            Ok(()) => tracing::info!("owner PID file removed"),
+            Err(e) => tracing::debug!(error = %e, "PID file already absent"),
+        }
+    }
+}
+
 fn start_tauri() {
     tracing::info!("startup");
 
     ensure_dll_copied();
+    write_owner_pid();
 
     let config_dir = std::env::var("APPDATA")
         .map(PathBuf::from)
@@ -288,6 +319,7 @@ fn start_tauri() {
             commands::rescan_plugins,
             commands::search_files,
             commands::get_app_metadata,
+            commands::quit_app,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());
@@ -346,8 +378,9 @@ fn start_tauri() {
                         }
                     }
                     "quit" => {
-                        // Just exit — COM stays registered, DLL stays loaded in Explorer.
-                        // Re-registration happens automatically on next app start.
+                        tracing::info!("tray quit — performing cleanup");
+                        remove_owner_pid();
+                        tracing::info!("all cleanup done, exiting");
                         app.exit(0);
                     }
                     _ => {}
@@ -356,7 +389,11 @@ fn start_tauri() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Prevent the window from actually closing.
+                // Hide to tray instead — the app keeps running in background.
+                // Full shutdown is via tray "Exit" only.
+                api.prevent_close();
                 if let Some(window) = window.app_handle().get_webview_window("main") {
                     let _ = window.hide();
                 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, type CSSProperties, type ReactNode } from 'react';
 import { invoke } from '../lib/invoke';
-import { message } from 'antd';
+import { message, Modal, Button } from 'antd';
+import { PoweroffOutlined } from '@ant-design/icons';
 
 interface Person {
     name: string;
@@ -541,6 +542,27 @@ const AboutPage = () => {
                     )}
                 </section>
             )}
+
+            <section style={{ ...sectionStyle, marginTop: 'var(--qs-space-2xl)' }}>
+                <div style={sectionTitleStyle}>Управление</div>
+                <Button
+                    danger
+                    icon={<PoweroffOutlined />}
+                    block
+                    onClick={() => {
+                        Modal.confirm({
+                            title: 'Завершить приложение?',
+                            content: 'Приложение будет закрыто полностью. Контекстное меню Проводника станет недоступно до следующего запуска.',
+                            okText: 'Выйти',
+                            cancelText: 'Отмена',
+                            okButtonProps: { danger: true },
+                            onOk: () => invoke('quit_app'),
+                        });
+                    }}
+                >
+                    Выйти из приложения
+                </Button>
+            </section>
         </div>
     );
 };

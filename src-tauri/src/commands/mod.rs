@@ -5,7 +5,7 @@ use quicksort_application::{
     UndoOperation, WindowsPath,
 };
 use std::path::PathBuf;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn get_folders_v2(state: State<'_, AppState>) -> Result<Vec<Folder>, String> {
@@ -525,4 +525,25 @@ pub async fn search_files(
 pub fn get_app_metadata() -> crate::metadata::AppMetadata {
     tracing::debug!(command = "get_app_metadata", "handling");
     crate::metadata::get_metadata()
+}
+
+/// Fully quit the application: cleanup resources and exit.
+/// Unlike the close button (which hides to tray), this terminates the process.
+#[tauri::command]
+pub async fn quit_app(app: AppHandle) -> Result<(), String> {
+    tracing::info!("quit_app command — performing full shutdown");
+
+    let pid_path = std::env::var("APPDATA")
+        .ok()
+        .map(|a| PathBuf::from(a).join("QuickSort").join("dll_owner.pid"));
+    if let Some(path) = pid_path {
+        match std::fs::remove_file(&path) {
+            Ok(()) => tracing::info!("owner PID file removed"),
+            Err(e) => tracing::debug!(error = %e, "PID file already absent"),
+        }
+    }
+
+    tracing::info!("all cleanup done, exiting");
+    app.exit(0);
+    Ok(())
 }
