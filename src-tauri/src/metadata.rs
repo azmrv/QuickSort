@@ -17,6 +17,9 @@ pub const APP_DESCRIPTION: &str = "Next-generation file manager for Windows — 
 pub const APP_LICENSE: &str = "MIT";
 pub const APP_REPOSITORY: &str = "https://github.com/azmrv/quicksort";
 pub const APP_HOMEPAGE: &str = "https://github.com/azmrv/quicksort";
+pub const APP_ISSUES: &str = "https://github.com/azmrv/quicksort/issues";
+pub const APP_DISCUSSIONS: &str = "https://github.com/azmrv/quicksort/discussions";
+pub const APP_TELEGRAM: &str = "https://t.me/Fib511";
 
 // ---------------------------------------------------------------------------
 // Authors & Contributors
@@ -324,6 +327,9 @@ pub struct AppMetadata {
     pub license: &'static str,
     pub repository: &'static str,
     pub homepage: &'static str,
+    pub issues: &'static str,
+    pub discussions: &'static str,
+    pub telegram: &'static str,
     pub authors: &'static [Person],
     pub contributors: &'static [Person],
     pub credits: &'static [Credit],
@@ -341,6 +347,9 @@ pub fn get_metadata() -> AppMetadata {
         license: APP_LICENSE,
         repository: APP_REPOSITORY,
         homepage: APP_HOMEPAGE,
+        issues: APP_ISSUES,
+        discussions: APP_DISCUSSIONS,
+        telegram: APP_TELEGRAM,
         authors: AUTHORS,
         contributors: CONTRIBUTORS,
         credits: CREDITS,

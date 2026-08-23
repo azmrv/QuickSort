@@ -1,5 +1,6 @@
 import { useState, useEffect, type CSSProperties, type ReactNode } from 'react';
 import { invoke } from '../lib/invoke';
+import { message } from 'antd';
 
 interface Person {
     name: string;
@@ -41,6 +42,9 @@ interface AppMetadata {
     license: string;
     repository: string;
     homepage: string;
+    issues: string;
+    discussions: string;
+    telegram: string;
     authors: Person[];
     contributors: Person[];
     credits: Credit[];
@@ -101,8 +105,12 @@ const tagTextStyle: CSSProperties = {
 const ChipLink = ({ href, children }: { href: string; children: ReactNode }) => (
     <a
         href={href}
-        target="_blank"
-        rel="noopener noreferrer"
+        onClick={(e) => {
+            e.preventDefault();
+            navigator.clipboard.writeText(href).then(() => {
+                message.success('Ссылка скопирована');
+            });
+        }}
         style={chipLinkStyle}
         onMouseEnter={(e) => {
             e.currentTarget.style.borderColor = 'var(--qs-accent)';
@@ -131,8 +139,12 @@ const PersonRow = ({ person }: { person: Person }) => (
             {person.url ? (
                 <a
                     href={person.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        navigator.clipboard.writeText(person.url!).then(() => {
+                            message.success('Ссылка скопирована');
+                        });
+                    }}
                     style={textLinkStyle}
                 >
                     {person.name}
@@ -294,8 +306,12 @@ const AboutPage = () => {
                                 <div style={{ marginBottom: '4px' }}>
                                     <a
                                         href={credit.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            navigator.clipboard.writeText(credit.url).then(() => {
+                                                message.success('Ссылка скопирована');
+                                            });
+                                        }}
                                         style={{ ...textLinkStyle, fontWeight: 500 }}
                                     >
                                         {credit.name}
@@ -331,6 +347,91 @@ const AboutPage = () => {
                 </section>
             )}
 
+            <section style={sectionStyle}>
+                <div style={sectionTitleStyle}>Обратная связь</div>
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'var(--qs-space-sm)',
+                }}>
+                    {metadata.issues && (
+                        <div style={cardStyle}>
+                            <div style={{ marginBottom: '4px' }}>
+                                <a
+                                    href={metadata.issues}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        navigator.clipboard.writeText(metadata.issues).then(() => {
+                                            message.success('Ссылка скопирована');
+                                        });
+                                    }}
+                                    style={{ ...textLinkStyle, fontWeight: 500 }}
+                                >
+                                    GitHub Issues
+                                </a>
+                            </div>
+                            <div style={{
+                                color: 'var(--qs-text-secondary)',
+                                fontSize: '12px',
+                                lineHeight: 1.5,
+                            }}>
+                                Сообщения о багах и предложения по улучшению
+                            </div>
+                        </div>
+                    )}
+                    {metadata.discussions && (
+                        <div style={cardStyle}>
+                            <div style={{ marginBottom: '4px' }}>
+                                <a
+                                    href={metadata.discussions}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        navigator.clipboard.writeText(metadata.discussions).then(() => {
+                                            message.success('Ссылка скопирована');
+                                        });
+                                    }}
+                                    style={{ ...textLinkStyle, fontWeight: 500 }}
+                                >
+                                    GitHub Discussions
+                                </a>
+                            </div>
+                            <div style={{
+                                color: 'var(--qs-text-secondary)',
+                                fontSize: '12px',
+                                lineHeight: 1.5,
+                            }}>
+                                Обсуждение функционала и идей
+                            </div>
+                        </div>
+                    )}
+                    {metadata.telegram && (
+                        <div style={cardStyle}>
+                            <div style={{ marginBottom: '4px' }}>
+                                <a
+                                    href={metadata.telegram}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        navigator.clipboard.writeText(metadata.telegram).then(() => {
+                                            message.success('Ссылка скопирована');
+                                        });
+                                    }}
+                                    style={{ ...textLinkStyle, fontWeight: 500 }}
+                                >
+                                    Telegram @Fib511
+                                </a>
+                            </div>
+                            <div style={{
+                                color: 'var(--qs-text-secondary)',
+                                fontSize: '12px',
+                                lineHeight: 1.5,
+                            }}>
+                                Прямая связь с автором
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </section>
+
             {metadata.external_resources.length > 0 && (
                 <section style={sectionStyle}>
                     <div style={sectionTitleStyle}>Внешние ресурсы</div>
@@ -346,8 +447,12 @@ const AboutPage = () => {
                                 }}>
                                     <a
                                         href={resource.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            navigator.clipboard.writeText(resource.url).then(() => {
+                                                message.success('Ссылка скопирована');
+                                            });
+                                        }}
                                         style={{ ...textLinkStyle, fontWeight: 500 }}
                                     >
                                         {resource.name}
@@ -410,8 +515,12 @@ const AboutPage = () => {
                                 >
                                     <a
                                         href={dependency.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            navigator.clipboard.writeText(dependency.url).then(() => {
+                                                message.success('Ссылка скопирована');
+                                            });
+                                        }}
                                         style={textLinkStyle}
                                     >
                                         {dependency.name}

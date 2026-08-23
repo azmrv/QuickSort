@@ -5,7 +5,7 @@ use winreg::RegKey;
 
 const CLSID: &str = "{12345678-1234-1234-1234-1234567890AB}";
 const HANDLERS: &[&str] = &[
-    "AllFilesystemObjects",
+    "*",
     "Directory",
     "Directory\\Background",
     "Drive",
@@ -143,10 +143,14 @@ fn write_registry_keys() -> Result<(), String> {
     Ok(())
 }
 
-/// Register COM server keys. Explorer re-queries the registry each time a
-/// context menu is shown, so no Explorer restart is needed.
+/// Register COM server keys and restart Explorer so it picks up the new handler.
+///
+/// Explorer caches shell extension registrations in-process. A restart forces it
+/// to re-read the registry and load the new DLL.
 pub fn register() -> Result<(), String> {
-    write_registry_keys()
+    write_registry_keys()?;
+    restart_explorer();
+    Ok(())
 }
 
 pub fn unregister() -> Result<(), String> {
@@ -179,14 +183,12 @@ pub fn unregister() -> Result<(), String> {
     Ok(())
 }
 
-#[allow(dead_code)]
-fn kill_explorer() {
+/// Restart Explorer so it re-reads COM handler registrations from the registry.
+fn restart_explorer() {
+    tracing::info!("Restarting Explorer to pick up new COM registration");
     let _ = Command::new("taskkill")
         .args(["/f", "/im", "explorer.exe"])
         .output();
-}
-
-#[allow(dead_code)]
-fn start_explorer() {
+    std::thread::sleep(std::time::Duration::from_millis(500));
     let _ = Command::new("explorer.exe").spawn();
 }
