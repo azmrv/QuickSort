@@ -34,9 +34,15 @@ pub extern "system" fn DllGetClassObject(
     }
 
     if unsafe { *rclsid } != CLSID_QUICKSORT {
+        log::error!(
+            "DllGetClassObject: unknown CLSID {:?}, expected {:?}",
+            unsafe { *rclsid },
+            CLSID_QUICKSORT
+        );
         return CLASS_E_CLASSNOTAVAILABLE;
     }
 
+    log::info!("DllGetClassObject: creating factory");
     let factory = QuickSortClassFactory;
     let unknown: IUnknown = factory.into();
 

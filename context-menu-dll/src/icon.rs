@@ -1,103 +1,88 @@
-//! Utilities to manipulate resource icons and bitmaps.
+//! Icon loading utilities for the context menu.
+//!
+//! Loads the QuickSort icon from the .ico file next to the DLL and converts
+//! it to an HBITMAP suitable for MIIM_BITMAP in context menu items.
+//!
+//! Uses plain Win32 GDI (no GDI+) to avoid deadlocks in Explorer's process.
 
-use std::collections::HashMap;
-use std::mem::{self, MaybeUninit};
-use std::ptr;
-use std::sync::{LazyLock, OnceLock};
+#![allow(dead_code)]
 
-use parking_lot::RwLock;
-use windows::core::{w, Owned, Result as WinResult, PCWSTR};
-use windows::Win32::Foundation::{E_FAIL, HINSTANCE};
-use windows::Win32::Graphics::Gdi::HBITMAP;
-use windows::Win32::Graphics::GdiPlus::{
-    Color as GpColor, GdipCreateBitmapFromHICON, GdipCreateHBITMAPFromBitmap, GdiplusShutdown,
-    GdiplusStartup, GdiplusStartupInput, GpBitmap, Status as GpStatus,
+use std::ffi::OsString;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
+use std::sync::OnceLock;
+
+use windows::core::{Result as WinResult, PCWSTR};
+use windows::Win32::Foundation::HMODULE;
+use windows::Win32::Graphics::Gdi::{
+    CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, ReleaseDC, SelectObject, GetDC,
+    HBITMAP, HGDIOBJ,
 };
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetSystemMetrics, LoadImageW, HICON, IMAGE_ICON, LR_DEFAULTCOLOR, SM_CXSMICON, SM_CYSMICON,
+    DrawIconEx, GetSystemMetrics, LoadImageW, HICON, IMAGE_ICON, DI_NORMAL, LR_DEFAULTCOLOR,
+    LR_LOADFROMFILE, SM_CXICON, SM_CXSMICON, SM_CYICON,
 };
 
-/// Global cache of icon [`PCWSTR`] names to [`HBITMAP`]s in raw values.
-static ICON_TO_BITMAP_CACHE: LazyLock<RwLock<HashMap<usize, usize>>> =
-    LazyLock::new(Default::default);
+/// Cached DLL module handle as raw pointer (set once on first use).
+static DLL_HMODULE: OnceLock<usize> = OnceLock::new();
 
-/// Cached DLL module handle (set once on first use).
-static DLL_HINSTANCE: OnceLock<SyncHINSTANCE> = OnceLock::new();
-
-/// Wrapper around HINSTANCE to make it Send+Sync (it's a process-wide constant).
-#[derive(Clone, Copy)]
-struct SyncHINSTANCE(HINSTANCE);
-unsafe impl Send for SyncHINSTANCE {}
-unsafe impl Sync for SyncHINSTANCE {}
-
-/// Returns the HINSTANCE of the current DLL module.
-///
-/// Uses `GetModuleHandleW` with the DLL file name to obtain the handle.
-/// The handle is cached for subsequent calls.
-pub fn get_dll_instance() -> HINSTANCE {
-    DLL_HINSTANCE
-        .get_or_init(|| {
-            let name = w!("context_menu_dll.dll");
-            let h = unsafe { GetModuleHandleW(name) }
-                .map(|h| HINSTANCE(h.0))
-                .unwrap_or(HINSTANCE(ptr::null_mut()));
-            SyncHINSTANCE(h)
-        })
-        .0
+/// Returns the HMODULE of the current DLL module as a raw pointer.
+fn get_dll_hmodule() -> usize {
+    *DLL_HMODULE.get_or_init(|| {
+        let name = windows::core::w!("context_menu_dll.dll");
+        unsafe { GetModuleHandleW(name) }
+            .map(|h| h.0 as usize)
+            .unwrap_or(0)
+    })
 }
 
-/// Loads the QuickSort app icon from DLL resources and returns an HBITMAP.
+/// Loads the QuickSort app icon and returns an HBITMAP for MIIM_BITMAP.
 ///
-/// Returns `None` if the icon cannot be loaded (e.g., resource not found).
+/// Tries the embedded DLL resource first, then falls back to quicksort.ico
+/// next to the DLL on disk. Returns `None` if neither source is available.
 pub fn load_app_icon_bitmap() -> Option<HBITMAP> {
-    // Try loading from DLL resources first
-    let dll = get_dll_instance();
-    if !dll.0.is_null() {
-        let icon_name = w!("QUICKSORT_ICON");
-        match resource_icon_to_bitmap(dll, icon_name) {
-            Ok(bmp) => return Some(bmp),
-            Err(e) => {
-                log::warn!(
-                    "Failed to load icon from DLL resource: {:?}, trying file",
-                    e
-                );
+    let module = get_dll_hmodule();
+
+    // Try loading from DLL resource (QUICKSORT_ICON)
+    if module != 0 {
+        let icon_name = windows::core::w!("QUICKSORT_ICON");
+        let hmodule = HMODULE(module as *mut _);
+        if let Ok(hicon) = load_icon_from_resource(hmodule, icon_name) {
+            if let Some(bmp) = icon_to_bitmap(&hicon) {
+                log::info!("Icon loaded from DLL resource");
+                return Some(bmp);
             }
         }
     }
 
     // Fallback: load from quicksort.ico next to the DLL
-    load_icon_from_dll_dir("quicksort.ico")
+    let hicon = load_icon_from_file("quicksort.ico")?;
+    let bmp = icon_to_bitmap(&hicon)?;
+    log::info!("Icon loaded from file");
+    Some(bmp)
 }
 
-/// Loads an icon from a file next to the DLL and converts it to HBITMAP.
-fn load_icon_from_dll_dir(icon_filename: &str) -> Option<HBITMAP> {
-    use std::ffi::OsString;
-    use std::os::windows::ffi::{OsStrExt, OsStringExt};
-    use windows::Win32::Foundation::HMODULE;
-    use windows::Win32::UI::WindowsAndMessaging::{LR_LOADFROMFILE, SM_CXICON};
-
-    // Get DLL directory
-    let dll = get_dll_instance();
+/// Loads an icon from a .ico file next to the DLL.
+fn load_icon_from_file(filename: &str) -> Option<HICON> {
+    let module = get_dll_hmodule();
     let mut dll_path_buf = [0u16; 512];
-    let len = unsafe {
-        windows::Win32::System::LibraryLoader::GetModuleFileNameW(
-            Some(HMODULE(dll.0)),
-            &mut dll_path_buf,
-        )
-    };
+    let hmodule = HMODULE(module as *mut _);
+    let len = unsafe { GetModuleFileNameW(Some(hmodule), &mut dll_path_buf) };
     if len == 0 {
-        log::warn!("GetModuleFileNameW failed");
+        log::warn!("GetModuleFileNameW failed for icon path");
         return None;
     }
     let dll_path = OsString::from_wide(&dll_path_buf[..len as usize]);
     let dll_dir = std::path::Path::new(&dll_path).parent()?;
-    let icon_path = dll_dir.join(icon_filename);
+    let icon_path = dll_dir.join(filename);
 
     log::info!("Loading icon from: {}", icon_path.display());
 
-    let icon_path_wide: Vec<u16> = icon_path.as_os_str().encode_wide().chain(Some(0)).collect();
-
+    let icon_path_wide: Vec<u16> = icon_path
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
     let icon_size = unsafe { GetSystemMetrics(SM_CXICON) };
 
     let hicon = unsafe {
@@ -112,154 +97,61 @@ fn load_icon_from_dll_dir(icon_filename: &str) -> Option<HBITMAP> {
     }
     .ok()?;
 
-    icon_to_bitmap(HICON(hicon.0)).ok()
+    Some(HICON(hicon.0))
 }
 
-/// Loads the given `icon_name` from `dll` and converts it to a bitmap.
-pub fn resource_icon_to_bitmap(dll: HINSTANCE, icon_name: PCWSTR) -> WinResult<HBITMAP> {
-    if let Some(&bmp_addr) = ICON_TO_BITMAP_CACHE
-        .read()
-        .get(&icon_name.as_ptr().expose_provenance())
-    {
-        Ok(HBITMAP(ptr::with_exposed_provenance_mut(bmp_addr)))
-    } else {
-        let icon = load_small_icon(dll, icon_name).inspect_err(|err| {
-            log::error!(
-                "Failed to load icon {:?} from DLL {:?}: {:?}",
-                icon_name,
-                dll,
-                err,
-            );
-        })?;
-        let icon_bmp = icon_to_bitmap(*icon).map_err(|err| {
-            log::error!("Failed to convert the icon to a bitmap: {:?}", err);
-            E_FAIL
-        })?;
-
-        ICON_TO_BITMAP_CACHE.write().insert(
-            icon_name.as_ptr().expose_provenance(),
-            icon_bmp.0.expose_provenance(),
-        );
-        Ok(icon_bmp)
-    }
-}
-
-/// Loads the given `icon_name` from `dll` in small size.
-///
-/// `icon_name` can be an actual string pointer or a special value constructed
-/// from the `MAKEINTRESOURCE` macro. The handle is returned in an owned
-/// fashion for immediate [`Drop`] compatibility.
-fn load_small_icon(dll: HINSTANCE, icon_name: PCWSTR) -> WinResult<Owned<HICON>> {
-    // `LoadIconWithScaleDown` is basically not available to us due to:
-    // https://developercommunity.visualstudio.com/t/LoadIconWithScaleDown-not-in-the-default/10646099?sort=newest&topics=Known+Issue+in%3A+Visual+Studio+2017+Version+15.5
-    // SAFETY: always safe to call supposing the arguments are valid.
-    unsafe {
+/// Loads an icon from a DLL resource by name.
+fn load_icon_from_resource(dll: HMODULE, icon_name: PCWSTR) -> WinResult<HICON> {
+    let icon_size = unsafe { GetSystemMetrics(SM_CXSMICON) };
+    let hinstance = windows::Win32::Foundation::HINSTANCE(dll.0);
+    let hicon = unsafe {
         LoadImageW(
-            Some(dll),
+            Some(hinstance),
             icon_name,
             IMAGE_ICON,
-            GetSystemMetrics(SM_CXSMICON),
-            GetSystemMetrics(SM_CYSMICON),
+            icon_size,
+            icon_size,
             LR_DEFAULTCOLOR,
         )
-    }
-    // SAFETY: the handle has just been created, so is owned by us.
-    .map(|h| unsafe { Owned::new(HICON(h.0)) })
+    }?;
+    Ok(HICON(hicon.0))
 }
 
-/// Converts the given icon to a bitmap.
-///
-/// Currently implemented using the GDI+ library because the regular GDI did
-/// not yield good results: the icon was very badly rendered. The handle is
-/// returned directly in a raw fashion so its ownership may be passed onto the
-/// system without releasing the resources by mistake.
-fn icon_to_bitmap(icon: HICON) -> GpResult<HBITMAP> {
-    let gp_token =
-        GpToken::new().inspect_err(|err| log::error!("Failed to initialize GDI+: {:?}", err))?;
+/// Converts an HICON to an HBITMAP using plain GDI (no GDI+).
+fn icon_to_bitmap(icon: &HICON) -> Option<HBITMAP> {
+    unsafe {
+        let screen_dc = GetDC(None);
+        if screen_dc.is_invalid() {
+            log::warn!("GetDC(None) failed");
+            return None;
+        }
 
-    let mut gp_bmp: MaybeUninit<*mut GpBitmap> = MaybeUninit::uninit();
-    // SAFETY: both pointers are valid, respectively for reading and for writing.
-    gp_status_ok(unsafe { GdipCreateBitmapFromHICON(icon, gp_bmp.as_mut_ptr()) })
-        .inspect_err(|err| log::error!("GdipCreateBitmapFromHICON failed: {:?}", err))?;
-    // SAFETY: errors are checked for, so the pointer is valid at this point.
-    let gp_bmp = unsafe { gp_bmp.assume_init() };
-    // `GpBitmap` does not have a destructor.
+        let icon_w = GetSystemMetrics(SM_CXICON);
+        let icon_h = GetSystemMetrics(SM_CYICON);
 
-    let mut bmp: MaybeUninit<HBITMAP> = MaybeUninit::uninit();
-    // SAFETY:
-    //  * the GDI+ bitmap pointer comes from the API;
-    //  * the GDI bitmap pointer is valid for writing;
-    gp_status_ok(unsafe {
-        GdipCreateHBITMAPFromBitmap(
-            gp_bmp,
-            bmp.as_mut_ptr(),
-            GpColor::Transparent.cast_unsigned(),
-        )
-    })
-    .inspect_err(|err| log::error!("GdipCreateHBITMAPFromBitmap failed: {:?}", err))?;
-    // SAFETY: errors are checked for, so the pointer is valid at this point.
-    let bmp = unsafe { bmp.assume_init() };
-    // This value is returned, so does not need releasing.
+        let bitmap = CreateCompatibleBitmap(screen_dc, icon_w, icon_h);
+        if bitmap.is_invalid() {
+            ReleaseDC(None, screen_dc);
+            log::warn!("CreateCompatibleBitmap failed");
+            return None;
+        }
 
-    // Explicit drop to show the role of the token guard.
-    mem::drop(gp_token);
-    Ok(bmp)
-}
+        let mem_dc = CreateCompatibleDC(Some(screen_dc));
+        if mem_dc.is_invalid() {
+            let _ = windows::Win32::Graphics::Gdi::DeleteObject(HGDIOBJ(bitmap.0));
+            ReleaseDC(None, screen_dc);
+            log::warn!("CreateCompatibleDC failed");
+            return None;
+        }
 
-/// RAII wrapper around a GDI+ session token with an adequate [`Drop`].
-#[repr(transparent)]
-struct GpToken(usize);
+        let old_obj = SelectObject(mem_dc, HGDIOBJ(bitmap.0));
 
-impl GpToken {
-    /// Initializes a GDI+ session by calling [`GdiplusStartup`] with default values.
-    pub fn new() -> GpResult<Self> {
-        let input = GdiplusStartupInput {
-            // > Must be 1.
-            GdiplusVersion: 1,
-            // Not useful here.
-            // > The default value is NULL.
-            DebugEventCallback: 0,
-            // For easier API interaction:
-            // > If you don't want to be responsible for calling the hook and
-            // > unhook functions, then set this member to `FALSE`.
-            SuppressBackgroundThread: false.into(),
-            // For extra safety, although:
-            // > GDI+ version 1.0 doesn't support external image codecs, so
-            // > this field is ignored.
-            SuppressExternalCodecs: true.into(),
-        };
-        let mut token: MaybeUninit<usize> = MaybeUninit::uninit();
-        // SAFETY:
-        //  * the token pointer is valid for writing;
-        //  * the input pointer is valid for reading;
-        //  * the output pointer can be null because `SuppressBackgroundThread`
-        //    is set to `FALSE`, as per the documentation;
-        gp_status_ok(unsafe {
-            GdiplusStartup(token.as_mut_ptr(), &raw const input, ptr::null_mut())
-        })
-        .inspect_err(|err| log::error!("GdiplusStartup failed: {:?}", err))?;
-        // SAFETY: errors are checked for, so the pointer is valid at this point.
-        Ok(Self(unsafe { token.assume_init() }))
-    }
-}
+        let _ = DrawIconEx(mem_dc, 0, 0, *icon, icon_w, icon_h, 0, None, DI_NORMAL);
 
-/// Calls [`GdiplusShutdown`] with the stored token value.
-impl Drop for GpToken {
-    fn drop(&mut self) {
-        // SAFETY: the passed value comes from the API.
-        unsafe { GdiplusShutdown(self.0) };
-    }
-}
+        SelectObject(mem_dc, old_obj);
+        let _ = DeleteDC(mem_dc);
+        ReleaseDC(None, screen_dc);
 
-/// Shortcut to [`Result`] with a GDI+ error type set.
-type GpResult<T> = Result<T, GpStatus>;
-
-/// Maps GDI+ statuses to [`GpResult`]s.
-#[inline]
-fn gp_status_ok(status: GpStatus) -> GpResult<()> {
-    if status.0 == 0 {
-        Ok(())
-    } else {
-        Err(status)
+        Some(bitmap)
     }
 }

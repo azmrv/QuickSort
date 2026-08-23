@@ -4,6 +4,7 @@ mod com;
 mod commands;
 mod ipc;
 mod logging;
+mod metadata;
 mod pending;
 mod progress;
 mod state;
@@ -185,11 +186,30 @@ fn ensure_dll_copied() {
     // Copy icon file next to DLL for context menu icon
     if let Some(ref src_dir) = source_dir {
         let icon_source = src_dir.join("quicksort.ico");
-        let icon_dest = dest_dir.join("quicksort.ico");
-        if icon_source.exists() && (!icon_dest.exists() || needs_update) {
-            match std::fs::copy(&icon_source, &icon_dest) {
-                Ok(_) => tracing::info!("Icon copied to {}", icon_dest.display()),
-                Err(e) => tracing::warn!(error = %e, "failed to copy icon"),
+        if !icon_source.exists() {
+            // In dev mode, icon is in resources/ next to workspace root
+            let resources_icon = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                .map(|p| p.parent().unwrap_or(&p).join("resources").join("quicksort.ico"));
+            if let Some(ri) = resources_icon {
+                if ri.exists() {
+                    let icon_dest = dest_dir.join("quicksort.ico");
+                    if !icon_dest.exists() || needs_update {
+                        match std::fs::copy(&ri, &icon_dest) {
+                            Ok(_) => tracing::info!("Icon copied from resources: {}", icon_dest.display()),
+                            Err(e) => tracing::warn!(error = %e, "failed to copy icon from resources"),
+                        }
+                    }
+                }
+            }
+        } else {
+            let icon_dest = dest_dir.join("quicksort.ico");
+            if !icon_dest.exists() || needs_update {
+                match std::fs::copy(&icon_source, &icon_dest) {
+                    Ok(_) => tracing::info!("Icon copied: {}", icon_dest.display()),
+                    Err(e) => tracing::warn!(error = %e, "failed to copy icon"),
+                }
             }
         }
     }
@@ -213,8 +233,12 @@ fn start_tauri() {
         settings_path,
     ));
 
+    // Shared operation repository — all use cases must reference the same instance
+    // so that execute writes to the same store that history reads from.
+    let operation_repo = quicksort_infrastructure::repository::InMemoryOperationRepository::new();
+
     let execute_use_case = ExecuteOperationUseCase::new(
-        Box::new(quicksort_infrastructure::repository::InMemoryOperationRepository::new()),
+        Box::new(operation_repo.clone_shared()),
         Box::new(quicksort_infrastructure::JsonConfigurationRepository::new(
             config_path.clone(),
         )),
@@ -233,11 +257,11 @@ fn start_tauri() {
     let save_settings_use_case = SaveSettingsUseCase::new(settings_repo.clone());
 
     let undo_use_case = UndoOperationUseCase::new(
-        Box::new(quicksort_infrastructure::repository::InMemoryOperationRepository::new()),
+        Box::new(operation_repo.clone_shared()),
         Box::new(quicksort_infrastructure::StdFileSystem::new()),
     );
     let get_operation_history_use_case = GetOperationHistoryUseCase::new(Box::new(
-        quicksort_infrastructure::repository::InMemoryOperationRepository::new(),
+        operation_repo.clone_shared(),
     ));
 
     let search_files_use_case =
@@ -299,6 +323,7 @@ fn start_tauri() {
             commands::set_plugin_enabled,
             commands::rescan_plugins,
             commands::search_files,
+            commands::get_app_metadata,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());
@@ -308,20 +333,30 @@ fn start_tauri() {
             std::thread::Builder::new()
                 .name("com-register".into())
                 .spawn(move || {
-                    if com::is_registered() {
-                        tracing::info!("COM already registered");
-                        let _ = handle.emit("com-status", "active");
-                        return;
-                    }
-                    tracing::info!("COM not registered — registering now");
-                    let _ = handle.emit("com-status", "registering");
-                    match com::register() {
-                        Ok(()) => {
-                            tracing::info!("COM registered successfully");
+                    use com::RegistrationStatus;
+                    let status = com::check_registration();
+                    match &status {
+                        RegistrationStatus::Active => {
+                            tracing::info!("COM registration: {}", status);
                             let _ = handle.emit("com-status", "active");
                         }
-                        Err(e) => {
-                            tracing::error!(error = %e, "auto COM registration failed");
+                        RegistrationStatus::NotRegistered
+                        | RegistrationStatus::PathMismatch { .. } => {
+                            tracing::info!("COM registration: {} — registering", status);
+                            let _ = handle.emit("com-status", "registering");
+                            match com::register() {
+                                Ok(()) => {
+                                    tracing::info!("COM registered");
+                                    let _ = handle.emit("com-status", "active");
+                                }
+                                Err(e) => {
+                                    tracing::error!(error = %e, "COM registration failed");
+                                    let _ = handle.emit("com-status", "error");
+                                }
+                            }
+                        }
+                        RegistrationStatus::DllMissing => {
+                            tracing::warn!("COM registration: {} — skipping", status);
                             let _ = handle.emit("com-status", "error");
                         }
                     }
@@ -346,7 +381,12 @@ fn start_tauri() {
                             let _ = window.set_focus();
                         }
                     }
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        if let Err(e) = crate::com::unregister_and_restart_explorer() {
+                            tracing::error!(error = %e, "unregister on exit failed");
+                        }
+                        app.exit(0);
+                    }
                     _ => {}
                 })
                 .build(app)?;
@@ -354,7 +394,6 @@ fn start_tauri() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
-                commands::unregister_com_server().ok();
                 if let Some(window) = window.app_handle().get_webview_window("main") {
                     let _ = window.hide();
                 }

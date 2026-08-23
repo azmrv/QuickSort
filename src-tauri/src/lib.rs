@@ -23,3 +23,6 @@ pub mod pending;
 
 // Keep – logging initialisation (called by main.rs)
 pub mod logging;
+
+// Application metadata — single source of truth for version, authors, credits, etc.
+pub mod metadata;

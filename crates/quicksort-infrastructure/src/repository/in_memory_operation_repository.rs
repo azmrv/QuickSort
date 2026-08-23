@@ -26,6 +26,15 @@ impl InMemoryOperationRepository {
             storage: Arc::new(Mutex::new(HashMap::new())),
         }
     }
+
+    /// Creates a clone that shares the same underlying storage.
+    ///
+    /// Both instances read/write to the same in-memory map.
+    pub fn clone_shared(&self) -> Self {
+        Self {
+            storage: Arc::clone(&self.storage),
+        }
+    }
 }
 
 impl Default for InMemoryOperationRepository {

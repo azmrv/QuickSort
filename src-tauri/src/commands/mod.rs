@@ -156,15 +156,15 @@ pub fn get_logs() -> Vec<serde_json::Value> {
 pub fn register_com_server() -> Result<String, String> {
     tracing::info!(command = "register_com_server", "handling");
     crate::com::register()?;
-    tracing::info!(command = "register_com_server", "OK — Explorer restarted");
-    Ok("COM server registered successfully. Explorer has been restarted.".to_string())
+    tracing::info!(command = "register_com_server", "OK — registry keys written");
+    Ok("COM server registered successfully.".to_string())
 }
 
 #[tauri::command]
 pub fn unregister_com_server() -> Result<String, String> {
     tracing::info!(command = "unregister_com_server", "handling");
     crate::com::unregister()?;
-    tracing::info!(command = "unregister_com_server", "OK — Explorer restarted");
+    tracing::info!(command = "unregister_com_server", "OK");
     Ok("COM server unregistered successfully.".to_string())
 }
 
@@ -414,4 +414,15 @@ pub async fn search_files(
         Err(e) => tracing::error!(command = "search_files", error = %e, "FAIL"),
     }
     result
+}
+
+// ---------------------------------------------------------------------------
+// Metadata command
+// ---------------------------------------------------------------------------
+
+/// Returns the complete application metadata (version, authors, credits, etc.).
+#[tauri::command]
+pub fn get_app_metadata() -> crate::metadata::AppMetadata {
+    tracing::debug!(command = "get_app_metadata", "handling");
+    crate::metadata::get_metadata()
 }

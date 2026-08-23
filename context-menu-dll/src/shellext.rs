@@ -33,12 +33,24 @@ use windows::Win32::UI::Shell::{
     CMF_DEFAULTONLY, CMINVOKECOMMANDINFO, DROPFILES, GCS_VALIDATEA, GCS_VALIDATEW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreatePopupMenu, InsertMenuItemW, InsertMenuW, SetMenuItemInfoW, HMENU, MENUITEMINFOW,
-    MFS_ENABLED, MFT_SEPARATOR, MF_BYPOSITION, MF_POPUP, MIIM_BITMAP, MIIM_FTYPE, MIIM_ID,
-    MIIM_STATE, MIIM_STRING,
+    CreatePopupMenu, InsertMenuItemW, InsertMenuW, HMENU, MENUITEMINFOW, MFS_ENABLED,
+    MFT_SEPARATOR, MF_BYPOSITION, MF_POPUP, MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STATE,
+    MIIM_STRING,
 };
 
+use crate::icon;
 use crate::pipe_client::move_to_folder;
+
+/// Cached app icon bitmap for MIIM_BITMAP in context menu items.
+/// Loaded once on first use, shared across all menu insertions.
+static APP_ICON_BITMAP: OnceLock<Option<usize>> = OnceLock::new();
+
+fn get_app_icon_bitmap() -> Option<windows::Win32::Graphics::Gdi::HBITMAP> {
+    let opt = APP_ICON_BITMAP.get_or_init(|| {
+        icon::load_app_icon_bitmap().map(|bmp| bmp.0.expose_provenance())
+    });
+    opt.map(|addr| windows::Win32::Graphics::Gdi::HBITMAP(ptr::with_exposed_provenance_mut(addr)))
+}
 
 // ============================================================================
 // Logging initialization
@@ -92,6 +104,7 @@ struct MenuFolder {
 pub struct QuickSortShellExt {
     item_paths: RefCell<Vec<PathBuf>>,
     folders: Mutex<Vec<MenuFolder>>,
+    min_cmd_id: std::cell::Cell<u32>,
 }
 
 impl Default for QuickSortShellExt {
@@ -102,6 +115,7 @@ impl Default for QuickSortShellExt {
         Self {
             item_paths: Default::default(),
             folders: Mutex::new(Vec::new()),
+            min_cmd_id: std::cell::Cell::new(0),
         }
     }
 }
@@ -123,11 +137,20 @@ impl IShellExtInit_Impl for QuickSortShellExt_Impl {
         data_obj: WinRef<'_, IDataObject>,
         _prog_id: HKEY,
     ) -> WinResult<()> {
+        log::info!("IShellExtInit::Initialize called");
         let paths = if let Some(data_obj) = data_obj.as_ref() {
-            extract_files_from_dataobject(data_obj)?
+            match extract_files_from_dataobject(data_obj) {
+                Ok(p) => p,
+                Err(e) => {
+                    log::error!("Failed to extract files from IDataObject: {:?}", e);
+                    return Err(e);
+                }
+            }
         } else {
+            log::error!("IDataObject is null");
             return E_POINTER.ok();
         };
+        log::info!("Initialize: got {} paths", paths.len());
         self.this.item_paths.replace(paths);
         Ok(())
     }
@@ -212,13 +235,24 @@ fn extract_files_from_dataobject(data_obj: &IDataObject) -> WinResult<Vec<PathBu
 // ============================================================================
 
 fn make_menu_item(id: u32, text: &[u16]) -> MENUITEMINFOW {
+    let len = text.len().saturating_sub(1);
+    let mut f_mask = MIIM_ID | MIIM_STATE | MIIM_STRING;
+    let mut icon_bmp = None;
+
+    // Add icon bitmap if available
+    if let Some(bmp) = get_app_icon_bitmap() {
+        f_mask |= MIIM_BITMAP;
+        icon_bmp = Some(bmp);
+    }
+
     MENUITEMINFOW {
         cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
-        fMask: MIIM_ID | MIIM_STATE | MIIM_STRING,
+        fMask: f_mask,
         wID: id,
         fState: MFS_ENABLED,
         dwTypeData: PWSTR::from_raw(text.as_ptr() as *mut _),
-        cch: text.len() as u32,
+        cch: len as u32,
+        hbmpItem: icon_bmp.unwrap_or_default(),
         ..Default::default()
     }
 }
@@ -242,7 +276,16 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         max_cmd_id: u32,
         flags: u32,
     ) -> HRESULT {
+        log::info!(
+            "QueryContextMenu called: menu_index={}, min_cmd_id={}, max_cmd_id={}, flags=0x{:x}",
+            menu_index,
+            min_cmd_id,
+            max_cmd_id,
+            flags
+        );
+
         if flags & CMF_DEFAULTONLY != 0 {
+            log::info!("QueryContextMenu: CMF_DEFAULTONLY set, returning S_OK");
             return S_OK;
         }
 
@@ -254,6 +297,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             }
         };
 
+        self.this.min_cmd_id.set(min_cmd_id);
         *self.this.folders.lock() = folders.clone();
 
         let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
@@ -319,20 +363,6 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 .collect();
             let root_pwstr = PWSTR::from_raw(root_wide.as_ptr() as *mut _);
 
-            let mut root_item = MENUITEMINFOW {
-                cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
-                fMask: MIIM_ID | MIIM_STATE | MIIM_STRING | MIIM_BITMAP,
-                wID: current_id,
-                fState: MFS_ENABLED,
-                dwTypeData: root_pwstr,
-                cch: root_wide.len() as u32,
-                ..Default::default()
-            };
-
-            if let Some(bmp) = crate::icon::load_app_icon_bitmap() {
-                root_item.hbmpItem = bmp;
-            }
-
             let _ = InsertMenuW(
                 menu,
                 menu_index,
@@ -341,24 +371,25 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 root_pwstr,
             );
 
-            // Apply bitmap separately via SetMenuItemInfoW (InsertMenuW ignores hbmpItem)
-            let _ = SetMenuItemInfoW(menu, menu_index, true, &root_item);
-
             HRESULT(used as i32)
         }
     }
 
     fn InvokeCommand(&self, info: *const CMINVOKECOMMANDINFO) -> WinResult<()> {
+        log::info!("InvokeCommand called");
         if info.is_null() {
+            log::error!("InvokeCommand: info is null");
             return E_POINTER.ok();
         }
         let ici = unsafe { *info };
+        // Explorer sends the submenu POSITION INDEX as lpVerb, not the wID.
+        // For MAKEINTRESOURCE-based commands the low 16 bits carry the ordinal,
+        // but InsertMenuItemW with MF_POPUP submenus gives the position instead.
         let verb = (ici.lpVerb.0 as usize) & 0xFFFF;
 
         let folders = self.this.folders.lock();
         let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
         let max_fav = favorites.len();
-        let all_folders_cmd = max_fav + 2;
 
         let sources: Vec<String> = self
             .this
@@ -373,19 +404,32 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             return E_FAIL.ok();
         }
 
+        log::info!(
+            "InvokeCommand: verb={}, max_fav={}, sources={}",
+            verb,
+            max_fav,
+            sources.len()
+        );
+
+        // Position 0..max_fav-1 → favorite folder
         if verb < max_fav {
             let target = favorites[verb];
             log::info!("Moving to: {} ({})", target.name, target.id);
 
-            match move_to_folder(sources, target.id.clone(), OverwritePolicy::Skip) {
-                Ok(resp) => {
-                    log::info!("Move OK: {:?}", resp);
+            let target_id = target.id.clone();
+            std::thread::spawn(move || {
+                match move_to_folder(sources, target_id, OverwritePolicy::Skip) {
+                    Ok(resp) => {
+                        log::info!("Move OK: {:?}", resp);
+                    }
+                    Err(e) => {
+                        log::error!("Move failed: {}", e);
+                    }
                 }
-                Err(e) => {
-                    log::error!("Move failed: {}", e);
-                }
-            }
-        } else if verb == all_folders_cmd {
+            });
+        // Position max_fav = separator (not clickable)
+        // Position max_fav+1 = "All folders"
+        } else if verb == max_fav + 1 {
             for path in self.this.item_paths.borrow().iter() {
                 let exe_path = get_quicksort_exe_path();
                 let exe_wide: Vec<u16> =
