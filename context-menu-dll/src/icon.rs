@@ -1,9 +1,10 @@
-//! Icon loading utilities for the context menu.
+//! Icon and bitmap utilities for the context menu.
 //!
-//! Loads the QuickSort icon from the .ico file next to the DLL and converts
-//! it to an HBITMAP suitable for MIIM_BITMAP in context menu items.
+//! - `load_app_icon_bitmap()` — loads the QuickSort icon for the root menu entry
+//! - `create_colored_circle_bitmap()` — creates a small colored circle for submenu items
 //!
 //! Uses plain Win32 GDI (no GDI+) to avoid deadlocks in Explorer's process.
+//! Bitmaps are created with `CreateBitmap` for exact pixel dimensions.
 
 #![allow(dead_code)]
 
@@ -12,16 +13,19 @@ use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::sync::OnceLock;
 
 use windows::core::{Result as WinResult, PCWSTR};
-use windows::Win32::Foundation::HMODULE;
+use windows::Win32::Foundation::{COLORREF, HMODULE};
 use windows::Win32::Graphics::Gdi::{
-    CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, ReleaseDC, SelectObject, GetDC,
-    HBITMAP, HGDIOBJ,
+    CreateBitmap, CreateCompatibleDC, CreateSolidBrush, DeleteDC, DeleteObject, Ellipse,
+    GetDC, ReleaseDC, SelectObject, HBITMAP, HGDIOBJ,
 };
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DrawIconEx, GetSystemMetrics, LoadImageW, HICON, IMAGE_ICON, DI_NORMAL, LR_DEFAULTCOLOR,
-    LR_LOADFROMFILE, SM_CXICON, SM_CXSMICON, SM_CYICON,
+    DrawIconEx, LoadImageW, HICON, IMAGE_ICON, DI_NORMAL, LR_DEFAULTCOLOR,
+    LR_LOADFROMFILE,
 };
+
+/// Size of context menu icons in pixels.
+const ICON_SIZE: i32 = 16;
 
 /// Cached DLL module handle as raw pointer (set once on first use).
 static DLL_HMODULE: OnceLock<usize> = OnceLock::new();
@@ -36,10 +40,41 @@ fn get_dll_hmodule() -> usize {
     })
 }
 
-/// Loads the QuickSort app icon and returns an HBITMAP for MIIM_BITMAP.
+/// Creates an exact-size 32bpp bitmap and draws into it via a memory DC.
 ///
-/// Tries the embedded DLL resource first, then falls back to quicksort.ico
-/// next to the DLL on disk. Returns `None` if neither source is available.
+/// Returns (bitmap, memory_dc, old_object) — caller must clean up.
+fn create_exact_bitmap(size: i32) -> Option<(HBITMAP, windows::Win32::Graphics::Gdi::HDC, HGDIOBJ)> {
+    unsafe {
+        let screen_dc = GetDC(None);
+        if screen_dc.is_invalid() {
+            log::warn!("GetDC(None) failed");
+            return None;
+        }
+
+        // CreateBitmap: exact pixel dimensions, 32bpp, 1 plane — no DPI scaling
+        let bitmap = CreateBitmap(size, size, 1, 32, None);
+        if bitmap.is_invalid() {
+            ReleaseDC(None, screen_dc);
+            log::warn!("CreateBitmap failed");
+            return None;
+        }
+
+        let mem_dc = CreateCompatibleDC(Some(screen_dc));
+        ReleaseDC(None, screen_dc);
+        if mem_dc.is_invalid() {
+            let _ = DeleteObject(HGDIOBJ(bitmap.0));
+            log::warn!("CreateCompatibleDC failed");
+            return None;
+        }
+
+        let old_obj = SelectObject(mem_dc, HGDIOBJ(bitmap.0));
+        Some((bitmap, mem_dc, old_obj))
+    }
+}
+
+/// Loads the QuickSort app icon as a 16x16 HBITMAP.
+///
+/// Used for MIIM_BITMAP on the root "QuickSort" context menu entry.
 pub fn load_app_icon_bitmap() -> Option<HBITMAP> {
     let module = get_dll_hmodule();
 
@@ -49,7 +84,7 @@ pub fn load_app_icon_bitmap() -> Option<HBITMAP> {
         let hmodule = HMODULE(module as *mut _);
         if let Ok(hicon) = load_icon_from_resource(hmodule, icon_name) {
             if let Some(bmp) = icon_to_bitmap(&hicon) {
-                log::info!("Icon loaded from DLL resource");
+                log::info!("Icon loaded from DLL resource ({}x{})", ICON_SIZE, ICON_SIZE);
                 return Some(bmp);
             }
         }
@@ -58,9 +93,55 @@ pub fn load_app_icon_bitmap() -> Option<HBITMAP> {
     // Fallback: load from quicksort.ico next to the DLL
     let hicon = load_icon_from_file("quicksort.ico")?;
     let bmp = icon_to_bitmap(&hicon)?;
-    log::info!("Icon loaded from file");
+    log::info!("Icon loaded from file ({}x{})", ICON_SIZE, ICON_SIZE);
     Some(bmp)
 }
+
+/// Creates a small colored circle bitmap for submenu folder items.
+///
+/// `color` is a Windows COLORREF value: `0x00BBGGRR`.
+pub fn create_colored_circle_bitmap(color: u32) -> Option<HBITMAP> {
+    let (bitmap, mem_dc, old_obj) = create_exact_bitmap(ICON_SIZE)?;
+
+    unsafe {
+        let padding = 2;
+
+        // Draw filled circle
+        let brush = CreateSolidBrush(COLORREF(color));
+        let old_brush = SelectObject(mem_dc, HGDIOBJ(brush.0));
+        let _ = Ellipse(
+            mem_dc,
+            padding,
+            padding,
+            ICON_SIZE - padding,
+            ICON_SIZE - padding,
+        );
+        SelectObject(mem_dc, old_brush);
+        let _ = DeleteObject(HGDIOBJ(brush.0));
+
+        SelectObject(mem_dc, old_obj);
+        let _ = DeleteDC(mem_dc);
+    }
+
+    Some(bitmap)
+}
+
+/// Parses a hex color string like "#FF5733" or "FF5733" to COLORREF (0x00BBGGRR).
+pub fn parse_color_to_colorref(color: &str) -> Option<u32> {
+    let hex = color.trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    // COLORREF is 0x00BBGGRR
+    Some((b as u32) << 16 | (g as u32) << 8 | (r as u32))
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
 
 /// Loads an icon from a .ico file next to the DLL.
 fn load_icon_from_file(filename: &str) -> Option<HICON> {
@@ -83,15 +164,14 @@ fn load_icon_from_file(filename: &str) -> Option<HICON> {
         .encode_wide()
         .chain(Some(0))
         .collect();
-    let icon_size = unsafe { GetSystemMetrics(SM_CXICON) };
 
     let hicon = unsafe {
         LoadImageW(
             None,
             PCWSTR::from_raw(icon_path_wide.as_ptr()),
             IMAGE_ICON,
-            icon_size,
-            icon_size,
+            ICON_SIZE,
+            ICON_SIZE,
             LR_DEFAULTCOLOR | LR_LOADFROMFILE,
         )
     }
@@ -102,56 +182,29 @@ fn load_icon_from_file(filename: &str) -> Option<HICON> {
 
 /// Loads an icon from a DLL resource by name.
 fn load_icon_from_resource(dll: HMODULE, icon_name: PCWSTR) -> WinResult<HICON> {
-    let icon_size = unsafe { GetSystemMetrics(SM_CXSMICON) };
     let hinstance = windows::Win32::Foundation::HINSTANCE(dll.0);
     let hicon = unsafe {
         LoadImageW(
             Some(hinstance),
             icon_name,
             IMAGE_ICON,
-            icon_size,
-            icon_size,
+            ICON_SIZE,
+            ICON_SIZE,
             LR_DEFAULTCOLOR,
         )
     }?;
     Ok(HICON(hicon.0))
 }
 
-/// Converts an HICON to an HBITMAP using plain GDI (no GDI+).
+/// Converts an HICON to an exact-size HBITMAP using CreateBitmap.
 fn icon_to_bitmap(icon: &HICON) -> Option<HBITMAP> {
+    let (bitmap, mem_dc, old_obj) = create_exact_bitmap(ICON_SIZE)?;
+
     unsafe {
-        let screen_dc = GetDC(None);
-        if screen_dc.is_invalid() {
-            log::warn!("GetDC(None) failed");
-            return None;
-        }
-
-        let icon_w = GetSystemMetrics(SM_CXICON);
-        let icon_h = GetSystemMetrics(SM_CYICON);
-
-        let bitmap = CreateCompatibleBitmap(screen_dc, icon_w, icon_h);
-        if bitmap.is_invalid() {
-            ReleaseDC(None, screen_dc);
-            log::warn!("CreateCompatibleBitmap failed");
-            return None;
-        }
-
-        let mem_dc = CreateCompatibleDC(Some(screen_dc));
-        if mem_dc.is_invalid() {
-            let _ = windows::Win32::Graphics::Gdi::DeleteObject(HGDIOBJ(bitmap.0));
-            ReleaseDC(None, screen_dc);
-            log::warn!("CreateCompatibleDC failed");
-            return None;
-        }
-
-        let old_obj = SelectObject(mem_dc, HGDIOBJ(bitmap.0));
-
-        let _ = DrawIconEx(mem_dc, 0, 0, *icon, icon_w, icon_h, 0, None, DI_NORMAL);
-
+        let _ = DrawIconEx(mem_dc, 0, 0, *icon, ICON_SIZE, ICON_SIZE, 0, None, DI_NORMAL);
         SelectObject(mem_dc, old_obj);
         let _ = DeleteDC(mem_dc);
-        ReleaseDC(None, screen_dc);
-
-        Some(bitmap)
     }
+
+    Some(bitmap)
 }

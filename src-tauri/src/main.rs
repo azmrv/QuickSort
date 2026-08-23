@@ -300,6 +300,7 @@ fn start_tauri() {
         .invoke_handler(tauri::generate_handler![
             commands::execute_operation_v2,
             commands::undo_operation_v2,
+            commands::repeat_operation_v2,
             commands::get_folders_v2,
             commands::add_folder_v2,
             commands::remove_folder_v2,

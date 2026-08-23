@@ -54,4 +54,16 @@ pub trait ManageFolders: Send + Sync {
     /// migration adds a dedicated `sort_order` field.
     // order parameter removed – see TASK-015 for ordering feature
     async fn toggle_favorite(&self, id: FolderId) -> Result<(), UseCaseError>;
+
+    /// Sets or clears the color indicator of a folder.
+    ///
+    /// The folder is identified by `id`. The `color` must be a hex string
+    /// in `#RRGGBB` format (e.g. `"#FF5733"`), or `None` to remove the
+    /// indicator. If the folder is not found, a `FolderNotFound` error is
+    /// returned.
+    async fn set_folder_color(
+        &self,
+        id: FolderId,
+        color: Option<String>,
+    ) -> Result<(), UseCaseError>;
 }

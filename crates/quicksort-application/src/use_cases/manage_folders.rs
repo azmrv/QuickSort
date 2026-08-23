@@ -109,4 +109,33 @@ impl ManageFolders for ManageFoldersUseCase {
             .await
             .map_err(|e| UseCaseError::RepositoryError(e.to_string()))
     }
+
+    /// Sets or clears the color indicator of a folder.
+    ///
+    /// Loads all folders, finds the target by ID, applies the new color,
+    /// and persists the updated list. Color validation (hex `#RRGGBB`)
+    /// is performed by the domain entity itself.
+    async fn set_folder_color(
+        &self,
+        id: FolderId,
+        color: Option<String>,
+    ) -> Result<(), UseCaseError> {
+        let mut folders = self
+            .config_repo
+            .load_all()
+            .await
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+
+        let folder = folders
+            .iter_mut()
+            .find(|f| f.id == id)
+            .ok_or_else(|| UseCaseError::FolderNotFound(id.to_string()))?;
+
+        folder.set_color(color).map_err(UseCaseError::Domain)?;
+
+        self.config_repo
+            .save_all(&folders)
+            .await
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))
+    }
 }

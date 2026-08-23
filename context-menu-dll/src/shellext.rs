@@ -33,16 +33,15 @@ use windows::Win32::UI::Shell::{
     CMF_DEFAULTONLY, CMINVOKECOMMANDINFO, DROPFILES, GCS_VALIDATEA, GCS_VALIDATEW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreatePopupMenu, InsertMenuItemW, InsertMenuW, HMENU, MENUITEMINFOW, MFS_ENABLED,
-    MFT_SEPARATOR, MF_BYPOSITION, MF_POPUP, MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STATE,
-    MIIM_STRING,
+    CreatePopupMenu, InsertMenuItemW, HMENU, MENUITEMINFOW, MFS_ENABLED,
+    MFT_SEPARATOR, MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
 };
 
 use crate::icon;
 use crate::pipe_client::move_to_folder;
 
-/// Cached app icon bitmap for MIIM_BITMAP in context menu items.
-/// Loaded once on first use, shared across all menu insertions.
+/// Cached app icon bitmap for MIIM_BITMAP on the root "QuickSort" menu entry.
+/// Loaded once on first use.
 static APP_ICON_BITMAP: OnceLock<Option<usize>> = OnceLock::new();
 
 fn get_app_icon_bitmap() -> Option<windows::Win32::Graphics::Gdi::HBITMAP> {
@@ -98,6 +97,7 @@ struct MenuFolder {
     name: String,
     path: String,
     is_favorite: bool,
+    color: Option<String>, // e.g. "#FF5733"
 }
 
 #[implement(IShellExtInit, IContextMenu)]
@@ -234,13 +234,12 @@ fn extract_files_from_dataobject(data_obj: &IDataObject) -> WinResult<Vec<PathBu
 // IContextMenu implementation
 // ============================================================================
 
-fn make_menu_item(id: u32, text: &[u16]) -> MENUITEMINFOW {
+fn make_menu_item_with_icon(id: u32, text: &[u16], icon: Option<windows::Win32::Graphics::Gdi::HBITMAP>) -> MENUITEMINFOW {
     let len = text.len().saturating_sub(1);
     let mut f_mask = MIIM_ID | MIIM_STATE | MIIM_STRING;
     let mut icon_bmp = None;
 
-    // Add icon bitmap if available
-    if let Some(bmp) = get_app_icon_bitmap() {
+    if let Some(bmp) = icon {
         f_mask |= MIIM_BITMAP;
         icon_bmp = Some(bmp);
     }
@@ -253,6 +252,32 @@ fn make_menu_item(id: u32, text: &[u16]) -> MENUITEMINFOW {
         dwTypeData: PWSTR::from_raw(text.as_ptr() as *mut _),
         cch: len as u32,
         hbmpItem: icon_bmp.unwrap_or_default(),
+        ..Default::default()
+    }
+}
+
+fn make_colored_menu_item(id: u32, text: &[u16], color_hex: Option<&str>) -> MENUITEMINFOW {
+    let len = text.len().saturating_sub(1);
+    let mut f_mask = MIIM_ID | MIIM_STATE | MIIM_STRING;
+    let mut circle_bmp = None;
+
+    if let Some(hex) = color_hex {
+        if let Some(colorref) = icon::parse_color_to_colorref(hex) {
+            if let Some(bmp) = icon::create_colored_circle_bitmap(colorref) {
+                f_mask |= MIIM_BITMAP;
+                circle_bmp = Some(bmp);
+            }
+        }
+    }
+
+    MENUITEMINFOW {
+        cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
+        fMask: f_mask,
+        wID: id,
+        fState: MFS_ENABLED,
+        dwTypeData: PWSTR::from_raw(text.as_ptr() as *mut _),
+        cch: len as u32,
+        hbmpItem: circle_bmp.unwrap_or_default(),
         ..Default::default()
     }
 }
@@ -317,6 +342,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             let h_submenu = CreatePopupMenu().unwrap();
             let mut current_id = min_cmd_id;
 
+            // Submenu items: favorites with colored circles
             for folder in favorites.iter().take(max_fav as usize) {
                 let label = format!("\u{2605} {}", folder.name);
                 let wide: Vec<u16> = OsString::from(&label)
@@ -327,18 +353,20 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                     h_submenu,
                     0xFFFFFFFF,
                     true,
-                    &make_menu_item(current_id, &wide),
+                    &make_colored_menu_item(current_id, &wide, folder.color.as_deref()),
                 );
                 current_id += 1;
                 used += 1;
             }
 
+            // Separator
             if has_all_folders_entry && used < available {
                 let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &make_separator(current_id));
                 current_id += 1;
                 used += 1;
             }
 
+            // "All folders..." entry
             if has_all_folders_entry && used < available {
                 let all_wide: Vec<u16> = w!("Все папки...")
                     .as_wide()
@@ -350,25 +378,32 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                     h_submenu,
                     0xFFFFFFFF,
                     true,
-                    &make_menu_item(current_id, &all_wide),
+                    &make_colored_menu_item(current_id, &all_wide, None),
                 );
                 used += 1;
             }
 
+            // Root "QuickSort" entry with app icon
             let root_wide: Vec<u16> = w!("QuickSort")
                 .as_wide()
                 .iter()
                 .copied()
                 .chain(Some(0))
                 .collect();
-            let root_pwstr = PWSTR::from_raw(root_wide.as_ptr() as *mut _);
-
-            let _ = InsertMenuW(
+            let root_item = make_menu_item_with_icon(
+                min_cmd_id + max_fav + 2, // dummy id for root
+                &root_wide,
+                get_app_icon_bitmap(),
+            );
+            let _ = InsertMenuItemW(
                 menu,
                 menu_index,
-                MF_BYPOSITION | MF_POPUP,
-                h_submenu.0 as usize,
-                root_pwstr,
+                true,
+                &MENUITEMINFOW {
+                    fMask: MIIM_ID | MIIM_STATE | MIIM_STRING | MIIM_BITMAP | MIIM_SUBMENU,
+                    hSubMenu: h_submenu,
+                    ..root_item
+                },
             );
 
             HRESULT(used as i32)
@@ -503,6 +538,7 @@ fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
         favorite: bool,
         #[serde(alias = "sort_order")]
         order: i32,
+        color: Option<String>,
     }
 
     let config: ConfigFile =
@@ -516,6 +552,7 @@ fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
             name: f.name,
             path: f.path,
             is_favorite: f.favorite,
+            color: f.color,
         })
         .collect();
 

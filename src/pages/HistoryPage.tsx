@@ -6,7 +6,7 @@ import { logger } from '../lib/logger';
 interface Operation {
     id: string;
     operation_type: string;
-    state: Record<string, unknown>;
+    state: unknown;
     source_paths: string[];
     target_folder_path: string | null;
     created_at: string;
@@ -35,6 +35,21 @@ const HistoryPage = () => {
     useEffect(() => {
         logger.action('HistoryPage', 'mount');
         loadOperations();
+
+        // Reload when the page becomes visible again (window restored from
+        // tray, webview refocused) so the history stays up to date.
+        const refreshIfVisible = () => {
+            if (document.visibilityState === 'visible') {
+                logger.action('HistoryPage', 'visible — refreshing operations');
+                loadOperations();
+            }
+        };
+        document.addEventListener('visibilitychange', refreshIfVisible);
+        window.addEventListener('focus', refreshIfVisible);
+        return () => {
+            document.removeEventListener('visibilitychange', refreshIfVisible);
+            window.removeEventListener('focus', refreshIfVisible);
+        };
     }, []);
 
     const handleUndo = async (operationId: string) => {
@@ -47,22 +62,43 @@ const HistoryPage = () => {
         }
     };
 
-    const getStateLabel = (state: Record<string, unknown>): { text: string; color: string } => {
-        if ('Completed' in state) {
-            const completed = state.Completed as { processed_files: number; bytes_processed: number };
+    const handleRepeat = async (operationId: string) => {
+        try {
+            await invoke('repeat_operation_v2', { operationId });
+            message.success('Операция повторена');
+            loadOperations();
+        } catch (err) {
+            message.error(`Ошибка повтора: ${err}`);
+        }
+    };
+
+    const getStateLabel = (state: unknown): { text: string; color: string } => {
+        // Serde serializes unit variants as strings ("Undone"), not objects.
+        if (typeof state === 'string') {
+            if (state === 'Undone') return { text: 'Отменено', color: '#f59e0b' };
+            if (state === 'Pending') return { text: 'Ожидание', color: '#6b7280' };
+            if (state === 'Executing') return { text: 'Выполняется', color: '#3b82f6' };
+            return { text: state, color: '#6b7280' };
+        }
+        if (typeof state !== 'object' || state === null) {
+            return { text: 'Неизвестно', color: '#6b7280' };
+        }
+        const s = state as Record<string, unknown>;
+        if ('Completed' in s) {
+            const completed = s.Completed as { processed_files: number; bytes_processed: number };
             return { text: `Выполнено (${completed.processed_files} файлов)`, color: '#22c55e' };
         }
-        if ('Failed' in state) {
-            const failed = state.Failed as { reason: string };
+        if ('Failed' in s) {
+            const failed = s.Failed as { reason: string };
             return { text: `Ошибка: ${failed.reason}`, color: '#ef4444' };
         }
-        if ('Undone' in state) {
+        if ('Undone' in s) {
             return { text: 'Отменено', color: '#f59e0b' };
         }
-        if ('Executing' in state) {
+        if ('Executing' in s) {
             return { text: 'Выполняется', color: '#3b82f6' };
         }
-        if ('Pending' in state) {
+        if ('Pending' in s) {
             return { text: 'Ожидание', color: '#6b7280' };
         }
         return { text: 'Неизвестно', color: '#6b7280' };
@@ -79,7 +115,17 @@ const HistoryPage = () => {
     };
 
     const canUndo = (op: Operation): boolean => {
+        if (typeof op.state === 'string') return false;
+        if (typeof op.state !== 'object' || op.state === null) return false;
         return 'Completed' in op.state && op.operation_type !== 'Delete';
+    };
+
+    // Repeat is offered for operations that finished (Completed) and for
+    // undone ones (redo). Unit variants arrive as plain strings via serde.
+    const canRepeat = (op: Operation): boolean => {
+        if (typeof op.state === 'string') return op.state === 'Undone';
+        if (typeof op.state !== 'object' || op.state === null) return false;
+        return 'Completed' in op.state || 'Undone' in op.state;
     };
 
     return (
@@ -210,6 +256,30 @@ const HistoryPage = () => {
                                         }}
                                     >
                                         Отменить
+                                    </button>
+                                )}
+                                {canRepeat(op) && (
+                                    <button
+                                        onClick={() => handleRepeat(op.id)}
+                                        style={{
+                                            padding: '4px 8px',
+                                            background: 'transparent',
+                                            border: '1px solid var(--qs-border)',
+                                            borderRadius: 'var(--qs-radius-sm)',
+                                            color: 'var(--qs-accent)',
+                                            fontFamily: 'var(--qs-font-mono)',
+                                            fontSize: '11px',
+                                            cursor: 'pointer',
+                                            flexShrink: 0,
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.background = 'var(--qs-accent-muted)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.background = 'transparent';
+                                        }}
+                                    >
+                                        Повторить
                                     </button>
                                 )}
                             </div>

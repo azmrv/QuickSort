@@ -126,6 +126,83 @@ pub async fn undo_operation_v2(
     result
 }
 
+/// Re-executes a previously completed operation with the same parameters.
+///
+/// The operation history only stores the target folder *path*, so the
+/// current folder configuration is searched for a folder with a matching
+/// path to resolve the `FolderId` required by `OperationCommand`.
+#[tauri::command]
+pub async fn repeat_operation_v2(
+    state: State<'_, AppState>,
+    operation_id: String,
+) -> Result<quicksort_application::OperationResult, String> {
+    tracing::info!(command = "repeat_operation_v2", operation_id = %operation_id, "handling");
+    let id = OperationId::from_string(&operation_id).map_err(|e| {
+        tracing::error!(command = "repeat_operation_v2", error = %e, "invalid operation ID");
+        format!("Invalid operation ID: {}", e)
+    })?;
+
+    // Find the original operation in the in-memory history.
+    let operations = state
+        .facade
+        .get_all_operations()
+        .await
+        .map_err(|e| e.to_string())?;
+    let original = match operations.iter().find(|op| op.id == id) {
+        Some(op) => op.clone(),
+        None => {
+            tracing::error!(command = "repeat_operation_v2", "operation not found");
+            return Err(format!("Operation not found: {}", operation_id));
+        }
+    };
+
+    // Resolve the target folder ID by matching the stored target path.
+    // Not required for Delete/Rename, which carry no target folder.
+    let target_folder_id = match &original.target_folder_path {
+        Some(target_path) => {
+            let folders = state.facade.get_all().await.map_err(|e| e.to_string())?;
+            match folders.iter().find(|f| &f.path == target_path) {
+                Some(folder) => Some(folder.id),
+                None => {
+                    tracing::error!(
+                        command = "repeat_operation_v2",
+                        path = %target_path,
+                        "target folder not found"
+                    );
+                    return Err(format!("Target folder not found: {}", target_path));
+                }
+            }
+        }
+        None => None,
+    };
+
+    // Rebuild the original command and execute it again.
+    let command = quicksort_application::OperationCommand {
+        operation_type: original.operation_type,
+        source_paths: original.source_paths,
+        target_folder_id,
+        target_paths: original.target_paths,
+        overwrite_policy: quicksort_application::OverwritePolicy::Skip,
+        duplicate_check_mode: quicksort_application::DuplicateCheckMode::default(),
+    };
+
+    let result = state
+        .facade
+        .execute(command)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(r) => tracing::info!(
+            command = "repeat_operation_v2",
+            state = ?r.state,
+            files = r.processed_files,
+            "OK"
+        ),
+        Err(e) => tracing::error!(command = "repeat_operation_v2", error = %e, "FAIL"),
+    }
+    result
+}
+
 #[tauri::command]
 pub fn get_mode() -> String {
     tracing::debug!(command = "get_mode", "handling");
