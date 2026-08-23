@@ -137,7 +137,7 @@ impl IShellExtInit_Impl for QuickSortShellExt_Impl {
         data_obj: WinRef<'_, IDataObject>,
         _prog_id: HKEY,
     ) -> WinResult<()> {
-        log::info!("IShellExtInit::Initialize called");
+        log::info!("IShellExtInit::Initialize called (folder_idl present: {})", !_folder_idl.is_null());
         let paths = if let Some(data_obj) = data_obj.as_ref() {
             match extract_files_from_dataobject(data_obj) {
                 Ok(p) => p,
@@ -264,8 +264,11 @@ fn make_colored_menu_item(id: u32, text: &[u16], color_hex: Option<&str>) -> MEN
     if let Some(hex) = color_hex {
         if let Some(colorref) = icon::parse_color_to_colorref(hex) {
             if let Some(bmp) = icon::create_colored_circle_bitmap(colorref) {
+                log::debug!("Colored circle created for '{}' color={}: bitmap handle={}", String::from_utf16_lossy(text), hex, bmp.0 as usize);
                 f_mask |= MIIM_BITMAP;
                 circle_bmp = Some(bmp);
+            } else {
+                log::warn!("Failed to create colored circle for '{}' color={}", String::from_utf16_lossy(text), hex);
             }
         }
     }

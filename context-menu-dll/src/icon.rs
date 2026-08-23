@@ -15,8 +15,9 @@ use std::sync::OnceLock;
 use windows::core::{Result as WinResult, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HMODULE};
 use windows::Win32::Graphics::Gdi::{
-    CreateBitmap, CreateCompatibleDC, CreateSolidBrush, DeleteDC, DeleteObject, Ellipse,
-    GetDC, ReleaseDC, SelectObject, HBITMAP, HGDIOBJ,
+    CreateCompatibleDC, CreateDIBSection, CreateSolidBrush, DeleteDC, DeleteObject, Ellipse,
+    GetDC, ReleaseDC, SelectObject, HBITMAP, HGDIOBJ, DIB_RGB_COLORS, BITMAPINFO,
+    BITMAPINFOHEADER,
 };
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -40,7 +41,7 @@ fn get_dll_hmodule() -> usize {
     })
 }
 
-/// Creates an exact-size 32bpp bitmap and draws into it via a memory DC.
+/// Creates an exact-size 32bpp DIB section bitmap and draws into it via a memory DC.
 ///
 /// Returns (bitmap, memory_dc, old_object) — caller must clean up.
 fn create_exact_bitmap(size: i32) -> Option<(HBITMAP, windows::Win32::Graphics::Gdi::HDC, HGDIOBJ)> {
@@ -51,11 +52,39 @@ fn create_exact_bitmap(size: i32) -> Option<(HBITMAP, windows::Win32::Graphics::
             return None;
         }
 
-        // CreateBitmap: exact pixel dimensions, 32bpp, 1 plane — no DPI scaling
-        let bitmap = CreateBitmap(size, size, 1, 32, None);
-        if bitmap.is_invalid() {
+        // CreateDIBSection: exact pixel dimensions, initialized to zero (transparent)
+        let bmi = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: size,
+                biHeight: -size, // top-down
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: 0, // BI_RGB
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut pixels: *mut core::ffi::c_void = std::ptr::null_mut();
+        let bitmap = match CreateDIBSection(
+            Some(screen_dc),
+            &bmi,
+            DIB_RGB_COLORS,
+            &mut pixels,
+            None,
+            0,
+        ) {
+            Ok(bmp) => bmp,
+            Err(e) => {
+                ReleaseDC(None, screen_dc);
+                log::warn!("CreateDIBSection failed: {:?}", e);
+                return None;
+            }
+        };
+        if pixels.is_null() {
             ReleaseDC(None, screen_dc);
-            log::warn!("CreateBitmap failed");
+            let _ = DeleteObject(HGDIOBJ(bitmap.0));
+            log::warn!("CreateDIBSection returned null pixel pointer");
             return None;
         }
 

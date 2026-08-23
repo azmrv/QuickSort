@@ -36,19 +36,26 @@ const HistoryPage = () => {
         logger.action('HistoryPage', 'mount');
         loadOperations();
 
-        // Reload when the page becomes visible again (window restored from
-        // tray, webview refocused) so the history stays up to date.
         const refreshIfVisible = () => {
             if (document.visibilityState === 'visible') {
-                logger.action('HistoryPage', 'visible — refreshing operations');
                 loadOperations();
             }
         };
         document.addEventListener('visibilitychange', refreshIfVisible);
         window.addEventListener('focus', refreshIfVisible);
+
+        // Periodic polling every 5 seconds while visible — covers Tauri
+        // webview quirks where focus/visibility events don't fire reliably.
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                loadOperations();
+            }
+        }, 5000);
+
         return () => {
             document.removeEventListener('visibilitychange', refreshIfVisible);
             window.removeEventListener('focus', refreshIfVisible);
+            clearInterval(interval);
         };
     }, []);
 

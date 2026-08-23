@@ -25,6 +25,8 @@ struct FolderData {
     favorite: bool,
     #[serde(default)]
     order: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    color: Option<String>,
     #[serde(default)]
     stats: Option<serde_json::Value>,
 }
@@ -60,6 +62,7 @@ impl JsonConfigurationRepository {
                 folder.toggle_favorite();
             }
             folder.order = f.order;
+            folder.color = f.color;
             folders.push(folder);
         }
         Ok(folders)
@@ -68,7 +71,7 @@ impl JsonConfigurationRepository {
     fn save_to_file(&self, folders: &[Folder]) -> Result<(), UseCaseError> {
         let config = ConfigFile {
             version: 1,
-            folders: folders
+            folders:             folders
                 .iter()
                 .map(|f| FolderData {
                     id: f.id.to_string(),
@@ -76,6 +79,7 @@ impl JsonConfigurationRepository {
                     path: f.path.to_string(),
                     favorite: f.favorite,
                     order: f.order,
+                    color: f.color.clone(),
                     stats: None,
                 })
                 .collect(),
