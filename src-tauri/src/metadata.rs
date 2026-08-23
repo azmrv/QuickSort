@@ -15,8 +15,8 @@ pub const APP_NAME: &str = "QuickSort";
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const APP_DESCRIPTION: &str = "Next-generation file manager for Windows — fast, keyboard-driven, with smart sorting and context menu integration.";
 pub const APP_LICENSE: &str = "MIT";
-pub const APP_REPOSITORY: &str = "https://github.com/pr0math3us/quicksort";
-pub const APP_HOMEPAGE: &str = "https://github.com/pr0math3us/quicksort";
+pub const APP_REPOSITORY: &str = "https://github.com/azmrv/quicksort";
+pub const APP_HOMEPAGE: &str = "https://github.com/azmrv/quicksort";
 
 // ---------------------------------------------------------------------------
 // Authors & Contributors
