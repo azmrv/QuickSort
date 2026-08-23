@@ -123,11 +123,6 @@ fn main() {
 }
 
 fn ensure_dll_copied() {
-    // DLL is expected to be next to the exe (same directory).
-    // This is handled by `cargo build` for context-menu-dll and
-    // by the installer/distribution for release builds.
-    //
-    // We just verify the DLL exists here so we can log a warning if it doesn't.
     let exe_dir = match std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
@@ -139,6 +134,7 @@ fn ensure_dll_copied() {
         }
     };
 
+    // Verify DLL exists next to exe
     let dll = exe_dir.join("context_menu_dll.dll");
     if dll.exists() {
         tracing::debug!(path = %dll.display(), "DLL found next to exe");
@@ -147,6 +143,37 @@ fn ensure_dll_copied() {
             path = %dll.display(),
             "DLL not found next to exe — COM registration will fail until DLL is built"
         );
+    }
+
+    // Copy quicksort.ico next to exe so the shell extension DLL can find it.
+    // The DLL looks for the icon relative to its own path.
+    let icon_dest = exe_dir.join("quicksort.ico");
+    if !icon_dest.exists() {
+        // Try CARGO_MANIFEST_DIR/../resources/quicksort.ico (build-time path)
+        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+            let icon_src = std::path::PathBuf::from(manifest_dir)
+                .join("..")
+                .join("resources")
+                .join("quicksort.ico");
+            if icon_src.exists() {
+                match std::fs::copy(&icon_src, &icon_dest) {
+                    Ok(_) => tracing::info!(src = %icon_src.display(), dst = %icon_dest.display(), "Copied icon next to exe"),
+                    Err(e) => tracing::warn!(error = %e, "Failed to copy icon next to exe"),
+                }
+            } else {
+                tracing::debug!(path = %icon_src.display(), "Icon source not found at build-time path, trying runtime path");
+            }
+        }
+        // Fallback: try relative to current working directory
+        if !icon_dest.exists() {
+            let icon_cwd = std::path::Path::new("resources").join("quicksort.ico");
+            if icon_cwd.exists() {
+                match std::fs::copy(&icon_cwd, &icon_dest) {
+                    Ok(_) => tracing::info!(src = %icon_cwd.display(), dst = %icon_dest.display(), "Copied icon next to exe (cwd fallback)"),
+                    Err(e) => tracing::warn!(error = %e, "Failed to copy icon next to exe (cwd fallback)"),
+                }
+            }
+        }
     }
 }
 

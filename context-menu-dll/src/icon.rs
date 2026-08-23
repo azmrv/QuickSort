@@ -16,8 +16,8 @@ use windows::core::{Result as WinResult, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HMODULE};
 use windows::Win32::Graphics::Gdi::{
     CreateCompatibleDC, CreateDIBSection, CreateSolidBrush, DeleteDC, DeleteObject, Ellipse,
-    GetDC, ReleaseDC, SelectObject, HBITMAP, HGDIOBJ, DIB_RGB_COLORS, BITMAPINFO,
-    BITMAPINFOHEADER,
+    GetDC, GetDIBits, ReleaseDC, SelectObject, SetDIBits, HBITMAP, HGDIOBJ, DIB_RGB_COLORS,
+    BITMAPINFO, BITMAPINFOHEADER,
 };
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -148,6 +148,49 @@ pub fn create_colored_circle_bitmap(color: u32) -> Option<HBITMAP> {
         SelectObject(mem_dc, old_brush);
         let _ = DeleteObject(HGDIOBJ(brush.0));
 
+        // Set alpha channel to 255 for all pixels inside the bitmap.
+        // CreateDIBSection initializes pixels to RGBA=(0,0,0,0) which is fully
+        // transparent. The Ellipse call sets RGB but leaves alpha at 0.
+        // We iterate all pixels and set alpha=255 so the circle is visible.
+        let mut bmi = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: ICON_SIZE,
+                biHeight: -ICON_SIZE, // top-down
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: 0, // BI_RGB
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut pixels: [u8; ICON_SIZE as usize * ICON_SIZE as usize * 4] =
+            std::mem::zeroed();
+        let _ = GetDIBits(
+            mem_dc,
+            bitmap,
+            0,
+            ICON_SIZE as u32,
+            Some(pixels.as_mut_ptr() as *mut _),
+            &mut bmi as *mut _,
+            DIB_RGB_COLORS,
+        );
+        let (groups, _tail) = pixels.as_chunks_mut::<4>();
+        for chunk in groups {
+            if chunk[0] != 0 || chunk[1] != 0 || chunk[2] != 0 {
+                chunk[3] = 255;
+            }
+        }
+        let _ = SetDIBits(
+            Some(mem_dc),
+            bitmap,
+            0,
+            ICON_SIZE as u32,
+            pixels.as_ptr() as *const _,
+            &bmi as *const _,
+            DIB_RGB_COLORS,
+        );
+
         SelectObject(mem_dc, old_obj);
         let _ = DeleteDC(mem_dc);
     }
@@ -225,12 +268,54 @@ fn load_icon_from_resource(dll: HMODULE, icon_name: PCWSTR) -> WinResult<HICON> 
     Ok(HICON(hicon.0))
 }
 
-/// Converts an HICON to an exact-size HBITMAP using CreateBitmap.
+/// Converts an HICON to an exact-size HBITMAP using CreateDIBSection.
 fn icon_to_bitmap(icon: &HICON) -> Option<HBITMAP> {
     let (bitmap, mem_dc, old_obj) = create_exact_bitmap(ICON_SIZE)?;
 
     unsafe {
         let _ = DrawIconEx(mem_dc, 0, 0, *icon, ICON_SIZE, ICON_SIZE, 0, None, DI_NORMAL);
+
+        // Ensure alpha channel is set for all non-zero pixels.
+        // DrawIconEx with DI_NORMAL may not set alpha on all Windows versions.
+        let mut bmi = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: ICON_SIZE,
+                biHeight: -ICON_SIZE,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut pixels: [u8; ICON_SIZE as usize * ICON_SIZE as usize * 4] =
+            std::mem::zeroed();
+        let _ = GetDIBits(
+            mem_dc,
+            bitmap,
+            0,
+            ICON_SIZE as u32,
+            Some(pixels.as_mut_ptr() as *mut _),
+            &mut bmi as *mut _,
+            DIB_RGB_COLORS,
+        );
+        let (groups, _tail) = pixels.as_chunks_mut::<4>();
+        for chunk in groups {
+            if chunk[0] != 0 || chunk[1] != 0 || chunk[2] != 0 {
+                chunk[3] = 255;
+            }
+        }
+        let _ = SetDIBits(
+            Some(mem_dc),
+            bitmap,
+            0,
+            ICON_SIZE as u32,
+            pixels.as_ptr() as *const _,
+            &bmi as *const _,
+            DIB_RGB_COLORS,
+        );
+
         SelectObject(mem_dc, old_obj);
         let _ = DeleteDC(mem_dc);
     }
