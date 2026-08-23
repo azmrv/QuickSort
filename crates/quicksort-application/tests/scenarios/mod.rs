@@ -376,6 +376,7 @@ pub fn test_folder() -> Folder {
         path: WindowsPath::new("C:\\Users\\Test\\Documents").unwrap(),
         favorite: false,
         order: 0,
+        color: None,
         stats: Default::default(),
         created_at: now,
         updated_at: now,

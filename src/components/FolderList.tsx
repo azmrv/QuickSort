@@ -5,10 +5,13 @@ interface FolderListProps {
     folders: Folder[];
     onRename: (id: string, newName: string) => void;
     onToggleFavorite: (id: string) => void;
+    onSetColor: (id: string, color: string | null) => void;
     onApply: (folders: Folder[]) => void;
 }
 
-const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavorite, onApply }) => {
+const DEFAULT_COLOR = '#4a9eff';
+
+const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavorite, onSetColor, onApply }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
 
@@ -85,6 +88,26 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
                         >
                             {folder.favorite ? '★' : '☆'}
                         </button>
+                        <label
+                            className={`folder-action-btn color ${folder.color ? '' : 'empty'}`}
+                            title={folder.color ? `Цвет: ${folder.color} (ПКМ — сбросить)` : 'Задать цвет'}
+                            onContextMenu={(e) => {
+                                e.preventDefault();
+                                if (folder.color) {
+                                    onSetColor(folder.id, null);
+                                }
+                            }}
+                        >
+                            <span
+                                className="color-dot"
+                                style={{ background: folder.color ?? 'transparent' }}
+                            />
+                            <input
+                                type="color"
+                                value={folder.color ?? DEFAULT_COLOR}
+                                onChange={(e) => onSetColor(folder.id, e.target.value.toUpperCase())}
+                            />
+                        </label>
                         {editingId === folder.id ? (
                             <button
                                 className="folder-action-btn"

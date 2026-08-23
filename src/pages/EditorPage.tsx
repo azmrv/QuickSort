@@ -66,6 +66,20 @@ const EditorPage: React.FC = () => {
         }
     };
 
+    const handleSetColor = async (id: string, color: string | null) => {
+        logger.action('EditorPage', `set color: ${id} → ${color ?? 'none'}`);
+        setFolders(folders.map((f) => (f.id === id ? { ...f, color } : f)));
+
+        try {
+            await invoke('set_folder_color_v2', { id, color });
+            logger.info('EditorPage', `color saved: ${id}`);
+        } catch (err) {
+            logger.error('EditorPage', 'set color failed', err);
+            setFolders(folders);
+            message.error('Ошибка сохранения цвета');
+        }
+    };
+
     const handleApply = async (newFolders: Folder[]) => {
         setFolders(newFolders);
     };
@@ -78,6 +92,7 @@ const EditorPage: React.FC = () => {
                 folders={folders}
                 onRename={handleRename}
                 onToggleFavorite={handleToggleFavorite}
+                onSetColor={handleSetColor}
                 onApply={handleApply}
             />
         </div>

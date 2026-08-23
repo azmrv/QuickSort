@@ -305,6 +305,7 @@ fn start_tauri() {
             commands::add_folder_v2,
             commands::remove_folder_v2,
             commands::toggle_favorite_v2,
+            commands::set_folder_color_v2,
             commands::get_mode,
             commands::get_pending_file,
             commands::check_menu_status,

@@ -157,6 +157,15 @@ impl ManageFolders for ApplicationFacadeImpl {
     async fn toggle_favorite(&self, id: FolderId) -> Result<(), UseCaseError> {
         self.manage_folders.toggle_favorite(id).await
     }
+
+    /// Delegates to `ManageFoldersUseCase::set_folder_color`.
+    async fn set_folder_color(
+        &self,
+        id: FolderId,
+        color: Option<String>,
+    ) -> Result<(), UseCaseError> {
+        self.manage_folders.set_folder_color(id, color).await
+    }
 }
 
 #[async_trait]

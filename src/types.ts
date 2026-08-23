@@ -4,6 +4,7 @@ export interface Folder {
     path: string;
     favorite: boolean;
     order: number;
+    color?: string | null;
     stats: {
         use_count: number;
         last_used: string | null;

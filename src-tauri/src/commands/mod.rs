@@ -89,6 +89,29 @@ pub async fn toggle_favorite_v2(
 }
 
 #[tauri::command]
+pub async fn set_folder_color_v2(
+    state: State<'_, AppState>,
+    id: String,
+    color: Option<String>,
+) -> Result<(), String> {
+    tracing::info!(command = "set_folder_color_v2", id = %id, color = ?color, "handling");
+    let folder_id = FolderId::from_string(&id).map_err(|e| {
+        tracing::error!(command = "set_folder_color_v2", error = %e, "invalid folder ID");
+        format!("Invalid folder ID: {}", e)
+    })?;
+    let result = state
+        .facade
+        .set_folder_color(folder_id, color)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "set_folder_color_v2", "OK"),
+        Err(e) => tracing::error!(command = "set_folder_color_v2", error = %e, "FAIL"),
+    }
+    result
+}
+
+#[tauri::command]
 pub async fn execute_operation_v2(
     state: State<'_, AppState>,
     command: quicksort_application::OperationCommand,

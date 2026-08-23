@@ -131,7 +131,9 @@ impl ManageFolders for ManageFoldersUseCase {
             .find(|f| f.id == id)
             .ok_or_else(|| UseCaseError::FolderNotFound(id.to_string()))?;
 
-        folder.set_color(color).map_err(UseCaseError::Domain)?;
+        folder
+            .set_color(color)
+            .map_err(|e| UseCaseError::Domain(e.to_string()))?;
 
         self.config_repo
             .save_all(&folders)
