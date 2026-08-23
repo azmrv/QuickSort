@@ -77,7 +77,9 @@ impl DateFilter {
             "yesterday" => Some(DateFilter::Yesterday),
             _ => {
                 // Try parsing "Nd" or "Ndays"
-                let stripped = lower.strip_suffix("days").or_else(|| lower.strip_suffix("d"));
+                let stripped = lower
+                    .strip_suffix("days")
+                    .or_else(|| lower.strip_suffix("d"));
                 stripped
                     .and_then(|n| n.parse::<u32>().ok())
                     .map(DateFilter::PastDays)
@@ -166,7 +168,7 @@ impl SearchQuery {
                 // This is part of an OR group
                 if query.or_groups.is_empty() {
                     // Convert previous AND terms into the first OR group
-                    let prev_terms: Vec<String> = query.text_terms.drain(..).collect();
+                    let prev_terms: Vec<String> = std::mem::take(&mut query.text_terms);
                     if !prev_terms.is_empty() {
                         query.or_groups.push(prev_terms);
                     }
@@ -182,10 +184,7 @@ impl SearchQuery {
     }
 
     /// Parse AND-separated terms from a single OR-part.
-    fn parse_and_terms(
-        input: &str,
-        query: &mut SearchQuery,
-    ) -> Result<Vec<String>, DomainError> {
+    fn parse_and_terms(input: &str, query: &mut SearchQuery) -> Result<Vec<String>, DomainError> {
         let mut terms = Vec::new();
         let mut chars = input.chars().peekable();
 
@@ -221,7 +220,9 @@ impl SearchQuery {
     }
 
     /// Read a single term (up to next space, handling quotes).
-    fn read_term(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Result<String, DomainError> {
+    fn read_term(
+        chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    ) -> Result<String, DomainError> {
         let mut term = String::new();
         let mut in_quotes = false;
 
@@ -280,8 +281,9 @@ impl SearchQuery {
                 }
             }
             "size" => Self::parse_size_filter(value),
-            "date-modified" | "dm" => DateFilter::parse_value(value)
-                .map(SearchFilter::DateModified),
+            "date-modified" | "dm" => {
+                DateFilter::parse_value(value).map(SearchFilter::DateModified)
+            }
             _ => None,
         }
     }
@@ -416,10 +418,7 @@ mod tests {
     #[test]
     fn test_size_filter_bytes() {
         let q = SearchQuery::parse("size:>1000").unwrap();
-        assert_eq!(
-            q.filters[0],
-            SearchFilter::Size(SizeOp::GreaterThan, 1000)
-        );
+        assert_eq!(q.filters[0], SearchFilter::Size(SizeOp::GreaterThan, 1000));
     }
 
     #[test]
@@ -519,7 +518,9 @@ mod tests {
         let q = SearchQuery::parse("report ext:pdf size:>1mb date-modified:today").unwrap();
         assert_eq!(q.text_terms, vec!["report"]);
         assert_eq!(q.filters.len(), 3);
-        assert!(q.filters.contains(&SearchFilter::Extension("pdf".to_string())));
+        assert!(q
+            .filters
+            .contains(&SearchFilter::Extension("pdf".to_string())));
         assert!(q
             .filters
             .contains(&SearchFilter::Size(SizeOp::GreaterThan, 1024 * 1024)));

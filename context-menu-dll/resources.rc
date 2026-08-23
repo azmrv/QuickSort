@@ -1,11 +1,10 @@
-// In order to embed an icon in the assembly.
+// Windows resource file for QuickSort context menu DLL.
 #include <winuser.h>
 #include <verrsrc.h>
 
 1 RT_MANIFEST "manifest.xml"
 
-IDI_MYAPP_ICON          ICON    "whatever.ico"
-IDI_MYAPP_ICON_SMALL    ICON    "whatever.ico"
+QUICKSORT_ICON         ICON    "../resources/quicksort.ico"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     0,2,0,0
@@ -13,22 +12,21 @@ PRODUCTVERSION  0,2,0,0
 FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
 FILEFLAGS       0
 FILEOS          VOS__WINDOWS32
-FILETYPE        VFT_APP
+FILETYPE        VFT_DLL
 FILESUBTYPE     VFT2_UNKNOWN
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        // US English UTF-16.
         BLOCK "040904B0"
         BEGIN
             VALUE "CompanyName", "QuickSort"
-            VALUE "FileDescription", "QuickSort Shell Extension"
+            VALUE "FileDescription", "QuickSort Context Menu Shell Extension"
             VALUE "FileVersion", "0.2.0"
             VALUE "InternalName", "context-menu-dll"
-            VALUE "OriginalFilename", "context-menu-dll.dll"
+            VALUE "OriginalFilename", "context_menu_dll.dll"
             VALUE "ProductName", "QuickSort"
             VALUE "ProductVersion", "0.2.0"
-            VALUE "LegalCopyright", "QuickSort"
+            VALUE "LegalCopyright", "QuickSort License"
         END
     END
     BLOCK "VarFileInfo"

@@ -24,7 +24,7 @@ use windows::Win32::Foundation::{
 use windows::Win32::System::Com::{
     IClassFactory, IClassFactory_Impl, IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL,
 };
-use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
+use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
 use windows::Win32::System::Memory::GlobalLock;
 use windows::Win32::System::Ole::{ReleaseStgMedium, CF_HDROP};
 use windows::Win32::System::Registry::HKEY;
@@ -32,13 +32,24 @@ use windows::Win32::UI::Shell::{
     Common::ITEMIDLIST, IContextMenu, IContextMenu_Impl, IShellExtInit, IShellExtInit_Impl,
     CMF_DEFAULTONLY, CMINVOKECOMMANDINFO, DROPFILES, GCS_VALIDATEA, GCS_VALIDATEW,
 };
-use windows::Win32::Graphics::Gdi::HBITMAP;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreatePopupMenu, InsertMenuItemW, MessageBoxW, HMENU, MB_OK, MENUITEMINFOW, MFS_ENABLED,
+    CreatePopupMenu, InsertMenuItemW, HMENU, MENUITEMINFOW, MFS_ENABLED,
     MFT_SEPARATOR, MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
 };
 
+use crate::icon;
 use crate::pipe_client::move_to_folder;
+
+/// Cached app icon bitmap for MIIM_BITMAP on the root "QuickSort" menu entry.
+/// Loaded once on first use.
+static APP_ICON_BITMAP: OnceLock<Option<usize>> = OnceLock::new();
+
+fn get_app_icon_bitmap() -> Option<windows::Win32::Graphics::Gdi::HBITMAP> {
+    let opt = APP_ICON_BITMAP.get_or_init(|| {
+        icon::load_app_icon_bitmap().map(|bmp| bmp.0.expose_provenance())
+    });
+    opt.map(|addr| windows::Win32::Graphics::Gdi::HBITMAP(ptr::with_exposed_provenance_mut(addr)))
+}
 
 // ============================================================================
 // Logging initialization
@@ -63,7 +74,7 @@ fn init_logging() {
 
         if let Ok(file) = std::fs::File::create(&log_dir) {
             let config = simplelog::ConfigBuilder::new()
-                .add_filter_allow_str("quicksort")
+                .add_filter_allow_str("context_menu_dll")
                 .build();
             let _ = simplelog::WriteLogger::init(simplelog::LevelFilter::Debug, config, file);
             log::info!("DLL logging started.");
@@ -86,12 +97,14 @@ struct MenuFolder {
     name: String,
     path: String,
     is_favorite: bool,
+    color: Option<String>, // e.g. "#FF5733"
 }
 
 #[implement(IShellExtInit, IContextMenu)]
 pub struct QuickSortShellExt {
     item_paths: RefCell<Vec<PathBuf>>,
     folders: Mutex<Vec<MenuFolder>>,
+    min_cmd_id: std::cell::Cell<u32>,
 }
 
 impl Default for QuickSortShellExt {
@@ -102,6 +115,7 @@ impl Default for QuickSortShellExt {
         Self {
             item_paths: Default::default(),
             folders: Mutex::new(Vec::new()),
+            min_cmd_id: std::cell::Cell::new(0),
         }
     }
 }
@@ -123,11 +137,20 @@ impl IShellExtInit_Impl for QuickSortShellExt_Impl {
         data_obj: WinRef<'_, IDataObject>,
         _prog_id: HKEY,
     ) -> WinResult<()> {
+        log::info!("IShellExtInit::Initialize called (folder_idl present: {})", !_folder_idl.is_null());
         let paths = if let Some(data_obj) = data_obj.as_ref() {
-            extract_files_from_dataobject(data_obj)?
+            match extract_files_from_dataobject(data_obj) {
+                Ok(p) => p,
+                Err(e) => {
+                    log::error!("Failed to extract files from IDataObject: {:?}", e);
+                    return Err(e);
+                }
+            }
         } else {
+            log::error!("IDataObject is null");
             return E_POINTER.ok();
         };
+        log::info!("Initialize: got {} paths", paths.len());
         self.this.item_paths.replace(paths);
         Ok(())
     }
@@ -211,19 +234,53 @@ fn extract_files_from_dataobject(data_obj: &IDataObject) -> WinResult<Vec<PathBu
 // IContextMenu implementation
 // ============================================================================
 
-fn make_menu_item(id: u32, text: &[u16], icon: Option<HBITMAP>) -> MENUITEMINFOW {
-    let mut mask = MIIM_ID | MIIM_STATE | MIIM_STRING;
-    if icon.is_some() {
-        mask |= MIIM_BITMAP;
+fn make_menu_item_with_icon(id: u32, text: &[u16], icon: Option<windows::Win32::Graphics::Gdi::HBITMAP>) -> MENUITEMINFOW {
+    let len = text.len().saturating_sub(1);
+    let mut f_mask = MIIM_ID | MIIM_STATE | MIIM_STRING;
+    let mut icon_bmp = None;
+
+    if let Some(bmp) = icon {
+        f_mask |= MIIM_BITMAP;
+        icon_bmp = Some(bmp);
     }
+
     MENUITEMINFOW {
         cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
-        fMask: mask,
+        fMask: f_mask,
         wID: id,
         fState: MFS_ENABLED,
-        hbmpItem: icon.unwrap_or_default(),
         dwTypeData: PWSTR::from_raw(text.as_ptr() as *mut _),
-        cch: text.len() as u32,
+        cch: len as u32,
+        hbmpItem: icon_bmp.unwrap_or_default(),
+        ..Default::default()
+    }
+}
+
+fn make_colored_menu_item(id: u32, text: &[u16], color_hex: Option<&str>) -> MENUITEMINFOW {
+    let len = text.len().saturating_sub(1);
+    let mut f_mask = MIIM_ID | MIIM_STATE | MIIM_STRING;
+    let mut circle_bmp = None;
+
+    if let Some(hex) = color_hex {
+        if let Some(colorref) = icon::parse_color_to_colorref(hex) {
+            if let Some(bmp) = icon::create_colored_circle_bitmap(colorref) {
+                log::debug!("Colored circle created for '{}' color={}: bitmap handle={}", String::from_utf16_lossy(text), hex, bmp.0 as usize);
+                f_mask |= MIIM_BITMAP;
+                circle_bmp = Some(bmp);
+            } else {
+                log::warn!("Failed to create colored circle for '{}' color={}", String::from_utf16_lossy(text), hex);
+            }
+        }
+    }
+
+    MENUITEMINFOW {
+        cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
+        fMask: f_mask,
+        wID: id,
+        fState: MFS_ENABLED,
+        dwTypeData: PWSTR::from_raw(text.as_ptr() as *mut _),
+        cch: len as u32,
+        hbmpItem: circle_bmp.unwrap_or_default(),
         ..Default::default()
     }
 }
@@ -247,7 +304,16 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         max_cmd_id: u32,
         flags: u32,
     ) -> HRESULT {
+        log::info!(
+            "QueryContextMenu called: menu_index={}, min_cmd_id={}, max_cmd_id={}, flags=0x{:x}",
+            menu_index,
+            min_cmd_id,
+            max_cmd_id,
+            flags
+        );
+
         if flags & CMF_DEFAULTONLY != 0 {
+            log::info!("QueryContextMenu: CMF_DEFAULTONLY set, returning S_OK");
             return S_OK;
         }
 
@@ -259,6 +325,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             }
         };
 
+        self.this.min_cmd_id.set(min_cmd_id);
         *self.this.folders.lock() = folders.clone();
 
         let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
@@ -278,8 +345,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             let h_submenu = CreatePopupMenu().unwrap();
             let mut current_id = min_cmd_id;
 
-            let icon_bmp = get_dll_icon();
-
+            // Submenu items: favorites with colored circles
             for folder in favorites.iter().take(max_fav as usize) {
                 let label = format!("\u{2605} {}", folder.name);
                 let wide: Vec<u16> = OsString::from(&label)
@@ -290,18 +356,20 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                     h_submenu,
                     0xFFFFFFFF,
                     true,
-                    &make_menu_item(current_id, &wide, icon_bmp),
+                    &make_colored_menu_item(current_id, &wide, folder.color.as_deref()),
                 );
                 current_id += 1;
                 used += 1;
             }
 
+            // Separator
             if has_all_folders_entry && used < available {
                 let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &make_separator(current_id));
                 current_id += 1;
                 used += 1;
             }
 
+            // "All folders..." entry
             if has_all_folders_entry && used < available {
                 let all_wide: Vec<u16> = w!("Все папки...")
                     .as_wide()
@@ -313,45 +381,53 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                     h_submenu,
                     0xFFFFFFFF,
                     true,
-                    &make_menu_item(current_id, &all_wide, None),
+                    &make_colored_menu_item(current_id, &all_wide, None),
                 );
                 used += 1;
             }
 
+            // Root "QuickSort" entry with app icon
             let root_wide: Vec<u16> = w!("QuickSort")
                 .as_wide()
                 .iter()
                 .copied()
                 .chain(Some(0))
                 .collect();
-            let root_item = MENUITEMINFOW {
-                cbSize: mem::size_of::<MENUITEMINFOW>() as u32,
-                fMask: MIIM_ID | MIIM_STATE | MIIM_STRING | MIIM_BITMAP | MIIM_SUBMENU,
-                wID: min_cmd_id + used,
-                fState: MFS_ENABLED,
-                hbmpItem: icon_bmp.unwrap_or_default(),
-                hSubMenu: h_submenu,
-                dwTypeData: PWSTR::from_raw(root_wide.as_ptr() as *mut _),
-                cch: 4, // "QuickSort" len
-                ..Default::default()
-            };
-            let _ = InsertMenuItemW(menu, menu_index, true, &root_item);
+            let root_item = make_menu_item_with_icon(
+                min_cmd_id + max_fav + 2, // dummy id for root
+                &root_wide,
+                get_app_icon_bitmap(),
+            );
+            let _ = InsertMenuItemW(
+                menu,
+                menu_index,
+                true,
+                &MENUITEMINFOW {
+                    fMask: MIIM_ID | MIIM_STATE | MIIM_STRING | MIIM_BITMAP | MIIM_SUBMENU,
+                    hSubMenu: h_submenu,
+                    ..root_item
+                },
+            );
 
             HRESULT(used as i32)
         }
     }
 
     fn InvokeCommand(&self, info: *const CMINVOKECOMMANDINFO) -> WinResult<()> {
+        log::info!("InvokeCommand called");
         if info.is_null() {
+            log::error!("InvokeCommand: info is null");
             return E_POINTER.ok();
         }
         let ici = unsafe { *info };
+        // Explorer sends the submenu POSITION INDEX as lpVerb, not the wID.
+        // For MAKEINTRESOURCE-based commands the low 16 bits carry the ordinal,
+        // but InsertMenuItemW with MF_POPUP submenus gives the position instead.
         let verb = (ici.lpVerb.0 as usize) & 0xFFFF;
 
         let folders = self.this.folders.lock();
         let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
         let max_fav = favorites.len();
-        let all_folders_cmd = max_fav + 2;
 
         let sources: Vec<String> = self
             .this
@@ -366,25 +442,32 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             return E_FAIL.ok();
         }
 
+        log::info!(
+            "InvokeCommand: verb={}, max_fav={}, sources={}",
+            verb,
+            max_fav,
+            sources.len()
+        );
+
+        // Position 0..max_fav-1 → favorite folder
         if verb < max_fav {
             let target = favorites[verb];
             log::info!("Moving to: {} ({})", target.name, target.id);
 
-            match move_to_folder(sources, target.id.clone(), OverwritePolicy::Skip) {
-                Ok(resp) => {
-                    log::info!("Move OK: {:?}", resp);
-                }
-                Err(e) => {
-                    log::error!("Move failed: {}", e);
-                    let msg = format!("QuickSort: {}", e);
-                    let wide_msg: Vec<u16> =
-                        OsString::from(&msg).encode_wide().chain(Some(0)).collect();
-                    unsafe {
-                        MessageBoxW(None, PCWSTR(wide_msg.as_ptr()), w!("QuickSort"), MB_OK);
+            let target_id = target.id.clone();
+            std::thread::spawn(move || {
+                match move_to_folder(sources, target_id, OverwritePolicy::Skip) {
+                    Ok(resp) => {
+                        log::info!("Move OK: {:?}", resp);
+                    }
+                    Err(e) => {
+                        log::error!("Move failed: {}", e);
                     }
                 }
-            }
-        } else if verb == all_folders_cmd {
+            });
+        // Position max_fav = separator (not clickable)
+        // Position max_fav+1 = "All folders"
+        } else if verb == max_fav + 1 {
             for path in self.this.item_paths.borrow().iter() {
                 let exe_path = get_quicksort_exe_path();
                 let exe_wide: Vec<u16> =
@@ -458,6 +541,7 @@ fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
         favorite: bool,
         #[serde(alias = "sort_order")]
         order: i32,
+        color: Option<String>,
     }
 
     let config: ConfigFile =
@@ -471,26 +555,11 @@ fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
             name: f.name,
             path: f.path,
             is_favorite: f.favorite,
+            color: f.color,
         })
         .collect();
 
     Ok(folders)
-}
-
-// ============================================================================
-// Helper: load DLL icon as HBITMAP for context menu
-// ============================================================================
-
-fn get_dll_icon() -> Option<HBITMAP> {
-    unsafe {
-        let dll_name: Vec<u16> = "context-menu-dll.dll"
-            .encode_utf16()
-            .chain(Some(0))
-            .collect();
-        let h_module = GetModuleHandleW(PCWSTR(dll_name.as_ptr())).ok()?;
-        let icon_name = PCWSTR(1 as _); // MAKEINTRESOURCE(1) = IDI_MYAPP_ICON
-        crate::icon::resource_icon_to_bitmap(h_module.into(), icon_name).ok()
-    }
 }
 
 // ============================================================================

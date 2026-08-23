@@ -57,18 +57,12 @@ impl ApplicationFacade {
         self
     }
 
-    pub fn with_plugin_manager(
-        mut self,
-        plugin_manager: Arc<dyn PluginManager>,
-    ) -> Self {
+    pub fn with_plugin_manager(mut self, plugin_manager: Arc<dyn PluginManager>) -> Self {
         self.plugin_manager = Some(plugin_manager);
         self
     }
 
-    pub fn with_search_files(
-        mut self,
-        search_files: Arc<dyn SearchFiles>,
-    ) -> Self {
+    pub fn with_search_files(mut self, search_files: Arc<dyn SearchFiles>) -> Self {
         self.search_files = Some(search_files);
         self
     }
@@ -137,10 +131,7 @@ impl ApplicationFacade {
             .await
     }
 
-    pub async fn get_plugin_config(
-        &self,
-        plugin_id: &str,
-    ) -> Result<PluginConfig, UseCaseError> {
+    pub async fn get_plugin_config(&self, plugin_id: &str) -> Result<PluginConfig, UseCaseError> {
         self.plugin_manager
             .as_ref()
             .ok_or(UseCaseError::RepositoryError(

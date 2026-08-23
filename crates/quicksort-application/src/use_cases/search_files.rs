@@ -51,9 +51,8 @@ impl SearchFiles for SearchFilesUseCase {
         directories: &[String],
     ) -> Result<SearchResult, UseCaseError> {
         // Parse the query
-        let _query = SearchQuery::parse(query_text).map_err(|e| {
-            UseCaseError::InvalidCommand(format!("Invalid search query: {}", e))
-        })?;
+        let _query = SearchQuery::parse(query_text)
+            .map_err(|e| UseCaseError::InvalidCommand(format!("Invalid search query: {}", e)))?;
 
         // Delegate to the file search port
         self.file_search

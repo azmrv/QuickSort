@@ -24,15 +24,15 @@ use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
 
 use super::{
-    ExecuteOperation, GetFolders, GetOperationHistory, LoadSettings, ManageFolders,
-    PluginInfoDto, PluginManager, SaveSettings, UndoOperation,
+    ExecuteOperation, GetFolders, GetOperationHistory, LoadSettings, ManageFolders, PluginInfoDto,
+    PluginManager, SaveSettings, UndoOperation,
 };
+use crate::ports::outbound::SearchResult;
 use crate::use_cases::{
     ExecuteOperationUseCase, GetFoldersUseCase, GetOperationHistoryUseCase, LoadSettingsUseCase,
     ManageFoldersUseCase, PluginManagerUseCase, SaveSettingsUseCase, SearchFiles,
     SearchFilesUseCase, UndoOperationUseCase,
 };
-use crate::ports::outbound::SearchResult;
 use quicksort_domain::{Folder, FolderId, Operation, OperationId, PluginConfig, Settings};
 
 /// Combined implementation of all inbound ports.
@@ -157,6 +157,15 @@ impl ManageFolders for ApplicationFacadeImpl {
     async fn toggle_favorite(&self, id: FolderId) -> Result<(), UseCaseError> {
         self.manage_folders.toggle_favorite(id).await
     }
+
+    /// Delegates to `ManageFoldersUseCase::set_folder_color`.
+    async fn set_folder_color(
+        &self,
+        id: FolderId,
+        color: Option<String>,
+    ) -> Result<(), UseCaseError> {
+        self.manage_folders.set_folder_color(id, color).await
+    }
 }
 
 #[async_trait]
@@ -195,10 +204,7 @@ impl PluginManager for ApplicationFacadeImpl {
             .await
     }
 
-    async fn get_plugin_config(
-        &self,
-        plugin_id: &str,
-    ) -> Result<PluginConfig, UseCaseError> {
+    async fn get_plugin_config(&self, plugin_id: &str) -> Result<PluginConfig, UseCaseError> {
         self.plugin_manager
             .as_ref()
             .ok_or(UseCaseError::RepositoryError(
@@ -222,11 +228,7 @@ impl PluginManager for ApplicationFacadeImpl {
             .await
     }
 
-    async fn set_plugin_enabled(
-        &self,
-        plugin_id: &str,
-        enabled: bool,
-    ) -> Result<(), UseCaseError> {
+    async fn set_plugin_enabled(&self, plugin_id: &str, enabled: bool) -> Result<(), UseCaseError> {
         self.plugin_manager
             .as_ref()
             .ok_or(UseCaseError::RepositoryError(

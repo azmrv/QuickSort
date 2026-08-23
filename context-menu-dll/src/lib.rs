@@ -3,7 +3,6 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 mod icon;
-mod lifecycle;
 mod pipe_client;
 mod shellext;
 
@@ -17,8 +16,6 @@ use windows::Win32::Foundation::{
 use shellext::{QuickSortClassFactory, CLSID_QUICKSORT, INSTANCE_COUNT};
 
 /// DllGetClassObject - returns a class factory for the requested CLSID.
-/// If the owner process (Tauri app) is not running, returns
-/// CLASS_E_CLASSNOTAVAILABLE so Explorer does not create new menu instances.
 #[no_mangle]
 pub extern "system" fn DllGetClassObject(
     rclsid: *const GUID,
@@ -37,24 +34,26 @@ pub extern "system" fn DllGetClassObject(
     }
 
     if unsafe { *rclsid } != CLSID_QUICKSORT {
+        log::error!(
+            "DllGetClassObject: unknown CLSID {:?}, expected {:?}",
+            unsafe { *rclsid },
+            CLSID_QUICKSORT
+        );
         return CLASS_E_CLASSNOTAVAILABLE;
     }
 
-    if !lifecycle::is_owner_alive() {
-        return CLASS_E_CLASSNOTAVAILABLE;
-    }
-
+    log::info!("DllGetClassObject: creating factory");
     let factory = QuickSortClassFactory;
     let unknown: IUnknown = factory.into();
 
     unsafe { unknown.query(riid, ppv) }
 }
 
-/// DllCanUnloadNow - returns S_OK if no instances exist or owner process is dead.
+/// DllCanUnloadNow - returns S_OK if no instances exist.
 #[no_mangle]
 pub extern "system" fn DllCanUnloadNow() -> HRESULT {
     let count = INSTANCE_COUNT.load(Ordering::SeqCst);
-    if lifecycle::can_unload(count) {
+    if count == 0 {
         S_OK
     } else {
         S_FALSE

@@ -5,7 +5,7 @@ use quicksort_application::{
     UndoOperation, WindowsPath,
 };
 use std::path::PathBuf;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn get_folders_v2(state: State<'_, AppState>) -> Result<Vec<Folder>, String> {
@@ -71,7 +71,7 @@ pub async fn toggle_favorite_v2(
     order: Option<u32>,
 ) -> Result<(), String> {
     tracing::info!(command = "toggle_favorite_v2", id = %id, order = ?order, "handling");
-    let _ = order;
+    let _ = order; // TODO: support order reordering in toggle_favorite port
     let folder_id = FolderId::from_string(&id).map_err(|e| {
         tracing::error!(command = "toggle_favorite_v2", error = %e, "invalid folder ID");
         format!("Invalid folder ID: {}", e)
@@ -84,6 +84,29 @@ pub async fn toggle_favorite_v2(
     match &result {
         Ok(()) => tracing::info!(command = "toggle_favorite_v2", "OK"),
         Err(e) => tracing::error!(command = "toggle_favorite_v2", error = %e, "FAIL"),
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn set_folder_color_v2(
+    state: State<'_, AppState>,
+    id: String,
+    color: Option<String>,
+) -> Result<(), String> {
+    tracing::info!(command = "set_folder_color_v2", id = %id, color = ?color, "handling");
+    let folder_id = FolderId::from_string(&id).map_err(|e| {
+        tracing::error!(command = "set_folder_color_v2", error = %e, "invalid folder ID");
+        format!("Invalid folder ID: {}", e)
+    })?;
+    let result = state
+        .facade
+        .set_folder_color(folder_id, color)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "set_folder_color_v2", "OK"),
+        Err(e) => tracing::error!(command = "set_folder_color_v2", error = %e, "FAIL"),
     }
     result
 }
@@ -126,6 +149,83 @@ pub async fn undo_operation_v2(
     result
 }
 
+/// Re-executes a previously completed operation with the same parameters.
+///
+/// The operation history only stores the target folder *path*, so the
+/// current folder configuration is searched for a folder with a matching
+/// path to resolve the `FolderId` required by `OperationCommand`.
+#[tauri::command]
+pub async fn repeat_operation_v2(
+    state: State<'_, AppState>,
+    operation_id: String,
+) -> Result<quicksort_application::OperationResult, String> {
+    tracing::info!(command = "repeat_operation_v2", operation_id = %operation_id, "handling");
+    let id = OperationId::from_string(&operation_id).map_err(|e| {
+        tracing::error!(command = "repeat_operation_v2", error = %e, "invalid operation ID");
+        format!("Invalid operation ID: {}", e)
+    })?;
+
+    // Find the original operation in the in-memory history.
+    let operations = state
+        .facade
+        .get_all_operations()
+        .await
+        .map_err(|e| e.to_string())?;
+    let original = match operations.iter().find(|op| op.id == id) {
+        Some(op) => op.clone(),
+        None => {
+            tracing::error!(command = "repeat_operation_v2", "operation not found");
+            return Err(format!("Operation not found: {}", operation_id));
+        }
+    };
+
+    // Resolve the target folder ID by matching the stored target path.
+    // Not required for Delete/Rename, which carry no target folder.
+    let target_folder_id = match &original.target_folder_path {
+        Some(target_path) => {
+            let folders = state.facade.get_all().await.map_err(|e| e.to_string())?;
+            match folders.iter().find(|f| &f.path == target_path) {
+                Some(folder) => Some(folder.id),
+                None => {
+                    tracing::error!(
+                        command = "repeat_operation_v2",
+                        path = %target_path,
+                        "target folder not found"
+                    );
+                    return Err(format!("Target folder not found: {}", target_path));
+                }
+            }
+        }
+        None => None,
+    };
+
+    // Rebuild the original command and execute it again.
+    let command = quicksort_application::OperationCommand {
+        operation_type: original.operation_type,
+        source_paths: original.source_paths,
+        target_folder_id,
+        target_paths: original.target_paths,
+        overwrite_policy: quicksort_application::OverwritePolicy::Skip,
+        duplicate_check_mode: quicksort_application::DuplicateCheckMode::default(),
+    };
+
+    let result = state
+        .facade
+        .execute(command)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(r) => tracing::info!(
+            command = "repeat_operation_v2",
+            state = ?r.state,
+            files = r.processed_files,
+            "OK"
+        ),
+        Err(e) => tracing::error!(command = "repeat_operation_v2", error = %e, "FAIL"),
+    }
+    result
+}
+
 #[tauri::command]
 pub fn get_mode() -> String {
     tracing::debug!(command = "get_mode", "handling");
@@ -156,15 +256,15 @@ pub fn get_logs() -> Vec<serde_json::Value> {
 pub fn register_com_server() -> Result<String, String> {
     tracing::info!(command = "register_com_server", "handling");
     crate::com::register()?;
-    tracing::info!(command = "register_com_server", "OK — Explorer restarted");
-    Ok("COM server registered successfully. Explorer has been restarted.".to_string())
+    tracing::info!(command = "register_com_server", "OK — registry keys written");
+    Ok("COM server registered successfully.".to_string())
 }
 
 #[tauri::command]
 pub fn unregister_com_server() -> Result<String, String> {
     tracing::info!(command = "unregister_com_server", "handling");
     crate::com::unregister()?;
-    tracing::info!(command = "unregister_com_server", "OK — Explorer restarted");
+    tracing::info!(command = "unregister_com_server", "OK");
     Ok("COM server unregistered successfully.".to_string())
 }
 
@@ -264,9 +364,7 @@ pub fn check_teracopy_installed() -> bool {
         "C:\\Program Files\\TeraCopy\\TeraCopy.exe",
         "C:\\Program Files (x86)\\TeraCopy\\TeraCopy.exe",
     ];
-    teracopy_paths
-        .iter()
-        .any(|p| PathBuf::from(p).exists())
+    teracopy_paths.iter().any(|p| PathBuf::from(p).exists())
 }
 
 /// Create a new folder in the specified parent directory.
@@ -291,8 +389,7 @@ pub async fn create_new_folder(parent_path: String, folder_name: String) -> Resu
         return Err(format!("Folder already exists: {}", new_folder.display()));
     }
 
-    std::fs::create_dir(&new_folder)
-        .map_err(|e| format!("Failed to create folder: {}", e))?;
+    std::fs::create_dir(&new_folder).map_err(|e| format!("Failed to create folder: {}", e))?;
 
     let path_str = new_folder.to_string_lossy().to_string();
     tracing::info!(command = "create_new_folder", path = %path_str, "OK");
@@ -408,8 +505,45 @@ pub async fn search_files(
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(r) => tracing::info!(command = "search_files", total = r.total_count, time_ms = r.search_time_ms, "OK"),
+        Ok(r) => tracing::info!(
+            command = "search_files",
+            total = r.total_count,
+            time_ms = r.search_time_ms,
+            "OK"
+        ),
         Err(e) => tracing::error!(command = "search_files", error = %e, "FAIL"),
     }
     result
+}
+
+// ---------------------------------------------------------------------------
+// Metadata command
+// ---------------------------------------------------------------------------
+
+/// Returns the complete application metadata (version, authors, credits, etc.).
+#[tauri::command]
+pub fn get_app_metadata() -> crate::metadata::AppMetadata {
+    tracing::debug!(command = "get_app_metadata", "handling");
+    crate::metadata::get_metadata()
+}
+
+/// Fully quit the application: cleanup resources and exit.
+/// Unlike the close button (which hides to tray), this terminates the process.
+#[tauri::command]
+pub async fn quit_app(app: AppHandle) -> Result<(), String> {
+    tracing::info!("quit_app command — performing full shutdown");
+
+    let pid_path = std::env::var("APPDATA")
+        .ok()
+        .map(|a| PathBuf::from(a).join("QuickSort").join("dll_owner.pid"));
+    if let Some(path) = pid_path {
+        match std::fs::remove_file(&path) {
+            Ok(()) => tracing::info!("owner PID file removed"),
+            Err(e) => tracing::debug!(error = %e, "PID file already absent"),
+        }
+    }
+
+    tracing::info!("all cleanup done, exiting");
+    app.exit(0);
+    Ok(())
 }

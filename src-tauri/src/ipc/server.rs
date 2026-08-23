@@ -150,7 +150,13 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
             let data = match read_frame(pipe.raw()) {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    tracing::error!("Read error: {}", e);
+                    // ERROR_BROKEN_PIPE (0x8007006D) is expected when the DLL
+                    // client disconnects after sending a single command.
+                    if e.contains("0x8007006D") || e.contains("broken pipe") {
+                        tracing::debug!("Client disconnected: {}", e);
+                    } else {
+                        tracing::error!("Read error: {}", e);
+                    }
                     break;
                 }
             };
@@ -179,6 +185,12 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                             Ok(result) => {
                                 let op_id = result.operation_id.to_string();
                                 let processed = result.processed_files;
+                                tracing::info!(
+                                    "ExecuteOperation OK: op_id={}, files={}, bytes={}",
+                                    op_id,
+                                    processed,
+                                    result.bytes_moved
+                                );
                                 ResponseMessage {
                                     status: ResponseStatus::Ok,
                                     message: format!("Processed {} files", processed),
@@ -186,19 +198,25 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                                     data: None,
                                 }
                             }
-                            Err(e) => ResponseMessage {
+                            Err(e) => {
+                                tracing::error!("ExecuteOperation FAIL: {}", e);
+                                ResponseMessage {
+                                    status: ResponseStatus::Error,
+                                    message: e.to_string(),
+                                    operation_id: None,
+                                    data: None,
+                                }
+                            }
+                        },
+                        None => {
+                            tracing::error!("ExecuteOperation FAIL: no valid source paths");
+                            ResponseMessage {
                                 status: ResponseStatus::Error,
-                                message: e.to_string(),
+                                message: "Invalid command: no valid source paths".to_string(),
                                 operation_id: None,
                                 data: None,
-                            },
-                        },
-                        None => ResponseMessage {
-                            status: ResponseStatus::Error,
-                            message: "Invalid command: no valid source paths".to_string(),
-                            operation_id: None,
-                            data: None,
-                        },
+                            }
+                        }
                     };
                     response
                 }

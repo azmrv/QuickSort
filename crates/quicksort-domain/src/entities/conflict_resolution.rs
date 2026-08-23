@@ -60,10 +60,7 @@ impl ConflictResolution {
 
     /// Returns true if the source file should be processed.
     pub fn should_process(&self) -> bool {
-        !matches!(
-            self,
-            ConflictResolution::Skip | ConflictResolution::Cancel
-        )
+        !matches!(self, ConflictResolution::Skip | ConflictResolution::Cancel)
     }
 }
 
@@ -276,7 +273,7 @@ mod tests {
 
     #[test]
     fn test_context_cancel() {
-        let mut ctx = ConflictContext::with_resolution(ConflictResolution::Cancel);
+        let ctx = ConflictContext::with_resolution(ConflictResolution::Cancel);
         assert!(ctx.is_cancelled());
     }
 }

@@ -1,26 +1,108 @@
 use std::path::PathBuf;
+use std::process::Command;
 use winreg::enums::*;
 use winreg::RegKey;
 
 const CLSID: &str = "{12345678-1234-1234-1234-1234567890AB}";
-const HANDLERS: &[&str] = &["*", "Directory", "Directory\\Background", "Drive"];
+const HANDLERS: &[&str] = &[
+    "*",
+    "Directory",
+    "Directory\\Background",
+    "Drive",
+];
 
-pub fn is_registered() -> bool {
+/// Registration status returned by [`check_registration`].
+pub enum RegistrationStatus {
+    /// Not registered — CLSID key or handler keys missing.
+    NotRegistered,
+    /// Registered but the DLL path in registry does not match the actual DLL
+    /// on disk (e.g. DLL was updated or moved).
+    PathMismatch { stored: String, expected: String },
+    /// Fully registered: CLSID key exists, DLL path matches, DLL file present.
+    Active,
+    /// DLL file does not exist on disk.
+    DllMissing,
+}
+
+impl std::fmt::Display for RegistrationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotRegistered => write!(f, "not registered"),
+            Self::PathMismatch { stored, expected } => {
+                write!(f, "path mismatch: stored={}, expected={}", stored, expected)
+            }
+            Self::Active => write!(f, "active"),
+            Self::DllMissing => write!(f, "DLL missing"),
+        }
+    }
+}
+
+/// Perform a full registration check.
+pub fn check_registration() -> RegistrationStatus {
+    let dll = match dll_path() {
+        Some(p) => p,
+        None => return RegistrationStatus::DllMissing,
+    };
+    if !dll.exists() {
+        return RegistrationStatus::DllMissing;
+    }
+
+    let expected_path = dll.to_string_lossy().to_string();
+
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    hkcu.open_subkey(format!("Software\\Classes\\CLSID\\{}", CLSID))
-        .is_ok()
+    let clsid_path = format!("Software\\Classes\\CLSID\\{}", CLSID);
+
+    // Check CLSID key
+    let clsid_key = match hkcu.open_subkey(&clsid_path) {
+        Ok(k) => k,
+        Err(_) => return RegistrationStatus::NotRegistered,
+    };
+
+    // Check InprocServer32
+    let inproc = match clsid_key.open_subkey("InprocServer32") {
+        Ok(k) => k,
+        Err(_) => return RegistrationStatus::NotRegistered,
+    };
+    let stored: String = inproc.get_value("").unwrap_or_default();
+
+    if stored != expected_path {
+        return RegistrationStatus::PathMismatch {
+            stored,
+            expected: expected_path,
+        };
+    }
+
+    // Check at least one handler key exists
+    let mut any_handler = false;
+    for handler in HANDLERS {
+        let handler_path = format!(
+            "Software\\Classes\\{}\\shellex\\ContextMenuHandlers\\QuickSort",
+            handler
+        );
+        if hkcu.open_subkey(&handler_path).is_ok() {
+            any_handler = true;
+            break;
+        }
+    }
+    if !any_handler {
+        return RegistrationStatus::NotRegistered;
+    }
+
+    RegistrationStatus::Active
+}
+
+/// Simple check: is the CLSID key present, DLL exists and path matches?
+pub fn is_registered() -> bool {
+    matches!(check_registration(), RegistrationStatus::Active)
 }
 
 pub fn dll_path() -> Option<PathBuf> {
-    let appdata = std::env::var("APPDATA").ok()?;
-    Some(
-        PathBuf::from(appdata)
-            .join("QuickSort")
-            .join("context_menu_dll.dll"),
-    )
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    Some(dir.join("context_menu_dll.dll"))
 }
 
-pub fn register() -> Result<(), String> {
+fn write_registry_keys() -> Result<(), String> {
     let dll = dll_path().ok_or("APPDATA not set")?;
     if !dll.exists() {
         return Err(format!("DLL not found: {}", dll.display()));
@@ -58,6 +140,15 @@ pub fn register() -> Result<(), String> {
             .map_err(|e| format!("set CLSID for '{}': {}", handler, e))?;
     }
 
+    Ok(())
+}
+
+/// Register COM server keys and restart Explorer so it picks up the new handler.
+///
+/// Explorer caches shell extension registrations in-process. A restart forces it
+/// to re-read the registry and load the new DLL.
+pub fn register() -> Result<(), String> {
+    write_registry_keys()?;
     restart_explorer();
     Ok(())
 }
@@ -65,31 +156,39 @@ pub fn register() -> Result<(), String> {
 pub fn unregister() -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
-    // Delete each handler entry from its parent key.
+    // Delete handler keys so Explorer won't load this extension anymore.
     for handler in HANDLERS {
-        let parent = format!(
+        let parent_path = format!(
             "Software\\Classes\\{}\\shellex\\ContextMenuHandlers",
             handler
         );
-        if let Ok(parent_key) = hkcu.open_subkey_with_flags(&parent, KEY_WRITE) {
-            let _ = parent_key.delete_subkey("QuickSort");
+        if let Ok(parent) = hkcu.open_subkey_with_flags(&parent_path, KEY_ALL_ACCESS) {
+            if let Err(e) = parent.delete_subkey("QuickSort") {
+                tracing::warn!("delete 'QuickSort' from '{}': {}", parent_path, e);
+            } else {
+                tracing::info!("deleted handler for '{}'", handler);
+            }
         }
     }
 
-    // Delete the CLSID key and ALL its children (InprocServer32, etc.).
-    let clsid_parent = "Software\\Classes\\CLSID";
-    if let Ok(parent_key) = hkcu.open_subkey_with_flags(clsid_parent, KEY_WRITE) {
-        parent_key
-            .delete_subkey_all(CLSID)
-            .map_err(|e| format!("delete CLSID '{}': {}", CLSID, e))?;
+    // Delete CLSID key.
+    if let Ok(parent) = hkcu.open_subkey_with_flags("Software\\Classes\\CLSID", KEY_ALL_ACCESS) {
+        if let Err(e) = parent.delete_subkey(CLSID) {
+            tracing::warn!("delete CLSID key: {}", e);
+        } else {
+            tracing::info!("deleted CLSID key");
+        }
     }
 
-    restart_explorer();
     Ok(())
 }
 
+/// Restart Explorer so it re-reads COM handler registrations from the registry.
 fn restart_explorer() {
-    let _ = std::process::Command::new("cmd")
-        .args(["/C", "taskkill /f /im explorer.exe && start explorer.exe"])
-        .spawn();
+    tracing::info!("Restarting Explorer to pick up new COM registration");
+    let _ = Command::new("taskkill")
+        .args(["/f", "/im", "explorer.exe"])
+        .output();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let _ = Command::new("explorer.exe").spawn();
 }

@@ -158,11 +158,7 @@ pub trait ArchivePlugin: Plugin {
     ) -> Result<(), PluginError>;
 
     /// Create a new archive.
-    fn create_archive(
-        &self,
-        archive_path: &Path,
-        files: &[PathBuf],
-    ) -> Result<(), PluginError>;
+    fn create_archive(&self, archive_path: &Path, files: &[PathBuf]) -> Result<(), PluginError>;
 }
 
 /// Content metadata plugin trait.
@@ -184,18 +180,10 @@ pub trait FileSystemPlugin: Plugin {
     fn list_files(&self, path: &str) -> Result<Vec<ArchiveEntry>, PluginError>;
 
     /// Download a file from the virtual filesystem.
-    fn get_file(
-        &self,
-        remote_path: &str,
-        local_path: &Path,
-    ) -> Result<(), PluginError>;
+    fn get_file(&self, remote_path: &str, local_path: &Path) -> Result<(), PluginError>;
 
     /// Upload a file to the virtual filesystem.
-    fn put_file(
-        &self,
-        local_path: &Path,
-        remote_path: &str,
-    ) -> Result<(), PluginError>;
+    fn put_file(&self, local_path: &Path, remote_path: &str) -> Result<(), PluginError>;
 }
 
 /// Lister plugin trait.
@@ -204,11 +192,7 @@ pub trait ListerPlugin: Plugin {
     fn can_handle(&self, file_path: &Path) -> bool;
 
     /// Get the plugin's window handle for preview.
-    fn load_preview(
-        &self,
-        parent_hwnd: isize,
-        file_path: &Path,
-    ) -> Result<isize, PluginError>;
+    fn load_preview(&self, parent_hwnd: isize, file_path: &Path) -> Result<isize, PluginError>;
 }
 
 #[cfg(test)]

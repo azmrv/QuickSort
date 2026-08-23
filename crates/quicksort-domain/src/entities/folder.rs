@@ -43,6 +43,9 @@ pub struct Folder {
     /// Sort order (lower values appear first). Used for menu ordering.
     #[serde(default)]
     pub order: u32,
+    /// Optional hex color for the context menu indicator (e.g. "#FF5733").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
     /// Usage statistics (not persisted if not needed, but available for analytics).
     #[serde(default)]
     pub stats: FolderStats,
@@ -72,6 +75,7 @@ impl Folder {
             path,
             favorite: false,
             order: 0,
+            color: None,
             stats: Default::default(),
             created_at: now,
             updated_at: now,
@@ -87,6 +91,7 @@ impl Folder {
             path,
             favorite: false,
             order: 0,
+            color: None,
             stats: Default::default(),
             created_at: now,
             updated_at: now,
@@ -119,6 +124,29 @@ impl Folder {
             return Err(DomainError::IllegalDirectoryTarget);
         }
         self.path = new_path;
+        self.updated_at = Utc::now();
+        Ok(())
+    }
+
+    /// Sets or clears the folder color indicator.
+    ///
+    /// # Parameters
+    /// - `color` – Hex color in `#RRGGBB` format (e.g. `"#FF5733"`),
+    ///   or `None` to remove the indicator.
+    ///
+    /// # Errors
+    /// Returns `DomainError::InvalidColor` if the string is not a valid
+    /// `#RRGGBB` hex color.
+    pub fn set_color(&mut self, color: Option<String>) -> Result<(), DomainError> {
+        if let Some(ref c) = color {
+            let valid = c.len() == 7
+                && c.starts_with('#')
+                && c[1..].chars().all(|ch| ch.is_ascii_hexdigit());
+            if !valid {
+                return Err(DomainError::InvalidColor(c.clone()));
+            }
+        }
+        self.color = color;
         self.updated_at = Utc::now();
         Ok(())
     }
@@ -238,6 +266,43 @@ mod tests {
         assert!(f.favorite);
         f.toggle_favorite();
         assert!(!f.favorite);
+    }
+
+    #[test]
+    fn test_set_color() {
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
+        assert!(f.color.is_none());
+        f.set_color(Some("#FF5733".to_string())).unwrap();
+        assert_eq!(f.color.as_deref(), Some("#FF5733"));
+    }
+
+    #[test]
+    fn test_set_color_lowercase_ok() {
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
+        f.set_color(Some("#ff5733".to_string())).unwrap();
+        assert_eq!(f.color.as_deref(), Some("#ff5733"));
+    }
+
+    #[test]
+    fn test_set_color_clears() {
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
+        f.set_color(Some("#FF5733".to_string())).unwrap();
+        f.set_color(None).unwrap();
+        assert!(f.color.is_none());
+    }
+
+    #[test]
+    fn test_set_color_invalid_fails() {
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
+        let cases = ["FF5733", "#FFF", "#GGGGGG", "#12345", "#1234567", ""];
+        for c in cases {
+            let result = f.set_color(Some(c.to_string()));
+            assert!(
+                matches!(result, Err(DomainError::InvalidColor(_))),
+                "expected InvalidColor for {:?}",
+                c
+            );
+        }
     }
 
     #[test]

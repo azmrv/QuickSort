@@ -29,6 +29,10 @@ pub enum DomainError {
     #[error("Invalid folder name")]
     InvalidFolderName,
 
+    // The provided color is not a valid `#RRGGBB` hex string.
+    #[error("Invalid color: {0}")]
+    InvalidColor(String),
+
     // The operation attempted to use a root directory (e.g., `C:\`) as a
     /// target, which is not allowed for safety reasons.
     #[error("Illegal target directory (root)")]
