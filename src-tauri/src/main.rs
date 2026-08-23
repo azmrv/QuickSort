@@ -5,6 +5,7 @@ mod commands;
 mod ipc;
 mod logging;
 mod pending;
+mod progress;
 mod state;
 
 use clap::{Parser, Subcommand};
@@ -19,8 +20,9 @@ use tauri::{
 
 use quicksort_application::{
     use_cases::{
-        ExecuteOperationUseCase, GetFoldersUseCase, LoadSettingsUseCase, ManageFoldersUseCase,
-        SaveSettingsUseCase, UndoOperationUseCase,
+        ExecuteOperationUseCase, GetFoldersUseCase, GetOperationHistoryUseCase,
+        LoadSettingsUseCase, ManageFoldersUseCase, SaveSettingsUseCase, SearchFilesUseCase,
+        UndoOperationUseCase,
     },
     ApplicationFacadeImpl,
 };
@@ -154,7 +156,8 @@ fn start_tauri() {
         Box::new(quicksort_infrastructure::DuplicateDetectionAdapter::new(
             quicksort_infrastructure::NameChecker,
         )),
-    );
+    )
+    .with_progress_reporter(Box::new(progress::TauriProgressReporter::new()));
 
     let get_folders_use_case = GetFoldersUseCase::new(config_repo.clone());
     let manage_folders_use_case = ManageFoldersUseCase::new(config_repo.clone());
@@ -165,15 +168,26 @@ fn start_tauri() {
         Box::new(quicksort_infrastructure::repository::InMemoryOperationRepository::new()),
         Box::new(quicksort_infrastructure::StdFileSystem::new()),
     );
-
-    let facade = Arc::new(ApplicationFacadeImpl::new(
-        Arc::new(execute_use_case),
-        Arc::new(undo_use_case),
-        Arc::new(get_folders_use_case),
-        Arc::new(manage_folders_use_case),
-        Arc::new(load_settings_use_case),
-        Arc::new(save_settings_use_case),
+    let get_operation_history_use_case = GetOperationHistoryUseCase::new(Box::new(
+        quicksort_infrastructure::repository::InMemoryOperationRepository::new(),
     ));
+
+    let search_files_use_case = SearchFilesUseCase::new(Arc::new(
+        quicksort_infrastructure::FsFileSearch::new(),
+    ));
+
+    let facade = Arc::new(
+        ApplicationFacadeImpl::new(
+            Arc::new(execute_use_case),
+            Arc::new(undo_use_case),
+            Arc::new(get_folders_use_case),
+            Arc::new(manage_folders_use_case),
+            Arc::new(get_operation_history_use_case),
+            Arc::new(load_settings_use_case),
+            Arc::new(save_settings_use_case),
+        )
+        .with_search_files(Arc::new(search_files_use_case)),
+    );
 
     let facade_for_ipc = Arc::clone(&facade);
     std::thread::Builder::new()
@@ -204,9 +218,20 @@ fn start_tauri() {
             commands::get_app_version,
             commands::get_settings,
             commands::save_settings,
+            commands::get_operations,
+            commands::launch_teracopy,
+            commands::check_teracopy_installed,
+            commands::create_new_folder,
+            commands::list_plugins,
+            commands::get_plugin_config,
+            commands::save_plugin_config,
+            commands::set_plugin_enabled,
+            commands::rescan_plugins,
+            commands::search_files,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());
+            progress::set_app_handle(app.handle().clone());
 
             let handle = app.handle().clone();
             std::thread::Builder::new()

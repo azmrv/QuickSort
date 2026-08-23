@@ -7,8 +7,10 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+mod search_query;
 mod windows_path;
 
+pub use self::search_query::{DateFilter, SearchFilter, SearchQuery, SizeOp};
 pub use self::windows_path::WindowsPath;
 
 // ============================================================================

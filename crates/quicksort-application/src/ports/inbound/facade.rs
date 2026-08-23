@@ -2,11 +2,16 @@
 
 use std::sync::Arc;
 
-use quicksort_domain::{Folder, FolderId, OperationId, Settings};
+use quicksort_domain::{Folder, FolderId, Operation, OperationId, PluginConfig, Settings};
 
 use crate::dtos::{OperationCommand, OperationResult};
 use crate::errors::UseCaseError;
-use crate::ports::inbound::{ExecuteOperation, GetFolders, ManageFolders, UndoOperation};
+use crate::ports::inbound::{
+    ExecuteOperation, GetFolders, GetOperationHistory, ManageFolders, PluginInfoDto, PluginManager,
+    UndoOperation,
+};
+use crate::ports::outbound::SearchResult;
+use crate::use_cases::SearchFiles;
 
 /// Unified facade combining all inbound operations.
 pub struct ApplicationFacade {
@@ -14,8 +19,11 @@ pub struct ApplicationFacade {
     undo_operation: Arc<dyn UndoOperation>,
     get_folders: Arc<dyn GetFolders>,
     manage_folders: Arc<dyn ManageFolders>,
+    get_operation_history: Arc<dyn GetOperationHistory>,
     load_settings: Option<Arc<dyn crate::ports::inbound::LoadSettings>>,
     save_settings: Option<Arc<dyn crate::ports::inbound::SaveSettings>>,
+    plugin_manager: Option<Arc<dyn PluginManager>>,
+    search_files: Option<Arc<dyn SearchFiles>>,
 }
 
 impl ApplicationFacade {
@@ -24,14 +32,18 @@ impl ApplicationFacade {
         undo_operation: Arc<dyn UndoOperation>,
         get_folders: Arc<dyn GetFolders>,
         manage_folders: Arc<dyn ManageFolders>,
+        get_operation_history: Arc<dyn GetOperationHistory>,
     ) -> Self {
         Self {
             execute_operation,
             undo_operation,
             get_folders,
             manage_folders,
+            get_operation_history,
             load_settings: None,
             save_settings: None,
+            plugin_manager: None,
+            search_files: None,
         }
     }
 
@@ -42,6 +54,22 @@ impl ApplicationFacade {
     ) -> Self {
         self.load_settings = Some(load_settings);
         self.save_settings = Some(save_settings);
+        self
+    }
+
+    pub fn with_plugin_manager(
+        mut self,
+        plugin_manager: Arc<dyn PluginManager>,
+    ) -> Self {
+        self.plugin_manager = Some(plugin_manager);
+        self
+    }
+
+    pub fn with_search_files(
+        mut self,
+        search_files: Arc<dyn SearchFiles>,
+    ) -> Self {
+        self.search_files = Some(search_files);
         self
     }
 
@@ -75,6 +103,10 @@ impl ApplicationFacade {
         self.manage_folders.rename_folder(id, new_name).await
     }
 
+    pub async fn get_operation_history(&self) -> Result<Vec<Operation>, UseCaseError> {
+        self.get_operation_history.get_all_operations().await
+    }
+
     pub async fn load_settings(&self) -> Result<Settings, UseCaseError> {
         self.load_settings
             .as_ref()
@@ -92,6 +124,81 @@ impl ApplicationFacade {
                 "Settings not configured".to_string(),
             ))?
             .save_settings(settings)
+            .await
+    }
+
+    pub async fn list_plugins(&self) -> Result<Vec<PluginInfoDto>, UseCaseError> {
+        self.plugin_manager
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Plugin manager not configured".to_string(),
+            ))?
+            .list_plugins()
+            .await
+    }
+
+    pub async fn get_plugin_config(
+        &self,
+        plugin_id: &str,
+    ) -> Result<PluginConfig, UseCaseError> {
+        self.plugin_manager
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Plugin manager not configured".to_string(),
+            ))?
+            .get_plugin_config(plugin_id)
+            .await
+    }
+
+    pub async fn save_plugin_config(
+        &self,
+        plugin_id: &str,
+        config: PluginConfig,
+    ) -> Result<(), UseCaseError> {
+        self.plugin_manager
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Plugin manager not configured".to_string(),
+            ))?
+            .save_plugin_config(plugin_id, config)
+            .await
+    }
+
+    pub async fn set_plugin_enabled(
+        &self,
+        plugin_id: &str,
+        enabled: bool,
+    ) -> Result<(), UseCaseError> {
+        self.plugin_manager
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Plugin manager not configured".to_string(),
+            ))?
+            .set_plugin_enabled(plugin_id, enabled)
+            .await
+    }
+
+    pub async fn rescan_plugins(&self) -> Result<Vec<PluginInfoDto>, UseCaseError> {
+        self.plugin_manager
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Plugin manager not configured".to_string(),
+            ))?
+            .rescan_plugins()
+            .await
+    }
+
+    pub async fn search_files(
+        &self,
+        query: &str,
+        directories: &[String],
+    ) -> Result<SearchResult, UseCaseError> {
+        self.search_files
+            .as_ref()
+            .ok_or(UseCaseError::RepositoryError(
+                "Search not configured".to_string(),
+            ))?
+            .search(query, directories)
             .await
     }
 }

@@ -1,8 +1,10 @@
 use crate::state::AppState;
 use quicksort_application::{
-    ExecuteOperation, Folder, FolderId, GetFolders, LoadSettings, ManageFolders, OperationId,
-    SaveSettings, Settings, UndoOperation, WindowsPath,
+    ExecuteOperation, Folder, FolderId, GetFolders, GetOperationHistory, LoadSettings,
+    ManageFolders, OperationId, PluginConfig, PluginInfoDto, PluginManager, SaveSettings, Settings,
+    UndoOperation, WindowsPath,
 };
+use std::path::PathBuf;
 use tauri::State;
 
 #[tauri::command]
@@ -197,6 +199,217 @@ pub async fn save_settings(state: State<'_, AppState>, settings: Settings) -> Re
     match &result {
         Ok(()) => tracing::info!(command = "save_settings", "OK"),
         Err(e) => tracing::error!(command = "save_settings", error = %e, "FAIL"),
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn get_operations(
+    state: State<'_, AppState>,
+) -> Result<Vec<quicksort_application::Operation>, String> {
+    tracing::info!(command = "get_operations", "handling");
+    let result = state
+        .facade
+        .get_all_operations()
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(ops) => tracing::info!(command = "get_operations", count = ops.len(), "OK"),
+        Err(e) => tracing::error!(command = "get_operations", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Launch TeraCopy with the given file list.
+///
+/// Writes file paths to a temp file and invokes TeraCopy.
+/// Supports TeraCopy 3.17 and 4.0.
+#[tauri::command]
+pub async fn launch_teracopy(files: Vec<String>) -> Result<(), String> {
+    tracing::info!(command = "launch_teracopy", count = files.len(), "handling");
+
+    // Default TeraCopy paths
+    let teracopy_paths = [
+        "C:\\Program Files\\TeraCopy\\TeraCopy.exe",
+        "C:\\Program Files (x86)\\TeraCopy\\TeraCopy.exe",
+    ];
+
+    let teracopy_exe = teracopy_paths
+        .iter()
+        .find(|p| PathBuf::from(p).exists())
+        .ok_or("TeraCopy not found at standard paths")?;
+
+    // Write file list to temp file (Windows-1251 encoding for TeraCopy compatibility)
+    let temp_dir = std::env::temp_dir();
+    let list_path = temp_dir.join("quicksort_tc_list.txt");
+    let content = files.join("\n");
+    std::fs::write(&list_path, &content)
+        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+    // Launch TeraCopy
+    std::process::Command::new(teracopy_exe)
+        .arg("AddList")
+        .arg(format!("*\"{}\"", list_path.to_string_lossy()))
+        .spawn()
+        .map_err(|e| format!("Failed to launch TeraCopy: {}", e))?;
+
+    tracing::info!(command = "launch_teracopy", "OK");
+    Ok(())
+}
+
+/// Check if TeraCopy is installed on the system.
+#[tauri::command]
+pub fn check_teracopy_installed() -> bool {
+    let teracopy_paths = [
+        "C:\\Program Files\\TeraCopy\\TeraCopy.exe",
+        "C:\\Program Files (x86)\\TeraCopy\\TeraCopy.exe",
+    ];
+    teracopy_paths
+        .iter()
+        .any(|p| PathBuf::from(p).exists())
+}
+
+/// Create a new folder in the specified parent directory.
+///
+/// Returns the path of the created folder.
+#[tauri::command]
+pub async fn create_new_folder(parent_path: String, folder_name: String) -> Result<String, String> {
+    tracing::info!(
+        command = "create_new_folder",
+        parent = %parent_path,
+        name = %folder_name,
+        "handling"
+    );
+
+    let parent = PathBuf::from(&parent_path);
+    if !parent.exists() {
+        return Err(format!("Parent directory does not exist: {}", parent_path));
+    }
+
+    let new_folder = parent.join(&folder_name);
+    if new_folder.exists() {
+        return Err(format!("Folder already exists: {}", new_folder.display()));
+    }
+
+    std::fs::create_dir(&new_folder)
+        .map_err(|e| format!("Failed to create folder: {}", e))?;
+
+    let path_str = new_folder.to_string_lossy().to_string();
+    tracing::info!(command = "create_new_folder", path = %path_str, "OK");
+    Ok(path_str)
+}
+
+// ---------------------------------------------------------------------------
+// Plugin management commands
+// ---------------------------------------------------------------------------
+
+/// List all discovered plugins.
+#[tauri::command]
+pub async fn list_plugins(state: State<'_, AppState>) -> Result<Vec<PluginInfoDto>, String> {
+    tracing::info!(command = "list_plugins", "handling");
+    let result = state.facade.list_plugins().await.map_err(|e| e.to_string());
+    match &result {
+        Ok(plugins) => tracing::info!(command = "list_plugins", count = plugins.len(), "OK"),
+        Err(e) => tracing::error!(command = "list_plugins", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Get plugin configuration.
+#[tauri::command]
+pub async fn get_plugin_config(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<PluginConfig, String> {
+    tracing::info!(command = "get_plugin_config", plugin_id = %plugin_id, "handling");
+    let result = state
+        .facade
+        .get_plugin_config(&plugin_id)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(_) => tracing::info!(command = "get_plugin_config", "OK"),
+        Err(e) => tracing::error!(command = "get_plugin_config", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Save plugin configuration.
+#[tauri::command]
+pub async fn save_plugin_config(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    config: PluginConfig,
+) -> Result<(), String> {
+    tracing::info!(command = "save_plugin_config", plugin_id = %plugin_id, "handling");
+    let result = state
+        .facade
+        .save_plugin_config(&plugin_id, config)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "save_plugin_config", "OK"),
+        Err(e) => tracing::error!(command = "save_plugin_config", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Enable or disable a plugin.
+#[tauri::command]
+pub async fn set_plugin_enabled(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    tracing::info!(command = "set_plugin_enabled", plugin_id = %plugin_id, enabled = enabled, "handling");
+    let result = state
+        .facade
+        .set_plugin_enabled(&plugin_id, enabled)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "set_plugin_enabled", "OK"),
+        Err(e) => tracing::error!(command = "set_plugin_enabled", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Rescan plugin directory.
+#[tauri::command]
+pub async fn rescan_plugins(state: State<'_, AppState>) -> Result<Vec<PluginInfoDto>, String> {
+    tracing::info!(command = "rescan_plugins", "handling");
+    let result = state
+        .facade
+        .rescan_plugins()
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(plugins) => tracing::info!(command = "rescan_plugins", count = plugins.len(), "OK"),
+        Err(e) => tracing::error!(command = "rescan_plugins", error = %e, "FAIL"),
+    }
+    result
+}
+
+// ---------------------------------------------------------------------------
+// Search commands
+// ---------------------------------------------------------------------------
+
+/// Search for files matching the given query.
+#[tauri::command]
+pub async fn search_files(
+    state: State<'_, AppState>,
+    query: String,
+    directories: Vec<String>,
+) -> Result<quicksort_application::SearchResult, String> {
+    tracing::info!(command = "search_files", query = %query, dir_count = directories.len(), "handling");
+    let result = state
+        .facade
+        .search_files(&query, &directories)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(r) => tracing::info!(command = "search_files", total = r.total_count, time_ms = r.search_time_ms, "OK"),
+        Err(e) => tracing::error!(command = "search_files", error = %e, "FAIL"),
     }
     result
 }
