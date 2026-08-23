@@ -9,6 +9,7 @@ import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
 import PluginsPage from './pages/PluginsPage';
+import SearchPage from './pages/SearchPage';
 import CommandPalette from './components/CommandPalette';
 import './styles/App.css';
 
@@ -51,6 +52,7 @@ function App() {
 
     const TABS = [
         { key: 'folders', label: 'Папки', content: <EditorPage /> },
+        { key: 'search', label: 'Поиск', content: <SearchPage /> },
         { key: 'history', label: 'История', content: <HistoryPage /> },
         { key: 'plugins', label: 'Плагины', content: <PluginsPage /> },
         { key: 'log', label: 'Лог', content: <LogPage /> },
