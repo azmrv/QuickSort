@@ -1,16 +1,21 @@
-name: Release
+name: Build
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+    branches: [master]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,16 +39,17 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build context-menu DLL
+      - name: Build context-menu DLL (release)
         run: cargo build -p context-menu-dll --release
 
-      - name: Build Tauri app
+      - name: Build Tauri app (release)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "QuickSort ${{ github.ref_name }}"
+          # On tag push: create/update GitHub Release with NSIS installer
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: ${{ github.ref_type == 'tag' && format('QuickSort {0}', github.ref_name) || '' }}
           releaseBody: "See the assets below for download options."
           releaseDraft: false
           prerelease: false
@@ -51,42 +57,36 @@ jobs:
       - name: Build portable ZIP
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".Replace("v", "")
-          $releaseDir = "src-tauri/target/release"
-          $bundleDir = "$releaseDir/bundle"
-
-          # Find the NSIS unpacked directory (contains the actual exe + dll)
-          $nsisDir = Get-ChildItem -Path "$bundleDir/nsis" -Directory -ErrorAction SilentlyContinue |
-                     Where-Object { $_.Name -like "*quicksort*" } |
-                     Select-Object -First 1 -ExpandProperty FullName
-
-          # Fallback: look in windows-release
-          if (-not $nsisDir) {
-              $nsisDir = Get-ChildItem -Path "$bundleDir" -Directory -Recurse -ErrorAction SilentlyContinue |
-                         Where-Object { $_.Name -eq "quicksort" } |
-                         Select-Object -First 1 -ExpandProperty FullName
+          $version = "0.2.0"
+          if ("${{ github.ref_name }}" -match "^v(\d+\.\d+\.\d+)$") {
+            $version = $Matches[1]
           }
-
-          # Build portable from release output
+          $releaseDir = "src-tauri/target/release"
           $portableName = "QuickSort-$version-portable"
           New-Item -ItemType Directory -Path $portableName -Force | Out-Null
 
-          # Copy exe from target/release
-          Copy-Item "$releaseDir/quicksort.exe" "$portableName/" -ErrorAction SilentlyContinue
-          # Copy DLL
-          Copy-Item "$releaseDir/context_menu_dll.dll" "$portableName/" -ErrorAction SilentlyContinue
-          # Copy icon
+          # Copy exe + DLL + icon
+          Copy-Item "$releaseDir/quicksort.exe" "$portableName/" -ErrorAction Stop
+          Copy-Item "$releaseDir/context_menu_dll.dll" "$portableName/" -ErrorAction Stop
           New-Item -ItemType Directory -Path "$portableName/resources" -Force | Out-Null
-          Copy-Item "resources/quicksort.ico" "$portableName/resources/" -ErrorAction SilentlyContinue
+          Copy-Item "resources/quicksort.ico" "$portableName/resources/" -ErrorAction Stop
 
-          # Create ZIP
-          if (Test-Path "$portableName.zip") { Remove-Item "$portableName.zip" }
           Compress-Archive -Path "$portableName/*" -DestinationPath "$portableName.zip"
-
-          Write-Host "Created: $portableName.zip ($(((Get-Item "$portableName.zip").Length / 1MB).ToString('F1')) MB)"
+          $size = ((Get-Item "$portableName.zip").Length / 1MB).ToString('F1')
+          Write-Host "Created: $portableName.zip ($size MB)"
           echo "PORTABLE_ZIP=$portableName.zip" >> $env:GITHUB_ENV
+          echo "PORTABLE_NAME=$portableName" >> $env:GITHUB_ENV
 
-      - name: Upload portable ZIP to release
+      # Always upload as workflow artifact (downloadable from Actions tab)
+      - name: Upload portable as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PORTABLE_NAME }}
+          path: ${{ env.PORTABLE_ZIP }}
+          retention-days: 30
+
+      # On tag push: also attach to GitHub Release
+      - name: Upload portable to GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
