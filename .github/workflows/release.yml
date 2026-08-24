@@ -87,7 +87,7 @@ jobs:
 
       # On tag push: also attach to GitHub Release
       - name: Upload portable to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: ${{ env.PORTABLE_ZIP }}
