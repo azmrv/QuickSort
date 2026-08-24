@@ -241,54 +241,54 @@ const HistoryPage = () => {
                                 }}>
                                     {new Date(op.created_at).toLocaleTimeString('ru-RU')}
                                 </div>
-                                {canUndo(op) && (
-                                    <button
-                                        onClick={() => handleUndo(op.id)}
-                                        style={{
-                                            padding: '4px 8px',
-                                            background: 'transparent',
-                                            border: '1px solid var(--qs-border)',
-                                            borderRadius: 'var(--qs-radius-sm)',
-                                            color: 'var(--qs-accent)',
-                                            fontFamily: 'var(--qs-font-mono)',
-                                            fontSize: '11px',
-                                            cursor: 'pointer',
-                                            flexShrink: 0,
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.background = 'var(--qs-accent-muted)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.background = 'transparent';
-                                        }}
-                                    >
-                                        Отменить
-                                    </button>
-                                )}
-                                {canRepeat(op) && (
-                                    <button
-                                        onClick={() => handleRepeat(op.id)}
-                                        style={{
-                                            padding: '4px 8px',
-                                            background: 'transparent',
-                                            border: '1px solid var(--qs-border)',
-                                            borderRadius: 'var(--qs-radius-sm)',
-                                            color: 'var(--qs-accent)',
-                                            fontFamily: 'var(--qs-font-mono)',
-                                            fontSize: '11px',
-                                            cursor: 'pointer',
-                                            flexShrink: 0,
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.background = 'var(--qs-accent-muted)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.background = 'transparent';
-                                        }}
-                                    >
-                                        Повторить
-                                    </button>
-                                )}
+                                <button
+                                    onClick={() => handleUndo(op.id)}
+                                    disabled={!canUndo(op)}
+                                    style={{
+                                        padding: '4px 8px',
+                                        background: 'transparent',
+                                        border: '1px solid var(--qs-border)',
+                                        borderRadius: 'var(--qs-radius-sm)',
+                                        color: canUndo(op) ? 'var(--qs-accent)' : 'var(--qs-text-muted)',
+                                        fontFamily: 'var(--qs-font-mono)',
+                                        fontSize: '11px',
+                                        cursor: canUndo(op) ? 'pointer' : 'not-allowed',
+                                        flexShrink: 0,
+                                        opacity: canUndo(op) ? 1 : 0.4,
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (canUndo(op)) e.currentTarget.style.background = 'var(--qs-accent-muted)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = 'transparent';
+                                    }}
+                                >
+                                    Отменить
+                                </button>
+                                <button
+                                    onClick={() => handleRepeat(op.id)}
+                                    disabled={!canRepeat(op)}
+                                    style={{
+                                        padding: '4px 8px',
+                                        background: 'transparent',
+                                        border: '1px solid var(--qs-border)',
+                                        borderRadius: 'var(--qs-radius-sm)',
+                                        color: canRepeat(op) ? 'var(--qs-accent)' : 'var(--qs-text-muted)',
+                                        fontFamily: 'var(--qs-font-mono)',
+                                        fontSize: '11px',
+                                        cursor: canRepeat(op) ? 'pointer' : 'not-allowed',
+                                        flexShrink: 0,
+                                        opacity: canRepeat(op) ? 1 : 0.4,
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (canRepeat(op)) e.currentTarget.style.background = 'var(--qs-accent-muted)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = 'transparent';
+                                    }}
+                                >
+                                    Повторить
+                                </button>
                             </div>
                         );
                     })}

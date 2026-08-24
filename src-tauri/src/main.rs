@@ -390,6 +390,8 @@ fn start_tauri() {
                     "quit" => {
                         tracing::info!("tray quit — performing cleanup");
                         remove_owner_pid();
+                        // Best-effort COM cleanup so Explorer releases the DLL from memory.
+                        let _ = crate::com::unregister();
                         tracing::info!("all cleanup done, exiting");
                         app.exit(0);
                     }

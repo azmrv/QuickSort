@@ -425,9 +425,8 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             return E_POINTER.ok();
         }
         let ici = unsafe { *info };
-        // Explorer sends the submenu POSITION INDEX as lpVerb, not the wID.
-        // For MAKEINTRESOURCE-based commands the low 16 bits carry the ordinal,
-        // but InsertMenuItemW with MF_POPUP submenus gives the position instead.
+        // Explorer sends the wID from InsertMenuItemW in the low 16 bits of lpVerb.
+        // The dispatch below uses wID-based lookup, not position-based.
         let verb = (ici.lpVerb.0 as usize) & 0xFFFF;
 
         let folders = self.this.folders.lock();

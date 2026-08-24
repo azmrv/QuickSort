@@ -142,6 +142,19 @@ impl ExecuteOperationUseCase {
     ) -> Result<u64, UseCaseError> {
         match command.operation_type {
             OperationType::Move | OperationType::Copy => {
+                // Check if source file still exists (re-move protection)
+                if !self
+                    .file_system
+                    .exists(source)
+                    .await
+                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
+                {
+                    return Err(UseCaseError::FileSystemError(format!(
+                        "Source file not found (may have been moved already): {}",
+                        source
+                    )));
+                }
+
                 // Skip files already in the target folder (same-folder protection)
                 if let (Some(src_parent), Some(ref target)) = (source.parent(), target_folder) {
                     if src_parent == *target {

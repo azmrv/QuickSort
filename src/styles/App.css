@@ -338,12 +338,6 @@
 .folder-actions {
     display: flex;
     gap: var(--qs-space-xs);
-    opacity: 0;
-    transition: opacity var(--qs-transition-fast);
-}
-
-.folder-card:hover .folder-actions {
-    opacity: 1;
 }
 
 .folder-action-btn {

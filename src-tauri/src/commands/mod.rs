@@ -543,6 +543,9 @@ pub async fn quit_app(app: AppHandle) -> Result<(), String> {
         }
     }
 
+    // Best-effort COM cleanup so Explorer releases the DLL from memory.
+    let _ = crate::com::unregister();
+
     tracing::info!("all cleanup done, exiting");
     app.exit(0);
     Ok(())

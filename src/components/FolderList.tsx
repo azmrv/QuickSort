@@ -47,10 +47,16 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
     return (
         <div className="folder-list">
             {folders.map((folder, index) => (
-                <div 
-                    key={folder.id} 
+                <div
+                    key={folder.id}
                     className={`folder-card ${folder.favorite ? 'favorite' : ''}`}
-                    style={{ animationDelay: `${index * 50}ms` }}
+                    style={{
+                        animationDelay: `${index * 50}ms`,
+                        ...(folder.color ? {
+                            borderLeft: `3px solid ${folder.color}`,
+                            background: `color-mix(in srgb, ${folder.color} 8%, transparent)`,
+                        } : {}),
+                    }}
                 >
                     <div className="folder-icon">📁</div>
                     <div className="folder-info">

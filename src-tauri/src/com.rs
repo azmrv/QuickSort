@@ -5,6 +5,7 @@ use winreg::RegKey;
 
 const CLSID: &str = "{12345678-1234-1234-1234-1234567890AB}";
 const HANDLERS: &[&str] = &[
+    "AllFilesystemObjects",
     "*",
     "Directory",
     "Directory\\Background",
