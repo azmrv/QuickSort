@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:dll": "pwsh -NoProfile -File scripts/build-dll.ps1 -Config release",
+    "build:dll:debug": "pwsh -NoProfile -File scripts/build-dll.ps1 -Config debug",
+    "clean:locked": "pwsh -NoProfile -Command \"Get-ChildItem -Path 'target' -Recurse -Filter '*.locked.delete' | Remove-Item -Force -ErrorAction SilentlyContinue\""
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",

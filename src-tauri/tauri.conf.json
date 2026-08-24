@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build && cargo build -p context-menu-dll --release",
+    "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -32,7 +32,6 @@
       "../resources/quicksort.ico"
     ],
     "resources": {
-      "../target/release/context_menu_dll.dll": "context_menu_dll.dll",
       "../resources/quicksort.ico": "resources/quicksort.ico"
     },
     "windows": {

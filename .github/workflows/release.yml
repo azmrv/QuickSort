@@ -39,7 +39,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build context-menu DLL (release)
+      # DLL is built separately — it's an independent component (COM Shell Extension)
+      # App works without it, DLL is optional for context menu integration
+      - name: Build context-menu DLL (standalone)
         run: cargo build -p context-menu-dll --release
 
       - name: Build Tauri app (release)

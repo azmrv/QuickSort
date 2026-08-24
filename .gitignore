@@ -2,6 +2,7 @@
 target/
 *.pdb
 *.rs.bk
+.cargo/config.toml
 
 # Frontend
 node_modules/
@@ -69,4 +70,5 @@ docs/*
 # Documentation (all excluded — docs has its own git repo)
 *.md
 !README.md
+!docs/translation/
 !docs/translation/**

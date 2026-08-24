@@ -15,6 +15,10 @@ QuickSort combines the speed of a shell extension with the power of a modern fil
 
 ---
 
+**English** | [Русский](docs/translation/ru/README.md) | [中文](docs/translation/cn/README.md) | [Deutsch](docs/translation/de/README.md) | [Español](docs/translation/es/README.md)
+
+---
+
 ## Features
 
 ### Core
@@ -53,9 +57,48 @@ QuickSort is evolving into a full-featured file manager with:
 | Core | Rust (Clean Architecture + DDD) |
 | GUI | Tauri 2 |
 | Frontend | React 19 + TypeScript + Ant Design |
-| Shell Extension | Windows COM (DLL) |
+| Shell Extension | Windows COM (DLL) — independent component |
 | IPC | Named Pipes |
 | WinAPI | windows-rs |
+
+## Architecture
+
+QuickSort follows Clean Architecture with Domain-Driven Design:
+
+```
+Domain <- Application <- Infrastructure <- Adapters (src-tauri, context-menu-dll)
+```
+
+### Cargo Workspace
+
+| Crate | Role | Description |
+|-------|------|-------------|
+| `quicksort-domain` | Domain | Entities, value objects, events |
+| `quicksort-application` | Application | Use cases, ports, DTOs, facade |
+| `quicksort-infrastructure` | Infrastructure | JSON repos, FileSystem, UUID, Clock |
+| `quicksort-ipc-contract` | Contract | Named Pipe contracts |
+| `src-tauri` | Adapter | Tauri app, CLI, IPC server, COM registration |
+| `context-menu-dll` | Adapter | COM Shell Extension (loaded by Explorer) |
+
+### DLL as Independent Component
+
+The context menu DLL (`context-menu-dll`) is an **independent component** that can be built and distributed separately from the main application:
+
+- **App works without DLL** — gracefully degrades (no context menu, all other features intact)
+- **DLL is optional** — place `context_menu_dll.dll` next to `QuickSort.exe` to enable context menu
+- **Separate build** — DLL has its own build process, no circular dependency with the app
+- **Locked file handling** — build script handles Windows Defender locks via rename pattern
+
+```bash
+# Build app only (no DLL dependency)
+npm run tauri build
+
+# Build DLL separately
+npm run build:dll
+
+# Or use the safe build script (handles locked files)
+pwsh -NoProfile -File scripts/build-dll.ps1
+```
 
 ## Build
 
@@ -76,7 +119,7 @@ npm run tauri dev        # development
 npm run tauri build      # production build
 ```
 
-The installer will be in `src-tauri/target/release/bundle`.
+The installer will be in `target/release/bundle`.
 
 ## Usage
 
@@ -98,27 +141,16 @@ Configure defaults in the Settings tab:
 
 ```
 QuickSort/
-  src-tauri/           # Tauri adapter, CLI, IPC server
-  context-menu-dll/    # COM Shell Extension (loaded by Explorer)
+  src-tauri/             # Tauri adapter, CLI, IPC server
+  context-menu-dll/      # COM Shell Extension (loaded by Explorer)
   crates/
-    quicksort-domain/        # Entities, value objects, events
-    quicksort-application/   # Use cases, ports, DTOs
-    quicksort-infrastructure/# JSON repos, FileSystem, UUID
-    quicksort-ipc-contract/  # Named Pipe contracts
-  src/                 # React frontend
+    quicksort-domain/          # Entities, value objects, events
+    quicksort-application/     # Use cases, ports, DTOs
+    quicksort-infrastructure/  # JSON repos, FileSystem, UUID
+    quicksort-ipc-contract/    # Named Pipe contracts
+  src/                   # React frontend
+  scripts/               # Build helpers (DLL safe build)
 ```
-
-## Architecture
-
-QuickSort follows Clean Architecture with Domain-Driven Design:
-
-```
-Domain <- Application <- Infrastructure <- Adapters (src-tauri, context-menu-dll)
-```
-
-Dependencies point inward toward the Domain layer. The Application layer exposes use cases through ports and facades. Infrastructure provides concrete implementations (JSON repositories, file system operations, duplicate checking).
-
-See `docs/adr/` for architectural decisions.
 
 ## Author
 

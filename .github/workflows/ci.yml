@@ -44,9 +44,6 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace -- -D warnings
 
-      - name: Build context-menu DLL
-        run: cargo build -p context-menu-dll
-
       - name: Build workspace
         run: cargo build --workspace
 
