@@ -134,19 +134,29 @@ fn ensure_dll_copied() {
         }
     };
 
-    // Verify DLL exists next to exe
+    // Copy DLL next to exe if not already there.
+    // In dev builds the DLL is in target/{debug,release}/deps/ — copy it.
+    // In installed builds it's already bundled via tauri.conf.json resources.
     let dll = exe_dir.join("context_menu_dll.dll");
-    if dll.exists() {
-        tracing::debug!(path = %dll.display(), "DLL found next to exe");
+    if !dll.exists() {
+        let deps_dll = exe_dir.join("deps").join("context_menu_dll.dll");
+        if deps_dll.exists() {
+            match std::fs::copy(&deps_dll, &dll) {
+                Ok(_) => tracing::info!(src = %deps_dll.display(), dst = %dll.display(), "Copied DLL next to exe"),
+                Err(e) => tracing::error!(error = %e, "Failed to copy DLL next to exe"),
+            }
+        } else {
+            tracing::warn!(
+                path = %dll.display(),
+                "DLL not found — COM registration will fail until DLL is built"
+            );
+        }
     } else {
-        tracing::warn!(
-            path = %dll.display(),
-            "DLL not found next to exe — COM registration will fail until DLL is built"
-        );
+        tracing::debug!(path = %dll.display(), "DLL found next to exe");
     }
 
     // Copy quicksort.ico next to exe so the shell extension DLL can find it.
-    // The DLL looks for the icon relative to its own path.
+    // The DLL looks for quicksort.ico in its own directory (next to the DLL).
     let icon_dest = exe_dir.join("quicksort.ico");
     if !icon_dest.exists() {
         // Try CARGO_MANIFEST_DIR/../resources/quicksort.ico (build-time path)
