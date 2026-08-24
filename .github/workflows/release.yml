@@ -59,10 +59,7 @@ jobs:
       - name: Build portable ZIP
         shell: pwsh
         run: |
-          $version = "0.2.0"
-          if ("${{ github.ref_name }}" -match "^v(\d+\.\d+\.\d+)$") {
-            $version = $Matches[1]
-          }
+          $version = "${{ github.ref_name }}" -replace '^v', ''
           $releaseDir = "src-tauri/target/release"
           $portableName = "QuickSort-$version-portable"
           New-Item -ItemType Directory -Path $portableName -Force | Out-Null
