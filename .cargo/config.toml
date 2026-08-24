@@ -1,0 +1,4 @@
+[build]
+# Shared target directory for all workspace members.
+# Ensures DLL and EXE end up in the same directory.
+target-dir = "target"

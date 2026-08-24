@@ -2,7 +2,6 @@
 target/
 *.pdb
 *.rs.bk
-.cargo/config.toml
 
 # Frontend
 node_modules/

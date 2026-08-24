@@ -60,7 +60,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}" -replace '^v', ''
-          $releaseDir = "src-tauri/target/release"
+          $releaseDir = "target/release"
           $portableName = "QuickSort-$version-portable"
           New-Item -ItemType Directory -Path $portableName -Force | Out-Null
 
