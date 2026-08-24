@@ -143,13 +143,9 @@ fn write_registry_keys() -> Result<(), String> {
     Ok(())
 }
 
-/// Register COM server keys and restart Explorer so it picks up the new handler.
-///
-/// Explorer caches shell extension registrations in-process. A restart forces it
-/// to re-read the registry and load the new DLL.
+/// Register COM server keys. Explorer picks up the handler on next context menu invocation.
 pub fn register() -> Result<(), String> {
     write_registry_keys()?;
-    restart_explorer();
     Ok(())
 }
 
@@ -179,6 +175,9 @@ pub fn unregister() -> Result<(), String> {
             tracing::info!("deleted CLSID key");
         }
     }
+
+    // Restart Explorer so it unloads the DLL from memory.
+    restart_explorer();
 
     Ok(())
 }

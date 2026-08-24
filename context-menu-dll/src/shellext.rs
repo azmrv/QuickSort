@@ -137,18 +137,23 @@ impl IShellExtInit_Impl for QuickSortShellExt_Impl {
         data_obj: WinRef<'_, IDataObject>,
         _prog_id: HKEY,
     ) -> WinResult<()> {
-        log::info!("IShellExtInit::Initialize called (folder_idl present: {})", !_folder_idl.is_null());
-        let paths = if let Some(data_obj) = data_obj.as_ref() {
-            match extract_files_from_dataobject(data_obj) {
+        log::info!(
+            "IShellExtInit::Initialize called (folder_idl present: {}, has_data_obj: {})",
+            !_folder_idl.is_null(),
+            data_obj.as_ref().is_some()
+        );
+        let paths = match data_obj.as_ref() {
+            Some(obj) => match extract_files_from_dataobject(obj) {
                 Ok(p) => p,
                 Err(e) => {
                     log::error!("Failed to extract files from IDataObject: {:?}", e);
                     return Err(e);
                 }
+            },
+            None => {
+                log::warn!("IDataObject is null — proceeding with empty selection");
+                Vec::new()
             }
-        } else {
-            log::error!("IDataObject is null");
-            return E_POINTER.ok();
         };
         log::info!("Initialize: got {} paths", paths.len());
         self.this.item_paths.replace(paths);
