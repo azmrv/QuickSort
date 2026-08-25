@@ -4,7 +4,10 @@ use winreg::enums::*;
 use winreg::RegKey;
 
 const CLSID: &str = "{12345678-1234-1234-1234-1234567890AB}";
-const HANDLERS: &[&str] = &["AllFilesystemObjects", "Directory", "Drive"];
+// Only AllFilesystemObjects — covers files, folders, AND shortcuts (.lnk).
+// Directory was removed: shortcuts match both AllFilesystemObjects AND Directory,
+// causing double menu entries. Drive was removed: drives are covered by AllFilesystemObjects.
+const HANDLERS: &[&str] = &["AllFilesystemObjects"];
 
 /// Registration status returned by [`check_registration`].
 pub enum RegistrationStatus {
@@ -143,8 +146,10 @@ pub fn register() -> Result<(), String> {
     // Remove stale handler keys from previous versions that are no longer in HANDLERS.
     // `*` was removed because Windows file-type ProgIDs override it.
     // `Directory\Background` was removed because it shows the menu on desktop right-click.
+    // `Directory` and `Drive` were removed because they cause double entries for shortcuts
+    // and inconsistent positioning across file types.
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let stale_handlers = ["*", "Directory\\Background"];
+    let stale_handlers = ["*", "Directory\\Background", "Directory", "Drive"];
     for handler in &stale_handlers {
         let stale_path = format!(
             "Software\\Classes\\{}\\shellex\\ContextMenuHandlers\\QuickSort",
