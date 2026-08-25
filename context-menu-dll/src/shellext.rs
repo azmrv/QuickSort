@@ -322,6 +322,17 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             return S_OK;
         }
 
+        // Skip menu in system dialogs (Open/Save) where IDataObject has no real files.
+        // AllFilesystemObjects is broad; this check prevents showing QuickSort in
+        // file pickers, common dialogs, and other non-Explorer contexts.
+        {
+            let paths = self.this.item_paths.borrow();
+            if paths.is_empty() {
+                log::info!("QueryContextMenu: no item paths, skipping (system dialog?)");
+                return S_OK;
+            }
+        }
+
         let folders = match load_folders_from_json() {
             Ok(f) => f,
             Err(e) => {

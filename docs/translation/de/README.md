@@ -160,8 +160,9 @@ QuickSort/
 
 ## Danksagung
 
-Dieses Projekt ist inspiriert von der Arbeit vieler talentierter Rust-Entwickler:
+Dieses Projekt ist inspiriert von der Arbeit vieler talentierter Entwickler und Projekte:
 
+- [Christian Ghisler](https://www.ghisler.com) — [Total Commander](https://www.ghisler.com), der Goldstandard der Dateimanager, der die Plugin-Architektur von QuickSort inspiriert hat (WCX/WDX/WFX/WLX)
 - [PaulDance](https://gist.github.com/PaulDance) — Shell-Erweiterungs-Beispiel, das die Grundlage unseres COM-Servers bildete
 - [ahaoboy](https://github.com/ahaoboy) — [rcm-com](https://github.com/ahaoboy/rcm-com) und [windows-contextmenu-manager](https://dev.to/ahaoboy/windows-contextmenu-manager-tauri-and-rust-3l9b)
 - [ppound](https://github.com/ppound) — [xmp-reader](https://github.com/ppound/xmp-reader), ein weiteres Shell-Erweiterungs-Beispiel

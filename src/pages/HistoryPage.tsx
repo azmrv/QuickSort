@@ -254,7 +254,7 @@ const HistoryPage = () => {
                                         fontSize: '11px',
                                         cursor: canUndo(op) ? 'pointer' : 'not-allowed',
                                         flexShrink: 0,
-                                        opacity: canUndo(op) ? 1 : 0.4,
+                                        opacity: canUndo(op) ? 1 : 0.7,
                                     }}
                                     onMouseEnter={(e) => {
                                         if (canUndo(op)) e.currentTarget.style.background = 'var(--qs-accent-muted)';
@@ -278,7 +278,7 @@ const HistoryPage = () => {
                                         fontSize: '11px',
                                         cursor: canRepeat(op) ? 'pointer' : 'not-allowed',
                                         flexShrink: 0,
-                                        opacity: canRepeat(op) ? 1 : 0.4,
+                                        opacity: canRepeat(op) ? 1 : 0.7,
                                     }}
                                     onMouseEnter={(e) => {
                                         if (canRepeat(op)) e.currentTarget.style.background = 'var(--qs-accent-muted)';

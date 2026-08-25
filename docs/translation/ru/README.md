@@ -160,8 +160,9 @@ QuickSort/
 
 ## Благодарности
 
-Проект вдохновлён работами многих талантливых разработчиков:
+Проект вдохновлён работами многих талантливых разработчиков и проектов:
 
+- [Christian Ghisler](https://www.ghisler.com) — [Total Commander](https://www.ghisler.com), эталон файловых менеджеров, вдохновивший архитектуру плагинов QuickSort (WCX/WDX/WFX/WLX)
 - [PaulDance](https://gist.github.com/PaulDance) — пример Shell Extension, ставший основой нашего COM-сервера
 - [ahaoboy](https://github.com/ahaoboy) — [rcm-com](https://github.com/ahaoboy/rcm-com) и [windows-contextmenu-manager](https://dev.to/ahaoboy/windows-contextmenu-manager-tauri-and-rust-3l9b)
 - [ppound](https://github.com/ppound) — [xmp-reader](https://github.com/ppound/xmp-reader), ещё один пример Shell Extension

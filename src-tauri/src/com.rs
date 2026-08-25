@@ -6,9 +6,7 @@ use winreg::RegKey;
 const CLSID: &str = "{12345678-1234-1234-1234-1234567890AB}";
 const HANDLERS: &[&str] = &[
     "AllFilesystemObjects",
-    "*",
     "Directory",
-    "Directory\\Background",
     "Drive",
 ];
 
@@ -146,6 +144,29 @@ fn write_registry_keys() -> Result<(), String> {
 
 /// Register COM server keys. Explorer picks up the handler on next context menu invocation.
 pub fn register() -> Result<(), String> {
+    // Remove stale handler keys from previous versions that are no longer in HANDLERS.
+    // `*` was removed because Windows file-type ProgIDs override it.
+    // `Directory\Background` was removed because it shows the menu on desktop right-click.
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let stale_handlers = ["*", "Directory\\Background"];
+    for handler in &stale_handlers {
+        let stale_path = format!(
+            "Software\\Classes\\{}\\shellex\\ContextMenuHandlers\\QuickSort",
+            handler
+        );
+        if let Ok(parent) = hkcu.open_subkey_with_flags(
+            format!(
+                "Software\\Classes\\{}\\shellex\\ContextMenuHandlers",
+                handler
+            ),
+            KEY_ALL_ACCESS,
+        ) {
+            if parent.delete_subkey("QuickSort").is_ok() {
+                tracing::info!("Removed stale handler key: {}", stale_path);
+            }
+        }
+    }
+
     write_registry_keys()?;
     Ok(())
 }

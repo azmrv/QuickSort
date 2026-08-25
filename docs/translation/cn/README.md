@@ -160,8 +160,9 @@ QuickSort/
 
 ## 致谢
 
-本项目受到许多优秀 Rust 开发者工作的启发：
+本项目受到许多优秀开发者和项目的启发：
 
+- [Christian Ghisler](https://www.ghisler.com) — [Total Commander](https://www.ghisler.com)，文件管理器的标杆，启发了 QuickSort 的插件架构（WCX/WDX/WFX/WLX）
 - [PaulDance](https://gist.github.com/PaulDance) — Shell 扩展示例，成为我们 COM 服务器的基础
 - [ahaoboy](https://github.com/ahaoboy) — [rcm-com](https://github.com/ahaoboy/rcm-com) 和 [windows-contextmenu-manager](https://dev.to/ahaoboy/windows-contextmenu-manager-tauri-and-rust-3l9b)
 - [ppound](https://github.com/ppound) — [xmp-reader](https://github.com/ppound/xmp-reader)，另一个 Shell 扩展示例
