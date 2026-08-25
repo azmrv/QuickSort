@@ -68,8 +68,8 @@ pub use use_cases::SearchFiles;
 // which depends on Domain).
 pub use quicksort_domain::{
     DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, DuplicateCheckMode, Folder,
-    FolderId, Operation, OperationId, OperationType, PluginConfig, SearchQuery, Settings,
-    WindowsPath,
+    FolderId, Locale, Operation, OperationId, OperationType, PluginConfig, SearchQuery, Settings,
+    ThemeMode, WindowsPath,
 };
 
 // Pipeline is intentionally NOT re-exported – it is an internal mechanism

@@ -16,4 +16,6 @@ pub use plugin::{
     ArchiveEntry, ArchivePlugin, ContentPlugin, FileSystemPlugin, ListerPlugin, Plugin,
     PluginCapabilities, PluginConfig, PluginError, PluginInfo, PluginType,
 };
-pub use settings::{DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, Settings};
+pub use settings::{
+    DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, Locale, Settings, ThemeMode,
+};

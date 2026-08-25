@@ -1,6 +1,6 @@
 [package]
 name = "quicksort"
-version = "0.2.2"
+version = "0.2.3"
 description = "QuickSort – быстрая сортировка файлов"
 authors = ["pr0math3us"]
 edition = "2021"

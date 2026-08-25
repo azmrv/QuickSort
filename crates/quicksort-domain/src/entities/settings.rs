@@ -52,6 +52,42 @@ impl Default for DuplicateCheckConfig {
     }
 }
 
+/// Theme mode selection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemeMode {
+    /// Follow OS system theme.
+    System,
+    /// Always light theme.
+    Light,
+    /// Always dark theme.
+    Dark,
+}
+
+impl Default for ThemeMode {
+    fn default() -> Self {
+        Self::System
+    }
+}
+
+/// UI language locale identifier.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Locale {
+    En,
+    Ru,
+    De,
+    Es,
+    Zh,
+    Ja,
+}
+
+impl Default for Locale {
+    fn default() -> Self {
+        Self::En
+    }
+}
+
 /// User settings entity.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -64,6 +100,12 @@ pub struct Settings {
     /// Duplicate detection configuration.
     #[serde(default)]
     pub duplicate_check: DuplicateCheckConfig,
+    /// Theme mode: system, light, or dark.
+    #[serde(default)]
+    pub theme_mode: ThemeMode,
+    /// UI language.
+    #[serde(default)]
+    pub locale: Locale,
 }
 
 impl Settings {
@@ -87,6 +129,8 @@ mod tests {
         );
         assert!(settings.duplicate_check.enabled);
         assert_eq!(settings.duplicate_check.mode, DuplicateCheckMode::Size);
+        assert_eq!(settings.theme_mode, ThemeMode::System);
+        assert_eq!(settings.locale, Locale::En);
     }
 
     #[test]
@@ -104,5 +148,16 @@ mod tests {
         assert!(json.contains("\"Move\""));
         assert!(json.contains("\"AutoRename\""));
         assert!(json.contains("\"size\""));
+        assert!(json.contains("\"system\""));
+        assert!(json.contains("\"en\""));
+    }
+
+    #[test]
+    fn test_backward_compat_missing_fields() {
+        // Old settings.json without theme_mode or locale should deserialize fine.
+        let old_json = r#"{"default_operation":"Move","default_overwrite_policy":"AutoRename","duplicate_check":{"enabled":true,"mode":"size"}}"#;
+        let settings: Settings = serde_json::from_str(old_json).unwrap();
+        assert_eq!(settings.theme_mode, ThemeMode::System);
+        assert_eq!(settings.locale, Locale::En);
     }
 }
