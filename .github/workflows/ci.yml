@@ -35,6 +35,9 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
 
+      - name: Architecture Dependency Rule check
+        run: python scripts/architecture_guard.py --root .
+
       - name: Install frontend dependencies
         run: npm ci
 

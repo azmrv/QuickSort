@@ -4,4 +4,4 @@ pub mod client;
 mod error;
 pub mod transport;
 
-pub use client::move_to_folder;
+pub use client::{move_to_folder, select_folder};

@@ -52,6 +52,17 @@ pub fn move_to_folder(
     send_command(&cmd)
 }
 
+/// Sends a SelectFolder command to open the folder selector UI.
+///
+/// The server will show/focus the main window and emit a `pending-file`
+/// event so the frontend displays the SelectorPage.
+pub fn select_folder(
+    source_paths: Vec<String>,
+) -> Result<ResponseMessage, PipeError> {
+    let cmd = CommandMessage::SelectFolder(SelectFolderData { source_paths });
+    send_command(&cmd)
+}
+
 #[allow(dead_code)]
 pub fn ping() -> Result<ResponseMessage, PipeError> {
     send_command(&CommandMessage::Ping)

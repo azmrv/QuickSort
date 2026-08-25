@@ -19,18 +19,18 @@ use windows::core::{
     PCWSTR, PSTR, PWSTR,
 };
 use windows::Win32::Foundation::{
-    CLASS_E_NOAGGREGATION, E_FAIL, E_NOINTERFACE, E_NOTIMPL, E_POINTER, S_OK,
+    CLASS_E_NOAGGREGATION, E_FAIL, E_NOINTERFACE, E_NOTIMPL, E_POINTER, HWND, LPARAM, S_OK,
 };
 use windows::Win32::System::Com::{
     IClassFactory, IClassFactory_Impl, IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL,
 };
-use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
 use windows::Win32::System::Memory::GlobalLock;
 use windows::Win32::System::Ole::{ReleaseStgMedium, CF_HDROP};
 use windows::Win32::System::Registry::HKEY;
 use windows::Win32::UI::Shell::{
     Common::ITEMIDLIST, IContextMenu, IContextMenu_Impl, IShellExtInit, IShellExtInit_Impl,
     CMF_DEFAULTONLY, CMINVOKECOMMANDINFO, DROPFILES, GCS_VALIDATEA, GCS_VALIDATEW,
+    SHBrowseForFolderW, SHGetPathFromIDListW, BROWSEINFOW, BIF_RETURNONLYFSDIRS,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreatePopupMenu, InsertMenuItemW, HMENU, MENUITEMINFOW, MFS_ENABLED, MFT_SEPARATOR,
@@ -38,7 +38,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use crate::icon;
-use crate::pipe_client::move_to_folder;
+use crate::pipe_client::{move_to_folder, select_folder};
 
 /// Cached app icon bitmap for MIIM_BITMAP on the root "QuickSort" menu entry.
 /// Loaded once on first use.
@@ -361,12 +361,13 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         let has_all_folders_entry = !all_folders.is_empty();
 
         let mut used = 0u32;
-        let separator_and_all = if has_all_folders_entry { 2 } else { 0 };
+        // Reserve slots: separator + "Все папки..." (conditional) + "Выбрать путь..." (always)
+        let bottom_items = (if has_all_folders_entry { 2 } else { 0 }) + 1;
         let available = max_cmd_id.saturating_sub(min_cmd_id) + 1;
 
         let max_fav = std::cmp::min(
             favorites.len() as u32,
-            available.saturating_sub(separator_and_all),
+            available.saturating_sub(bottom_items),
         );
 
         unsafe {
@@ -390,8 +391,11 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 used += 1;
             }
 
-            // Separator
-            if has_all_folders_entry && used < available {
+            // Separator — only when we have favorites and at least one bottom item
+            if !favorites.is_empty()
+                && (has_all_folders_entry || true)
+                && used < available
+            {
                 let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &make_separator(current_id));
                 current_id += 1;
                 used += 1;
@@ -411,6 +415,25 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                     true,
                     &make_colored_menu_item(current_id, &all_wide, None),
                 );
+                current_id += 1;
+                used += 1;
+            }
+
+            // "Choose path..." entry — always available
+            if used < available {
+                let choose_wide: Vec<u16> = w!("Выбрать путь...")
+                    .as_wide()
+                    .iter()
+                    .copied()
+                    .chain(Some(0))
+                    .collect();
+                let _ = InsertMenuItemW(
+                    h_submenu,
+                    0xFFFFFFFF,
+                    true,
+                    &make_colored_menu_item(current_id, &choose_wide, None),
+                );
+                current_id += 1;
                 used += 1;
             }
 
@@ -422,7 +445,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 .chain(Some(0))
                 .collect();
             let root_item = make_menu_item_with_icon(
-                min_cmd_id + max_fav + 2, // dummy id for root
+                current_id, // id after all submenu items
                 &root_wide,
                 get_app_icon_bitmap(),
             );
@@ -493,27 +516,34 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 }
             });
         // Position max_fav = separator (not clickable)
-        // Position max_fav+1 = "All folders"
-        } else if verb == max_fav + 1 {
-            for path in self.this.item_paths.borrow().iter() {
-                let exe_path = get_quicksort_exe_path();
-                let exe_wide: Vec<u16> =
-                    exe_path.as_os_str().encode_wide().chain(Some(0)).collect();
-                let params = format!("select-folder --file \"{}\"", path.display());
-                let params_wide: Vec<u16> = OsString::from(&params)
-                    .encode_wide()
-                    .chain(Some(0))
-                    .collect();
-                unsafe {
-                    let _ = windows::Win32::UI::Shell::ShellExecuteW(
-                        None,
-                        w!("open"),
-                        PCWSTR(exe_wide.as_ptr()),
-                        PCWSTR(params_wide.as_ptr()),
-                        None,
-                        windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
-                    );
-                }
+        // Position max_fav+1 = "All folders" (only if has_all_folders_entry)
+        // Position max_fav+2 (or max_fav+1) = "Choose path"
+        } else {
+            // Calculate the ID for "All folders" and "Choose path"
+            let has_folders = !folders.is_empty();
+            let all_folders_id = max_fav + 1; // separator + 1
+            let choose_path_id = if has_folders {
+                all_folders_id + 1
+            } else {
+                all_folders_id
+            };
+
+            if verb == all_folders_id && has_folders {
+                // "Все папки..." — open folder selector via IPC pipe
+                let source_clone = sources.clone();
+                std::thread::spawn(move || {
+                    match select_folder(source_clone) {
+                        Ok(resp) => {
+                            log::info!("SelectFolder OK: {:?}", resp);
+                        }
+                        Err(e) => {
+                            log::error!("SelectFolder failed: {}", e);
+                        }
+                    }
+                });
+            } else if verb == choose_path_id {
+                // "Выбрать путь..." — open native folder picker
+                self.handle_choose_path(sources);
             }
         }
 
@@ -533,6 +563,138 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             _ => E_NOTIMPL,
         }
         .ok()
+    }
+}
+
+// ============================================================================
+// "Выбрать путь..." handler — native folder picker + direct file move
+// ============================================================================
+
+/// Shows the native Windows folder picker and moves files to the selected folder.
+///
+/// Uses `SHBrowseForFolderW` for the picker dialog and `MoveFileW` for the
+/// actual move. Falls back to copy+delete for cross-drive moves.
+impl QuickSortShellExt_Impl {
+    fn handle_choose_path(&self, sources: Vec<String>) {
+        let title: Vec<u16> = unsafe {
+            w!("Выберите папку назначения")
+                .as_wide()
+                .iter()
+                .copied()
+                .chain(Some(0))
+                .collect()
+        };
+
+        let browse_info = BROWSEINFOW {
+            hwndOwner: HWND(ptr::null_mut()),
+            pidlRoot: ptr::null_mut(),
+            pszDisplayName: PWSTR::null(),
+            lpszTitle: PCWSTR::from_raw(title.as_ptr()),
+            ulFlags: BIF_RETURNONLYFSDIRS,
+            lpfn: None,
+            lParam: LPARAM(0),
+            iImage: 0,
+        };
+
+        unsafe {
+            let pidl = SHBrowseForFolderW(&browse_info);
+            if pidl.is_null() {
+                log::info!("ChoosePath: user cancelled folder picker");
+                return;
+            }
+
+            let mut path_buf = [0u16; 260];
+            if SHGetPathFromIDListW(pidl, &mut path_buf).as_bool() {
+                let target_dir =
+                    String::from_utf16_lossy(&path_buf[..path_buf.iter().position(|&c| c == 0).unwrap_or(260)])
+                        .to_string();
+                log::info!("ChoosePath: target directory = {}", target_dir);
+
+                let target = std::path::PathBuf::from(&target_dir);
+                let target_path = target.clone();
+
+                // Move files in a background thread to avoid blocking Explorer.
+                std::thread::spawn(move || {
+                    let mut moved = 0u32;
+                    let mut errors = 0u32;
+
+                    for src_str in &sources {
+                        let src = std::path::PathBuf::from(src_str);
+                        let file_name = match src.file_name() {
+                            Some(name) => name.to_owned(),
+                            None => {
+                                log::warn!("ChoosePath: no file name in {}", src_str);
+                                errors += 1;
+                                continue;
+                            }
+                        };
+                        let dest = target_path.join(&file_name);
+
+                        // Try MoveFileW first (same-drive fast path).
+                        let src_wide: Vec<u16> = OsString::from(&src)
+                            .encode_wide()
+                            .chain(Some(0))
+                            .collect();
+                        let dest_wide: Vec<u16> = OsString::from(&dest)
+                            .encode_wide()
+                            .chain(Some(0))
+                            .collect();
+
+                        let move_ok = windows::Win32::Storage::FileSystem::MoveFileW(
+                            PCWSTR::from_raw(src_wide.as_ptr()),
+                            PCWSTR::from_raw(dest_wide.as_ptr()),
+                        );
+
+                        if move_ok.is_ok() {
+                            moved += 1;
+                            log::info!("ChoosePath: moved {} → {}", src.display(), dest.display());
+                        } else {
+                            // Cross-drive fallback: copy + delete.
+                            log::info!(
+                                "ChoosePath: MoveFileW failed (cross-drive?), trying copy+delete for {}",
+                                src.display()
+                            );
+                            let copy_ok = windows::Win32::Storage::FileSystem::CopyFileW(
+                                PCWSTR::from_raw(src_wide.as_ptr()),
+                                PCWSTR::from_raw(dest_wide.as_ptr()),
+                                false,
+                            );
+
+                            if copy_ok.is_ok() {
+                                let _ = windows::Win32::Storage::FileSystem::DeleteFileW(
+                                    PCWSTR::from_raw(src_wide.as_ptr()),
+                                );
+                                moved += 1;
+                                log::info!(
+                                    "ChoosePath: copy+delete {} → {}",
+                                    src.display(),
+                                    dest.display()
+                                );
+                            } else {
+                                errors += 1;
+                                log::error!(
+                                    "ChoosePath: failed to move {} → {}: {:?}",
+                                    src.display(),
+                                    dest.display(),
+                                    copy_ok
+                                );
+                            }
+                        }
+                    }
+
+                    log::info!(
+                        "ChoosePath: done — moved={}, errors={}",
+                        moved,
+                        errors
+                    );
+                });
+            } else {
+                log::warn!("ChoosePath: SHGetPathFromIDListW failed");
+            }
+
+            // Free the PIDL allocated by SHBrowseForFolderW.
+            windows::Win32::System::Com::CoTaskMemFree(Some(pidl as *const _));
+        }
     }
 }
 
@@ -587,23 +749,6 @@ fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
         .collect();
 
     Ok(folders)
-}
-
-// ============================================================================
-// Helper: get path to quicksort.exe
-// ============================================================================
-
-fn get_quicksort_exe_path() -> PathBuf {
-    let mut path = [0u16; 260];
-    let len = unsafe { GetModuleFileNameW(None, &mut path) };
-    if len > 0 {
-        let dll_path = OsString::from_wide(&path[..len as usize])
-            .to_string_lossy()
-            .to_string();
-        PathBuf::from(dll_path).with_file_name("quicksort.exe")
-    } else {
-        PathBuf::from("quicksort.exe")
-    }
 }
 
 // ============================================================================

@@ -24,8 +24,10 @@ use quicksort_application::{
 };
 use quicksort_ipc_contract::{
     CommandMessage, ExecuteOperationData, OperationType as IpcOpType,
-    OverwritePolicy as IpcOverwritePolicy, ResponseMessage, ResponseStatus,
+    OverwritePolicy as IpcOverwritePolicy, ResponseMessage, ResponseStatus, SelectFolderData,
 };
+
+use tauri::{Emitter, Manager};
 
 use super::framing::{read_frame, write_frame};
 
@@ -96,6 +98,75 @@ fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> 
         overwrite_policy: convert_overwrite_policy(data.overwrite_policy),
         duplicate_check_mode: DuplicateCheckMode::default(),
     })
+}
+
+// ---------------------------------------------------------------------------
+// SelectFolder handler
+// ---------------------------------------------------------------------------
+
+/// Payload for the `pending-file` Tauri event.
+#[derive(Clone, serde::Serialize)]
+struct PendingFilePayload {
+    file: String,
+}
+
+/// Handles a `SelectFolder` command from the DLL.
+///
+/// Sets the first source file as pending, shows/focuses the main window,
+/// and emits a `pending-file` event so the frontend displays the SelectorPage.
+fn handle_select_folder(data: SelectFolderData) -> ResponseMessage {
+    if data.source_paths.is_empty() {
+        return ResponseMessage {
+            status: ResponseStatus::Error,
+            message: "No source files provided".to_string(),
+            operation_id: None,
+            data: None,
+        };
+    }
+
+    // Store the first file path for the frontend.
+    let first_file = &data.source_paths[0];
+    crate::pending::set_pending_file(first_file.clone());
+
+    match crate::ipc::get_app_handle() {
+        Some(app) => {
+            // Show and focus the main window.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+
+            // Emit event so the frontend switches to selector mode.
+            let _ = app.emit(
+                "pending-file",
+                PendingFilePayload {
+                    file: first_file.clone(),
+                },
+            );
+
+            tracing::info!(
+                file = %first_file,
+                total_files = data.source_paths.len(),
+                "SelectFolder: window shown, event emitted"
+            );
+
+            ResponseMessage {
+                status: ResponseStatus::Ok,
+                message: "Folder selector opened".to_string(),
+                operation_id: None,
+                data: None,
+            }
+        }
+        None => {
+            tracing::error!("SelectFolder: AppHandle not available");
+            ResponseMessage {
+                status: ResponseStatus::Error,
+                message: "App not initialized".to_string(),
+                operation_id: None,
+                data: None,
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +297,10 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                     operation_id: None,
                     data: None,
                 },
+                CommandMessage::SelectFolder(data) => {
+                    tracing::info!("Received SelectFolder: {:?}", data);
+                    handle_select_folder(data)
+                }
             };
 
             let response_bytes = match serde_json::to_vec(&response) {

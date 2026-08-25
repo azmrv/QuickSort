@@ -56,6 +56,21 @@ pub enum CommandMessage {
     /// A simple keep-alive or health-check request.
     /// The server should respond with `ResponseMessage { status: Ok }`.
     Ping,
+
+    /// Open the folder selector UI for the given source files.
+    /// The server shows/focuses the main window and emits a `pending-file`
+    /// event so the frontend displays the SelectorPage.
+    SelectFolder(SelectFolderData),
+}
+
+/// Payload for the `SelectFolder` command.
+///
+/// Contains the source file paths that the user wants to move.
+/// The server will display the folder selector so the user can pick a target.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SelectFolderData {
+    /// Absolute paths of the files to move.
+    pub source_paths: Vec<String>,
 }
 
 /// Payload for the `ExecuteOperation` command.

@@ -294,6 +294,34 @@ const SettingsPage: React.FC = () => {
                     ))}
                 </select>
             </div>
+
+            <div>
+                <h3 style={sectionStyle}>Приложение</h3>
+                <button
+                    onClick={async () => {
+                        logger.action('SettingsPage', 'quit app');
+                        try {
+                            await invoke('quit_app');
+                        } catch (err) {
+                            logger.error('SettingsPage', 'Failed to quit app', err);
+                        }
+                    }}
+                    style={{
+                        width: '100%',
+                        padding: 'var(--qs-space-md)',
+                        background: 'var(--qs-danger-muted)',
+                        border: '1px solid transparent',
+                        borderRadius: 'var(--qs-radius-md)',
+                        color: 'var(--qs-danger)',
+                        fontFamily: 'var(--qs-font-body)',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                    }}
+                >
+                    Выход из приложения
+                </button>
+            </div>
         </div>
     );
 };
