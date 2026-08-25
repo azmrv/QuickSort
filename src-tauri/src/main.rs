@@ -142,7 +142,9 @@ fn ensure_dll_copied() {
         let deps_dll = exe_dir.join("deps").join("context_menu_dll.dll");
         if deps_dll.exists() {
             match std::fs::copy(&deps_dll, &dll) {
-                Ok(_) => tracing::info!(src = %deps_dll.display(), dst = %dll.display(), "Copied DLL next to exe"),
+                Ok(_) => {
+                    tracing::info!(src = %deps_dll.display(), dst = %dll.display(), "Copied DLL next to exe")
+                }
                 Err(e) => tracing::error!(error = %e, "Failed to copy DLL next to exe"),
             }
         } else {
@@ -167,7 +169,9 @@ fn ensure_dll_copied() {
                 .join("quicksort.ico");
             if icon_src.exists() {
                 match std::fs::copy(&icon_src, &icon_dest) {
-                    Ok(_) => tracing::info!(src = %icon_src.display(), dst = %icon_dest.display(), "Copied icon next to exe"),
+                    Ok(_) => {
+                        tracing::info!(src = %icon_src.display(), dst = %icon_dest.display(), "Copied icon next to exe")
+                    }
                     Err(e) => tracing::warn!(error = %e, "Failed to copy icon next to exe"),
                 }
             } else {
@@ -179,8 +183,12 @@ fn ensure_dll_copied() {
             let icon_cwd = std::path::Path::new("resources").join("quicksort.ico");
             if icon_cwd.exists() {
                 match std::fs::copy(&icon_cwd, &icon_dest) {
-                    Ok(_) => tracing::info!(src = %icon_cwd.display(), dst = %icon_dest.display(), "Copied icon next to exe (cwd fallback)"),
-                    Err(e) => tracing::warn!(error = %e, "Failed to copy icon next to exe (cwd fallback)"),
+                    Ok(_) => {
+                        tracing::info!(src = %icon_cwd.display(), dst = %icon_dest.display(), "Copied icon next to exe (cwd fallback)")
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Failed to copy icon next to exe (cwd fallback)")
+                    }
                 }
             }
         }
@@ -263,9 +271,8 @@ fn start_tauri() {
         Box::new(operation_repo.clone_shared()),
         Box::new(quicksort_infrastructure::StdFileSystem::new()),
     );
-    let get_operation_history_use_case = GetOperationHistoryUseCase::new(Box::new(
-        operation_repo.clone_shared(),
-    ));
+    let get_operation_history_use_case =
+        GetOperationHistoryUseCase::new(Box::new(operation_repo.clone_shared()));
 
     let search_files_use_case =
         SearchFilesUseCase::new(Arc::new(quicksort_infrastructure::FsFileSearch::new()));

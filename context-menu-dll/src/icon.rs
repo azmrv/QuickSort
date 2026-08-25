@@ -15,14 +15,13 @@ use std::sync::OnceLock;
 use windows::core::{Result as WinResult, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HMODULE};
 use windows::Win32::Graphics::Gdi::{
-    CreateCompatibleDC, CreateDIBSection, CreateSolidBrush, DeleteDC, DeleteObject, Ellipse,
-    GetDC, GetDIBits, ReleaseDC, SelectObject, SetDIBits, HBITMAP, HGDIOBJ, DIB_RGB_COLORS,
-    BITMAPINFO, BITMAPINFOHEADER,
+    CreateCompatibleDC, CreateDIBSection, CreateSolidBrush, DeleteDC, DeleteObject, Ellipse, GetDC,
+    GetDIBits, ReleaseDC, SelectObject, SetDIBits, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS,
+    HBITMAP, HGDIOBJ,
 };
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DrawIconEx, LoadImageW, HICON, IMAGE_ICON, DI_NORMAL, LR_DEFAULTCOLOR,
-    LR_LOADFROMFILE,
+    DrawIconEx, LoadImageW, DI_NORMAL, HICON, IMAGE_ICON, LR_DEFAULTCOLOR, LR_LOADFROMFILE,
 };
 
 /// Size of context menu icons in pixels.
@@ -44,7 +43,9 @@ fn get_dll_hmodule() -> usize {
 /// Creates an exact-size 32bpp DIB section bitmap and draws into it via a memory DC.
 ///
 /// Returns (bitmap, memory_dc, old_object) — caller must clean up.
-fn create_exact_bitmap(size: i32) -> Option<(HBITMAP, windows::Win32::Graphics::Gdi::HDC, HGDIOBJ)> {
+fn create_exact_bitmap(
+    size: i32,
+) -> Option<(HBITMAP, windows::Win32::Graphics::Gdi::HDC, HGDIOBJ)> {
     unsafe {
         let screen_dc = GetDC(None);
         if screen_dc.is_invalid() {
@@ -66,21 +67,15 @@ fn create_exact_bitmap(size: i32) -> Option<(HBITMAP, windows::Win32::Graphics::
             ..Default::default()
         };
         let mut pixels: *mut core::ffi::c_void = std::ptr::null_mut();
-        let bitmap = match CreateDIBSection(
-            Some(screen_dc),
-            &bmi,
-            DIB_RGB_COLORS,
-            &mut pixels,
-            None,
-            0,
-        ) {
-            Ok(bmp) => bmp,
-            Err(e) => {
-                ReleaseDC(None, screen_dc);
-                log::warn!("CreateDIBSection failed: {:?}", e);
-                return None;
-            }
-        };
+        let bitmap =
+            match CreateDIBSection(Some(screen_dc), &bmi, DIB_RGB_COLORS, &mut pixels, None, 0) {
+                Ok(bmp) => bmp,
+                Err(e) => {
+                    ReleaseDC(None, screen_dc);
+                    log::warn!("CreateDIBSection failed: {:?}", e);
+                    return None;
+                }
+            };
         if pixels.is_null() {
             ReleaseDC(None, screen_dc);
             let _ = DeleteObject(HGDIOBJ(bitmap.0));
@@ -113,7 +108,11 @@ pub fn load_app_icon_bitmap() -> Option<HBITMAP> {
         let hmodule = HMODULE(module as *mut _);
         if let Ok(hicon) = load_icon_from_resource(hmodule, icon_name) {
             if let Some(bmp) = icon_to_bitmap(&hicon) {
-                log::info!("Icon loaded from DLL resource ({}x{})", ICON_SIZE, ICON_SIZE);
+                log::info!(
+                    "Icon loaded from DLL resource ({}x{})",
+                    ICON_SIZE,
+                    ICON_SIZE
+                );
                 return Some(bmp);
             }
         }
@@ -164,8 +163,7 @@ pub fn create_colored_circle_bitmap(color: u32) -> Option<HBITMAP> {
             },
             ..Default::default()
         };
-        let mut pixels: [u8; ICON_SIZE as usize * ICON_SIZE as usize * 4] =
-            std::mem::zeroed();
+        let mut pixels: [u8; ICON_SIZE as usize * ICON_SIZE as usize * 4] = std::mem::zeroed();
         let _ = GetDIBits(
             mem_dc,
             bitmap,
@@ -231,11 +229,7 @@ fn load_icon_from_file(filename: &str) -> Option<HICON> {
 
     log::info!("Loading icon from: {}", icon_path.display());
 
-    let icon_path_wide: Vec<u16> = icon_path
-        .as_os_str()
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
+    let icon_path_wide: Vec<u16> = icon_path.as_os_str().encode_wide().chain(Some(0)).collect();
 
     let hicon = unsafe {
         LoadImageW(
@@ -273,7 +267,9 @@ fn icon_to_bitmap(icon: &HICON) -> Option<HBITMAP> {
     let (bitmap, mem_dc, old_obj) = create_exact_bitmap(ICON_SIZE)?;
 
     unsafe {
-        let _ = DrawIconEx(mem_dc, 0, 0, *icon, ICON_SIZE, ICON_SIZE, 0, None, DI_NORMAL);
+        let _ = DrawIconEx(
+            mem_dc, 0, 0, *icon, ICON_SIZE, ICON_SIZE, 0, None, DI_NORMAL,
+        );
 
         // Ensure alpha channel is set for all non-zero pixels.
         // DrawIconEx with DI_NORMAL may not set alpha on all Windows versions.
@@ -289,8 +285,7 @@ fn icon_to_bitmap(icon: &HICON) -> Option<HBITMAP> {
             },
             ..Default::default()
         };
-        let mut pixels: [u8; ICON_SIZE as usize * ICON_SIZE as usize * 4] =
-            std::mem::zeroed();
+        let mut pixels: [u8; ICON_SIZE as usize * ICON_SIZE as usize * 4] = std::mem::zeroed();
         let _ = GetDIBits(
             mem_dc,
             bitmap,

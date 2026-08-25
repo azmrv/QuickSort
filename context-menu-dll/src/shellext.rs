@@ -33,8 +33,8 @@ use windows::Win32::UI::Shell::{
     CMF_DEFAULTONLY, CMINVOKECOMMANDINFO, DROPFILES, GCS_VALIDATEA, GCS_VALIDATEW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreatePopupMenu, InsertMenuItemW, HMENU, MENUITEMINFOW, MFS_ENABLED,
-    MFT_SEPARATOR, MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
+    CreatePopupMenu, InsertMenuItemW, HMENU, MENUITEMINFOW, MFS_ENABLED, MFT_SEPARATOR,
+    MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
 };
 
 use crate::icon;
@@ -45,9 +45,8 @@ use crate::pipe_client::move_to_folder;
 static APP_ICON_BITMAP: OnceLock<Option<usize>> = OnceLock::new();
 
 fn get_app_icon_bitmap() -> Option<windows::Win32::Graphics::Gdi::HBITMAP> {
-    let opt = APP_ICON_BITMAP.get_or_init(|| {
-        icon::load_app_icon_bitmap().map(|bmp| bmp.0.expose_provenance())
-    });
+    let opt = APP_ICON_BITMAP
+        .get_or_init(|| icon::load_app_icon_bitmap().map(|bmp| bmp.0.expose_provenance()));
     opt.map(|addr| windows::Win32::Graphics::Gdi::HBITMAP(ptr::with_exposed_provenance_mut(addr)))
 }
 
@@ -239,7 +238,11 @@ fn extract_files_from_dataobject(data_obj: &IDataObject) -> WinResult<Vec<PathBu
 // IContextMenu implementation
 // ============================================================================
 
-fn make_menu_item_with_icon(id: u32, text: &[u16], icon: Option<windows::Win32::Graphics::Gdi::HBITMAP>) -> MENUITEMINFOW {
+fn make_menu_item_with_icon(
+    id: u32,
+    text: &[u16],
+    icon: Option<windows::Win32::Graphics::Gdi::HBITMAP>,
+) -> MENUITEMINFOW {
     let len = text.len().saturating_sub(1);
     let mut f_mask = MIIM_ID | MIIM_STATE | MIIM_STRING;
     let mut icon_bmp = None;
@@ -269,11 +272,20 @@ fn make_colored_menu_item(id: u32, text: &[u16], color_hex: Option<&str>) -> MEN
     if let Some(hex) = color_hex {
         if let Some(colorref) = icon::parse_color_to_colorref(hex) {
             if let Some(bmp) = icon::create_colored_circle_bitmap(colorref) {
-                log::debug!("Colored circle created for '{}' color={}: bitmap handle={}", String::from_utf16_lossy(text), hex, bmp.0 as usize);
+                log::debug!(
+                    "Colored circle created for '{}' color={}: bitmap handle={}",
+                    String::from_utf16_lossy(text),
+                    hex,
+                    bmp.0 as usize
+                );
                 f_mask |= MIIM_BITMAP;
                 circle_bmp = Some(bmp);
             } else {
-                log::warn!("Failed to create colored circle for '{}' color={}", String::from_utf16_lossy(text), hex);
+                log::warn!(
+                    "Failed to create colored circle for '{}' color={}",
+                    String::from_utf16_lossy(text),
+                    hex
+                );
             }
         }
     }

@@ -71,7 +71,7 @@ impl JsonConfigurationRepository {
     fn save_to_file(&self, folders: &[Folder]) -> Result<(), UseCaseError> {
         let config = ConfigFile {
             version: 1,
-            folders:             folders
+            folders: folders
                 .iter()
                 .map(|f| FolderData {
                     id: f.id.to_string(),

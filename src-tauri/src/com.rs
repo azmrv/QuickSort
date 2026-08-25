@@ -4,11 +4,7 @@ use winreg::enums::*;
 use winreg::RegKey;
 
 const CLSID: &str = "{12345678-1234-1234-1234-1234567890AB}";
-const HANDLERS: &[&str] = &[
-    "AllFilesystemObjects",
-    "Directory",
-    "Drive",
-];
+const HANDLERS: &[&str] = &["AllFilesystemObjects", "Directory", "Drive"];
 
 /// Registration status returned by [`check_registration`].
 pub enum RegistrationStatus {

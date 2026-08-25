@@ -256,7 +256,10 @@ pub fn get_logs() -> Vec<serde_json::Value> {
 pub fn register_com_server() -> Result<String, String> {
     tracing::info!(command = "register_com_server", "handling");
     crate::com::register()?;
-    tracing::info!(command = "register_com_server", "OK — registry keys written");
+    tracing::info!(
+        command = "register_com_server",
+        "OK — registry keys written"
+    );
     Ok("COM server registered successfully.".to_string())
 }
 

@@ -32,13 +32,11 @@ pub struct Person {
     pub url: Option<&'static str>,
 }
 
-pub const AUTHORS: &[Person] = &[
-    Person {
-        name: "pr0math3us",
-        role: "Author & Lead Developer",
-        url: Some("https://github.com/azmrv"),
-    },
-];
+pub const AUTHORS: &[Person] = &[Person {
+    name: "pr0math3us",
+    role: "Author & Lead Developer",
+    url: Some("https://github.com/azmrv"),
+}];
 
 pub const CONTRIBUTORS: &[Person] = &[
     // Add contributors here as the project grows.
