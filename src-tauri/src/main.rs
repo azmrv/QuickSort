@@ -404,20 +404,31 @@ fn start_tauri() {
                 .expect("failed to spawn COM register thread");
 
             let open = MenuItemBuilder::with_id("open", "Open editor").build(app)?;
+            let quit = MenuItemBuilder::with_id("quit", "Exit").build(app)?;
             let menu = MenuBuilder::new(app)
                 .item(&open)
+                .separator()
+                .item(&quit)
                 .build()?;
 
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
-                .on_menu_event(|app, event| {
-                    if event.id().as_ref() == "open" {
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "open" => {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
                     }
+                    "quit" => {
+                        tracing::info!("tray quit — performing cleanup");
+                        // Best-effort COM cleanup so Explorer releases the DLL from memory.
+                        let _ = crate::com::unregister();
+                        tracing::info!("all cleanup done, exiting");
+                        app.exit(0);
+                    }
+                    _ => {}
                 })
                 .build(app)?;
             Ok(())
