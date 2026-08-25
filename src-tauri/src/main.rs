@@ -48,6 +48,11 @@ enum Commands {
 
 use quicksort_application::errors::UseCaseError;
 
+#[derive(Clone, serde::Serialize)]
+struct SingleInstancePayload {
+    file: String,
+}
+
 // ---------------------------------------------------------------------------
 // Stub implementations for plugin system (no real plugins yet)
 // ---------------------------------------------------------------------------
@@ -246,10 +251,12 @@ fn start_tauri() {
 
     // Shared operation repository — all use cases must reference the same instance
     // so that execute writes to the same store that history reads from.
-    let operation_repo = quicksort_infrastructure::repository::InMemoryOperationRepository::new();
+    let operations_path = config_dir.join("operations.json");
+    let operation_repo =
+        quicksort_infrastructure::repository::JsonOperationRepository::new(operations_path);
 
     let execute_use_case = ExecuteOperationUseCase::new(
-        Box::new(operation_repo.clone_shared()),
+        Box::new(operation_repo.clone()),
         Box::new(quicksort_infrastructure::JsonConfigurationRepository::new(
             config_path.clone(),
         )),
@@ -268,11 +275,11 @@ fn start_tauri() {
     let save_settings_use_case = SaveSettingsUseCase::new(settings_repo.clone());
 
     let undo_use_case = UndoOperationUseCase::new(
-        Box::new(operation_repo.clone_shared()),
+        Box::new(operation_repo.clone()),
         Box::new(quicksort_infrastructure::StdFileSystem::new()),
     );
     let get_operation_history_use_case =
-        GetOperationHistoryUseCase::new(Box::new(operation_repo.clone_shared()));
+        GetOperationHistoryUseCase::new(Box::new(operation_repo.clone()));
 
     let search_files_use_case =
         SearchFilesUseCase::new(Arc::new(quicksort_infrastructure::FsFileSearch::new()));
@@ -305,6 +312,37 @@ fn start_tauri() {
     let app_state = AppState { facade };
 
     tauri::Builder::default()
+        // Single-instance must be first so it can intercept second launches
+        // before any other plugin initialises resources.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            tracing::info!(?argv, "single-instance callback triggered");
+
+            // argv[0] is the exe path; the rest are CLI arguments.
+            // Look for: select-folder --file <path>
+            let args: Vec<&str> = argv.iter().skip(1).map(|s| s.as_str()).collect();
+            if args.iter().position(|&a| a == "select-folder").is_some() {
+                if let Some(file_pos) = args.iter().position(|&a| a == "--file") {
+                    let file = args.get(file_pos + 1).unwrap_or(&"");
+                    tracing::info!(file = %file, "single-instance: forwarding select-folder");
+
+                    crate::pending::set_pending_file(file.to_string());
+
+                    // Show and focus the existing main window
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+
+                    // Emit event so the frontend switches to selector mode
+                    let _ = app.emit(
+                        "pending-file",
+                        SingleInstancePayload {
+                            file: file.to_string(),
+                        },
+                    );
+                }
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![

@@ -13,6 +13,8 @@ use quicksort_domain::{Operation, OperationId};
 ///
 /// The file contains an array of `Operation` objects serialized as JSON.
 /// It is read on startup and written whenever an operation is saved or deleted.
+/// Each instance reads/writes independently (file-backed, not shared-state).
+#[derive(Clone)]
 pub struct JsonOperationRepository {
     file_path: PathBuf,
 }

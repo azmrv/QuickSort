@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { invoke } from './lib/invoke';
 import { logger } from './lib/logger';
 import { ConfigProvider, theme, App as AntApp } from 'antd';
@@ -9,14 +10,19 @@ import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
 import PluginsPage from './pages/PluginsPage';
-import SearchPage from './pages/SearchPage';
 import CommandPalette from './components/CommandPalette';
 import './styles/App.css';
 
 function App() {
     const [mode, setMode] = useState<'editor' | 'selector'>('editor');
     const [selectFile, setSelectFile] = useState<string | null>(null);
-    const [isDark, setIsDark] = useState(true);
+    const [isDark, setIsDark] = useState(() => {
+        // Sync with Windows system theme on startup
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+            return false;
+        }
+        return true;
+    });
     const [activeTab, setActiveTab] = useState('folders');
     const [version, setVersion] = useState('0.0.0');
     const [paletteOpen, setPaletteOpen] = useState(false);
@@ -31,6 +37,28 @@ function App() {
                 setMode('selector');
             }
         });
+    }, []);
+
+    // Listen for single-instance forwarded file (second launch while already running)
+    useEffect(() => {
+        const unlisten = listen<{ file: string }>('pending-file', (event) => {
+            const file = event.payload.file;
+            logger.info('App', `single-instance pending file: ${file}`);
+            setSelectFile(file);
+            setMode('selector');
+        });
+        return () => { unlisten.then((fn) => fn()); };
+    }, []);
+
+    // Listen for Windows system theme changes
+    useEffect(() => {
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const handler = (e: MediaQueryListEvent) => {
+            setIsDark(e.matches);
+            logger.info('App', `system theme changed → ${e.matches ? 'dark' : 'light'}`);
+        };
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
     }, []);
 
     // Global keyboard shortcut: Ctrl+Shift+Space opens Command Palette
@@ -52,7 +80,6 @@ function App() {
 
     const TABS = [
         { key: 'folders', label: 'Папки', content: <EditorPage /> },
-        { key: 'search', label: 'Поиск', content: <SearchPage /> },
         { key: 'history', label: 'История', content: <HistoryPage /> },
         { key: 'plugins', label: 'Плагины', content: <PluginsPage /> },
         { key: 'log', label: 'Лог', content: <LogPage /> },
@@ -86,15 +113,6 @@ function App() {
                                 <span className="app-logo-version">v{version}</span>
                             </div>
                             <div className="header-right">
-                                <button
-                                    className="search-hint-btn"
-                                    onClick={() => setPaletteOpen(true)}
-                                    title="Search (Ctrl+Shift+Space)"
-                                >
-                                    <span className="search-hint-icon">{'>'}_</span>
-                                    <span className="search-hint-text">Search</span>
-                                    <span className="search-hint-shortcut">Ctrl+Shift+Space</span>
-                                </button>
                                 <div className="theme-toggle" onClick={() => setIsDark(!isDark)}>
                                     <span className="theme-toggle-icon">{isDark ? '🌙' : '☀️'}</span>
                                 </div>

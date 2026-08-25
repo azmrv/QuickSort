@@ -168,7 +168,9 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
                         )}
                         {otherFolders.length > 0 && (
                             <div className="selector-section">
-                                {favoriteFolders.length > 0 && (
+                                {favoriteFolders.length > 0 ? (
+                                    <div className="selector-section-label">Остальные</div>
+                                ) : (
                                     <div className="selector-section-label">Все папки</div>
                                 )}
                                 {otherFolders.map((f, i) => renderFolderItem(f, i + favoriteFolders.length))}
