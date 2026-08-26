@@ -1,22 +1,10 @@
-//! Named Pipe server that receives commands from the shell extension DLL.
+//! Platform-agnostic IPC server.
 //!
-//! This module runs in a dedicated background thread and listens for
-//! incoming connections on `\\.\pipe\quicksort_cmd`.  Every command
-//! received is deserialized, validated, and forwarded to the Application
-//! Facade for execution.  A response is sent back to the client (DLL).
+//! This module contains the command handling logic that is shared across
+//! all platform-specific transport implementations.  The transport loop
+//! is generic over [`IpcTransport`].
 
-use std::ffi::OsStr;
-use std::os::windows::ffi::OsStrExt;
 use std::sync::Arc;
-use windows::core::PCWSTR;
-use windows::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE};
-use windows::Win32::Storage::FileSystem::{
-    FlushFileBuffers, FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX,
-};
-use windows::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE,
-    PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
-};
 
 use quicksort_application::{
     AbsolutePath, ApplicationFacadeImpl, DuplicateCheckMode, ExecuteOperation, FolderId,
@@ -30,32 +18,10 @@ use quicksort_ipc_contract::{
 
 use tauri::{Emitter, Manager};
 
-use super::framing::{read_frame, write_frame};
-
-const PIPE_NAME: &str = r"\\.\pipe\quicksort_cmd";
+use super::transport::{IpcStream, IpcTransport};
 
 // ---------------------------------------------------------------------------
-// RAII wrapper for HANDLE
-// ---------------------------------------------------------------------------
-
-struct PipeHandle(HANDLE);
-
-impl PipeHandle {
-    fn raw(&self) -> HANDLE {
-        self.0
-    }
-}
-
-impl Drop for PipeHandle {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = CloseHandle(self.0);
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Type conversions: IPC contract → Application DTOs
+// Type conversions: IPC contract -> Application DTOs
 // ---------------------------------------------------------------------------
 
 fn convert_operation_type(ty: IpcOpType) -> DomainOpType {
@@ -185,60 +151,158 @@ fn handle_select_folder(data: SelectFolderData) -> ResponseMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Public entry point
+// Command processing
 // ---------------------------------------------------------------------------
 
-/// Starts the pipe server loop.
+/// Processes a single command and returns a response.
+fn process_command(
+    cmd: CommandMessage,
+    facade: &ApplicationFacadeImpl,
+    rt: &tokio::runtime::Runtime,
+) -> ResponseMessage {
+    match cmd {
+        CommandMessage::ExecuteOperation(data) => {
+            tracing::info!("Received ExecuteOperation: {:?}", data);
+
+            // Resolve target_folder_path to a registered folder ID
+            // when target_folder_id is not provided.
+            let mut data = data;
+            let mut early_response: Option<ResponseMessage> = None;
+
+            if data.target_folder_id.is_none() {
+                if let Some(ref path) = data.target_folder_path.clone() {
+                    match rt.block_on(resolve_target_folder_path(path, facade)) {
+                        Some(folder_id) => {
+                            tracing::info!(
+                                "Resolved target_folder_path '{}' to folder ID '{}'",
+                                path,
+                                folder_id
+                            );
+                            data.target_folder_id = Some(folder_id.to_string());
+                        }
+                        None => {
+                            tracing::error!(
+                                "Target folder path '{}' not found in registered folders",
+                                path
+                            );
+                            early_response = Some(ResponseMessage {
+                                status: ResponseStatus::Error,
+                                message: format!("Target folder not found: {}", path),
+                                operation_id: None,
+                                data: None,
+                            });
+                        }
+                    }
+                } else {
+                    early_response = Some(ResponseMessage {
+                        status: ResponseStatus::Error,
+                        message: "Move/Copy requires target_folder_id or target_folder_path"
+                            .to_string(),
+                        operation_id: None,
+                        data: None,
+                    });
+                }
+            }
+
+            match early_response {
+                Some(resp) => resp,
+                None => match convert_execute_data(data) {
+                    Some(command) => match rt.block_on(facade.execute(command)) {
+                        Ok(result) => {
+                            let op_id = result.operation_id.to_string();
+                            let processed = result.processed_files;
+                            tracing::info!(
+                                "ExecuteOperation OK: op_id={}, files={}, bytes={}",
+                                op_id,
+                                processed,
+                                result.bytes_moved
+                            );
+                            ResponseMessage {
+                                status: ResponseStatus::Ok,
+                                message: format!("Processed {} files", processed),
+                                operation_id: Some(op_id),
+                                data: None,
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("ExecuteOperation FAIL: {}", e);
+                            ResponseMessage {
+                                status: ResponseStatus::Error,
+                                message: e.to_string(),
+                                operation_id: None,
+                                data: None,
+                            }
+                        }
+                    },
+                    None => {
+                        tracing::error!("ExecuteOperation FAIL: no valid source paths");
+                        ResponseMessage {
+                            status: ResponseStatus::Error,
+                            message: "Invalid command: no valid source paths".to_string(),
+                            operation_id: None,
+                            data: None,
+                        }
+                    }
+                },
+            }
+        }
+        CommandMessage::Ping => ResponseMessage {
+            status: ResponseStatus::Ok,
+            message: "pong".to_string(),
+            operation_id: None,
+            data: None,
+        },
+        CommandMessage::SelectFolder(data) => {
+            tracing::info!("Received SelectFolder: {:?}", data);
+            handle_select_folder(data)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Public entry points
+// ---------------------------------------------------------------------------
+
+/// Starts the IPC server loop using the given transport.
 ///
 /// # Blocking
 /// This function never returns under normal operation.  It must be spawned
 /// on a dedicated OS thread.
-pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
-    tracing::info!("Pipe server starting on {}", PIPE_NAME);
+pub fn start_ipc_server<T: IpcTransport>(transport: T, facade: Arc<ApplicationFacadeImpl>) {
+    tracing::info!("IPC server starting ({})", transport.name());
 
-    let pipe_name: Vec<u16> = OsStr::new(PIPE_NAME).encode_wide().chain(Some(0)).collect();
+    if let Err(e) = transport.start() {
+        tracing::error!("Failed to start transport: {}", e);
+        return;
+    }
 
     // Create a Tokio runtime for blocking on async facade calls.
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .expect("failed to create tokio runtime for pipe server");
+        .expect("failed to create tokio runtime for IPC server");
 
     loop {
-        let handle = unsafe {
-            CreateNamedPipeW(
-                PCWSTR::from_raw(pipe_name.as_ptr()),
-                PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
-                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                PIPE_UNLIMITED_INSTANCES,
-                4096,
-                4096,
-                0,
-                None,
-            )
+        let mut stream = match transport.accept() {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!("Accept failed: {}", e);
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                continue;
+            }
         };
 
-        if handle == INVALID_HANDLE_VALUE {
-            let err = unsafe { GetLastError() };
-            tracing::error!("CreateNamedPipeW failed: {:?}", err);
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            continue;
-        }
-
-        let pipe = PipeHandle(handle);
-
-        unsafe {
-            let _ = ConnectNamedPipe(pipe.raw(), None);
-        }
-        tracing::info!("Client connected to pipe");
+        tracing::info!("Client connected");
 
         loop {
-            let data = match read_frame(pipe.raw()) {
+            let data = match stream.read_frame() {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    // ERROR_BROKEN_PIPE (0x8007006D) is expected when the DLL
-                    // client disconnects after sending a single command.
-                    if e.contains("0x8007006D") || e.contains("broken pipe") {
+                    // Broken pipe is expected when the client disconnects
+                    // after sending a single command.
+                    if e.kind() == std::io::ErrorKind::BrokenPipe
+                        || e.to_string().contains("broken pipe")
+                    {
                         tracing::debug!("Client disconnected: {}", e);
                     } else {
                         tracing::error!("Read error: {}", e);
@@ -257,113 +321,12 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                         operation_id: None,
                         data: None,
                     };
-                    let _ = write_frame(pipe.raw(), &serde_json::to_vec(&resp).unwrap_or_default());
+                    let _ = stream.write_frame(&serde_json::to_vec(&resp).unwrap_or_default());
                     continue;
                 }
             };
 
-            let response = match cmd {
-                CommandMessage::ExecuteOperation(data) => {
-                    tracing::info!("Received ExecuteOperation: {:?}", data);
-
-                    // Resolve target_folder_path to a registered folder ID
-                    // when target_folder_id is not provided.
-                    let mut data = data;
-                    let mut early_response: Option<ResponseMessage> = None;
-
-                    if data.target_folder_id.is_none() {
-                        if let Some(ref path) = data.target_folder_path.clone() {
-                            match rt.block_on(resolve_target_folder_path(path, &facade)) {
-                                Some(folder_id) => {
-                                    tracing::info!(
-                                        "Resolved target_folder_path '{}' to folder ID '{}'",
-                                        path,
-                                        folder_id
-                                    );
-                                    data.target_folder_id = Some(folder_id.to_string());
-                                }
-                                None => {
-                                    tracing::error!(
-                                        "Target folder path '{}' not found in registered folders",
-                                        path
-                                    );
-                                    early_response = Some(ResponseMessage {
-                                        status: ResponseStatus::Error,
-                                        message: format!("Target folder not found: {}", path),
-                                        operation_id: None,
-                                        data: None,
-                                    });
-                                }
-                            }
-                        } else {
-                            early_response = Some(ResponseMessage {
-                                status: ResponseStatus::Error,
-                                message:
-                                    "Move/Copy requires target_folder_id or target_folder_path"
-                                        .to_string(),
-                                operation_id: None,
-                                data: None,
-                            });
-                        }
-                    }
-
-                    match early_response {
-                        Some(resp) => resp,
-                        None => {
-                            let response = match convert_execute_data(data) {
-                                Some(command) => match rt.block_on(facade.execute(command)) {
-                                    Ok(result) => {
-                                        let op_id = result.operation_id.to_string();
-                                        let processed = result.processed_files;
-                                        tracing::info!(
-                                            "ExecuteOperation OK: op_id={}, files={}, bytes={}",
-                                            op_id,
-                                            processed,
-                                            result.bytes_moved
-                                        );
-                                        ResponseMessage {
-                                            status: ResponseStatus::Ok,
-                                            message: format!("Processed {} files", processed),
-                                            operation_id: Some(op_id),
-                                            data: None,
-                                        }
-                                    }
-                                    Err(e) => {
-                                        tracing::error!("ExecuteOperation FAIL: {}", e);
-                                        ResponseMessage {
-                                            status: ResponseStatus::Error,
-                                            message: e.to_string(),
-                                            operation_id: None,
-                                            data: None,
-                                        }
-                                    }
-                                },
-                                None => {
-                                    tracing::error!("ExecuteOperation FAIL: no valid source paths");
-                                    ResponseMessage {
-                                        status: ResponseStatus::Error,
-                                        message: "Invalid command: no valid source paths"
-                                            .to_string(),
-                                        operation_id: None,
-                                        data: None,
-                                    }
-                                }
-                            };
-                            response
-                        }
-                    }
-                }
-                CommandMessage::Ping => ResponseMessage {
-                    status: ResponseStatus::Ok,
-                    message: "pong".to_string(),
-                    operation_id: None,
-                    data: None,
-                },
-                CommandMessage::SelectFolder(data) => {
-                    tracing::info!("Received SelectFolder: {:?}", data);
-                    handle_select_folder(data)
-                }
-            };
+            let response = process_command(cmd, &facade, &rt);
 
             let response_bytes = match serde_json::to_vec(&response) {
                 Ok(b) => b,
@@ -372,13 +335,27 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                     break;
                 }
             };
-            if let Err(e) = write_frame(pipe.raw(), &response_bytes) {
+            if let Err(e) = stream.write_frame(&response_bytes) {
                 tracing::error!("Write response failed: {}", e);
                 break;
             }
-            unsafe {
-                FlushFileBuffers(pipe.raw()).ok();
-            }
         }
+    }
+}
+
+/// Starts the IPC server using the platform-appropriate transport.
+///
+/// This is the main entry point called from `main.rs`.  It selects the
+/// correct transport implementation based on the target platform.
+pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
+    #[cfg(target_os = "windows")]
+    {
+        let transport = super::named_pipe::NamedPipeTransport::new();
+        start_ipc_server(transport, facade);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let transport = super::unix_socket::UnixSocketTransport::new();
+        start_ipc_server(transport, facade);
     }
 }

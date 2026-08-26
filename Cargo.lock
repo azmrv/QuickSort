@@ -2854,6 +2854,7 @@ dependencies = [
  "chrono",
  "clap",
  "directories",
+ "libc",
  "parking_lot",
  "quicksort-application",
  "quicksort-infrastructure",

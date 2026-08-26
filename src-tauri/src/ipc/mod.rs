@@ -1,20 +1,30 @@
 //! IPC (Inter-Process Communication) module for the Tauri adapter.
 //!
-//! This module contains the Named Pipe server that receives commands from
-//! the shell extension DLL.  It uses the framing protocol defined in
-//! `quicksort-ipc-contract` and forwards decoded commands to the
-//! Application Facade.
+//! This module provides a platform-agnostic IPC server that receives
+//! commands from the shell extension DLL (Windows) or Unix socket clients.
+//! On Windows, it uses Named Pipes; on Linux/macOS, Unix Domain Sockets.
+//! The framing protocol is defined in `quicksort-ipc-contract` and forwarded
+//! decoded commands to the Application Facade.
 
 use std::sync::OnceLock;
 use tauri::AppHandle;
 
-pub mod framing;
 pub mod server;
+pub mod transport;
 
-/// Global Tauri AppHandle stored during setup for use by the pipe server.
+#[cfg(target_os = "windows")]
+pub mod framing;
+
+#[cfg(target_os = "windows")]
+pub mod named_pipe;
+
+#[cfg(not(target_os = "windows"))]
+pub mod unix_socket;
+
+/// Global Tauri AppHandle stored during setup for use by the IPC server.
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
-/// Stores the AppHandle so the pipe server can emit events and control windows.
+/// Stores the AppHandle so the IPC server can emit events and control windows.
 ///
 /// Called once during Tauri setup. Subsequent calls are silently ignored.
 pub fn set_app_handle(handle: AppHandle) {

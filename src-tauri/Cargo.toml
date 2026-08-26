@@ -114,3 +114,6 @@ quicksort-ipc-contract = { path = "../crates/quicksort-ipc-contract" }
 
 # Async runtime for Tauri commands and pipe server
 tokio = { workspace = true, features = ["rt", "net", "time", "macros", "io-util"] }
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.189"
