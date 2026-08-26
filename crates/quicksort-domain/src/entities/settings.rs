@@ -53,10 +53,11 @@ impl Default for DuplicateCheckConfig {
 }
 
 /// Theme mode selection.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ThemeMode {
     /// Follow OS system theme.
+    #[default]
     System,
     /// Always light theme.
     Light,
@@ -64,28 +65,17 @@ pub enum ThemeMode {
     Dark,
 }
 
-impl Default for ThemeMode {
-    fn default() -> Self {
-        Self::System
-    }
-}
-
 /// UI language locale identifier.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Locale {
+    #[default]
     En,
     Ru,
     De,
     Es,
     Zh,
     Ja,
-}
-
-impl Default for Locale {
-    fn default() -> Self {
-        Self::En
-    }
 }
 
 /// User settings entity.

@@ -111,7 +111,7 @@ async fn resolve_target_folder_path(
     facade: &ApplicationFacadeImpl,
 ) -> Option<FolderId> {
     let folders = facade.get_all().await.ok()?;
-    folders.iter().find(|f| f.path.to_string() == path).map(|f| f.id.clone())
+    folders.iter().find(|f| f.path.to_string() == path).map(|f| f.id)
 }
 
 // ---------------------------------------------------------------------------
