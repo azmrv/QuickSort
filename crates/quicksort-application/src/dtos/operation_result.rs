@@ -49,6 +49,6 @@ pub struct OperationResult {
     /// `bytes_processed`) may be introduced in a future breaking change.
     pub bytes_moved: u64,
     // Future extensions:
-    // pub failed_files: Vec<WindowsPath>,
+    // pub failed_files: Vec<AbsolutePath>,
     // pub errors: Vec<String>,
 }

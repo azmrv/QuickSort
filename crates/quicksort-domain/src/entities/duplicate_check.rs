@@ -1,15 +1,15 @@
 //! Domain entities for duplicate file detection.
 
-use crate::value_objects::WindowsPath;
+use crate::value_objects::AbsolutePath;
 use serde::{Deserialize, Serialize};
 
 /// Result of a duplicate check for a single file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DuplicateCheckResult {
     /// Source file path.
-    pub source: WindowsPath,
+    pub source: AbsolutePath,
     /// Destination file path.
-    pub destination: WindowsPath,
+    pub destination: AbsolutePath,
     /// Whether a duplicate was found.
     pub exists: bool,
     /// Mode used for the check.
@@ -35,8 +35,8 @@ pub trait DuplicateChecker: Send + Sync {
     /// Check if a file already exists at the destination.
     async fn check(
         &self,
-        source: &WindowsPath,
-        destination: &WindowsPath,
+        source: &AbsolutePath,
+        destination: &AbsolutePath,
         mode: &DuplicateCheckMode,
     ) -> Result<DuplicateCheckResult, crate::errors::DomainError>;
 }

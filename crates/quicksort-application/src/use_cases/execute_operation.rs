@@ -6,7 +6,9 @@ use crate::ports::outbound::{
     OperationRepository, ProgressInfo, ProgressReporter,
 };
 use async_trait::async_trait;
-use quicksort_domain::{DuplicateCheckMode, Operation, OperationState, OperationType, WindowsPath};
+use quicksort_domain::{
+    AbsolutePath, DuplicateCheckMode, Operation, OperationState, OperationType,
+};
 
 pub struct ExecuteOperationUseCase {
     operation_repository: Box<dyn OperationRepository>,
@@ -136,9 +138,9 @@ impl ExecuteOperation for ExecuteOperationUseCase {
 impl ExecuteOperationUseCase {
     async fn execute_single(
         &self,
-        source: &WindowsPath,
+        source: &AbsolutePath,
         command: &OperationCommand,
-        target_folder: &Option<WindowsPath>,
+        target_folder: &Option<AbsolutePath>,
     ) -> Result<u64, UseCaseError> {
         match command.operation_type {
             OperationType::Move | OperationType::Copy => {
@@ -264,9 +266,9 @@ impl ExecuteOperationUseCase {
 
     fn build_destination(
         &self,
-        source: &WindowsPath,
-        target_folder: &Option<WindowsPath>,
-    ) -> Result<WindowsPath, UseCaseError> {
+        source: &AbsolutePath,
+        target_folder: &Option<AbsolutePath>,
+    ) -> Result<AbsolutePath, UseCaseError> {
         let folder = target_folder
             .as_ref()
             .ok_or_else(|| UseCaseError::InvalidCommand("Target folder is required".to_string()))?;
@@ -276,7 +278,7 @@ impl ExecuteOperationUseCase {
         Ok(folder.join(file_name))
     }
 
-    async fn unique_name(&self, path: &WindowsPath) -> Result<WindowsPath, UseCaseError> {
+    async fn unique_name(&self, path: &AbsolutePath) -> Result<AbsolutePath, UseCaseError> {
         let file_name = path.file_name().map(|s| s.to_string()).unwrap_or_default();
         let ext = path
             .extension()
@@ -310,7 +312,7 @@ impl ExecuteOperationUseCase {
     async fn resolve_target_folder_async(
         &self,
         command: &OperationCommand,
-    ) -> Result<Option<WindowsPath>, UseCaseError> {
+    ) -> Result<Option<AbsolutePath>, UseCaseError> {
         if let Some(folder_id) = &command.target_folder_id {
             let folder = self
                 .configuration_repository

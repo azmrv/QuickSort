@@ -5,7 +5,7 @@
 //! They are **not** domain entities and contain no business logic.
 //!
 //! # Design Decisions
-//! - DTOs use domain types (`OperationId`, `WindowsPath`, `FolderId`) where
+//! - DTOs use domain types (`OperationId`, `AbsolutePath`, `FolderId`) where
 //!   appropriate to avoid anemic wrappers and unnecessary mapping.  Per the
 //!   Dependency Rule (ADR-002), adapters depend on domain types via the
 //!   Application Layer.

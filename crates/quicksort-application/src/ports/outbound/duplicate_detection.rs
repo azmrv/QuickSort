@@ -12,8 +12,8 @@ pub trait DuplicateDetectionPort: Send + Sync {
     /// Check if a file already exists at the destination.
     async fn check_duplicate(
         &self,
-        source: &quicksort_domain::value_objects::WindowsPath,
-        destination: &quicksort_domain::value_objects::WindowsPath,
+        source: &quicksort_domain::value_objects::AbsolutePath,
+        destination: &quicksort_domain::value_objects::AbsolutePath,
         mode: &DuplicateCheckMode,
     ) -> Result<DuplicateCheckResult, quicksort_domain::errors::DomainError>;
 }

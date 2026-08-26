@@ -105,7 +105,7 @@ fn log_outcome(result: &OperationResult) {
 mod tests {
     use super::*;
     use crate::dtos::OverwritePolicy;
-    use quicksort_domain::{OperationType, WindowsPath};
+    use quicksort_domain::{AbsolutePath, OperationType};
 
     /// A simple mock that always succeeds.
     struct MockExecuteOperation;
@@ -145,7 +145,7 @@ mod tests {
     fn test_command() -> OperationCommand {
         OperationCommand {
             operation_type: OperationType::Move,
-            source_paths: vec![WindowsPath::new("C:\\test.txt").unwrap()],
+            source_paths: vec![AbsolutePath::new("C:\\test.txt").unwrap()],
             target_folder_id: Some(
                 quicksort_domain::FolderId::from_string("00000000-0000-0000-0000-000000000001")
                     .unwrap(),

@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use quicksort_application::ports::outbound::DuplicateDetectionPort;
 use quicksort_domain::{
-    DomainError, DuplicateCheckMode, DuplicateCheckResult, DuplicateChecker, WindowsPath,
+    AbsolutePath, DomainError, DuplicateCheckMode, DuplicateCheckResult, DuplicateChecker,
 };
 
 /// Adapter that delegates DuplicateDetectionPort to a concrete DuplicateChecker.
@@ -21,8 +21,8 @@ impl<C: DuplicateChecker> DuplicateDetectionAdapter<C> {
 impl<C: DuplicateChecker + Send + Sync> DuplicateDetectionPort for DuplicateDetectionAdapter<C> {
     async fn check_duplicate(
         &self,
-        source: &WindowsPath,
-        destination: &WindowsPath,
+        source: &AbsolutePath,
+        destination: &AbsolutePath,
         mode: &DuplicateCheckMode,
     ) -> Result<DuplicateCheckResult, DomainError> {
         self.checker.check(source, destination, mode).await

@@ -29,7 +29,7 @@ use quicksort_application::errors::UseCaseError;
 use quicksort_application::ports::outbound::{
     Clock, ConfigurationRepository, ConflictResolver, FileSystem, IdGenerator, OperationRepository,
 };
-use quicksort_domain::{Folder, FolderId, Operation, OperationId, WindowsPath};
+use quicksort_domain::{AbsolutePath, Folder, FolderId, Operation, OperationId};
 
 // ============================================================================
 // Mock: ConfigurationRepository
@@ -201,20 +201,20 @@ impl MockFileSystem {
         self.files.lock().unwrap().insert(path, size);
     }
 
-    /// Helper to convert `WindowsPath` to `PathBuf` for internal storage.
-    fn to_pathbuf(path: &WindowsPath) -> PathBuf {
+    /// Helper to convert `AbsolutePath` to `PathBuf` for internal storage.
+    fn to_pathbuf(path: &AbsolutePath) -> PathBuf {
         PathBuf::from(path.to_string_lossy().as_ref())
     }
 }
 
 #[async_trait]
 impl FileSystem for MockFileSystem {
-    async fn exists(&self, path: &WindowsPath) -> Result<bool, UseCaseError> {
+    async fn exists(&self, path: &AbsolutePath) -> Result<bool, UseCaseError> {
         let path = Self::to_pathbuf(path);
         Ok(self.files.lock().unwrap().contains_key(&path))
     }
 
-    async fn get_file_size(&self, path: &WindowsPath) -> Result<u64, UseCaseError> {
+    async fn get_file_size(&self, path: &AbsolutePath) -> Result<u64, UseCaseError> {
         let path = Self::to_pathbuf(path);
         let files = self.files.lock().unwrap();
         match files.get(&path) {
@@ -226,7 +226,7 @@ impl FileSystem for MockFileSystem {
         }
     }
 
-    async fn move_file(&self, from: &WindowsPath, to: &WindowsPath) -> Result<u64, UseCaseError> {
+    async fn move_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
         let from_path = Self::to_pathbuf(from);
         let to_path = Self::to_pathbuf(to);
         let mut files = self.files.lock().unwrap();
@@ -239,7 +239,7 @@ impl FileSystem for MockFileSystem {
         Ok(size)
     }
 
-    async fn copy_file(&self, from: &WindowsPath, to: &WindowsPath) -> Result<u64, UseCaseError> {
+    async fn copy_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
         let from_path = Self::to_pathbuf(from);
         let to_path = Self::to_pathbuf(to);
         let files = self.files.lock().unwrap();
@@ -254,7 +254,7 @@ impl FileSystem for MockFileSystem {
         Ok(size_clone)
     }
 
-    async fn delete_file(&self, path: &WindowsPath) -> Result<(), UseCaseError> {
+    async fn delete_file(&self, path: &AbsolutePath) -> Result<(), UseCaseError> {
         let path = Self::to_pathbuf(path);
         let mut files = self.files.lock().unwrap();
         files.remove(&path).ok_or_else(|| {
@@ -263,7 +263,11 @@ impl FileSystem for MockFileSystem {
         Ok(())
     }
 
-    async fn rename_file(&self, from: &WindowsPath, to: &WindowsPath) -> Result<(), UseCaseError> {
+    async fn rename_file(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+    ) -> Result<(), UseCaseError> {
         let from_path = Self::to_pathbuf(from);
         let to_path = Self::to_pathbuf(to);
         let mut files = self.files.lock().unwrap();
@@ -373,7 +377,7 @@ pub fn test_folder() -> Folder {
     Folder {
         id: FolderId::from_string("00000000-0000-0000-0000-000000000001").unwrap(),
         name: "Documents".to_string(),
-        path: WindowsPath::new("C:\\Users\\Test\\Documents").unwrap(),
+        path: AbsolutePath::new("C:\\Users\\Test\\Documents").unwrap(),
         favorite: false,
         order: 0,
         color: None,
@@ -383,7 +387,7 @@ pub fn test_folder() -> Folder {
     }
 }
 
-/// Creates a `WindowsPath` from a string for testing.
-pub fn test_file(path: &str) -> WindowsPath {
-    WindowsPath::new(path).expect("Invalid test path")
+/// Creates a `AbsolutePath` from a string for testing.
+pub fn test_file(path: &str) -> AbsolutePath {
+    AbsolutePath::new(path).expect("Invalid test path")
 }

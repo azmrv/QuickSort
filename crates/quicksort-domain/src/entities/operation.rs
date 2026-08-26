@@ -14,7 +14,7 @@
 use crate::{
     errors::DomainError,
     events::DomainEvent,
-    value_objects::{OperationId, WindowsPath},
+    value_objects::{AbsolutePath, OperationId},
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -57,9 +57,9 @@ pub struct Operation {
     pub id: OperationId,
     pub operation_type: OperationType,
     pub state: OperationState,
-    pub source_paths: Vec<WindowsPath>,
-    pub target_folder_path: Option<WindowsPath>,
-    pub target_paths: Option<Vec<WindowsPath>>,
+    pub source_paths: Vec<AbsolutePath>,
+    pub target_folder_path: Option<AbsolutePath>,
+    pub target_paths: Option<Vec<AbsolutePath>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(skip)]
@@ -71,9 +71,9 @@ impl Operation {
     pub fn new(
         id: OperationId,
         op_type: OperationType,
-        source_paths: Vec<WindowsPath>,
-        target: Option<WindowsPath>,
-        target_paths: Option<Vec<WindowsPath>>,
+        source_paths: Vec<AbsolutePath>,
+        target: Option<AbsolutePath>,
+        target_paths: Option<Vec<AbsolutePath>>,
         now: DateTime<Utc>,
     ) -> Self {
         Self {
@@ -90,7 +90,7 @@ impl Operation {
     }
 
     /// Create a Move operation (files moved to a single target folder).
-    pub fn new_move(source: Vec<WindowsPath>, target: WindowsPath, now: DateTime<Utc>) -> Self {
+    pub fn new_move(source: Vec<AbsolutePath>, target: AbsolutePath, now: DateTime<Utc>) -> Self {
         Self::new(
             OperationId::new(),
             OperationType::Move,
@@ -102,7 +102,7 @@ impl Operation {
     }
 
     /// Create a Copy operation.
-    pub fn new_copy(source: Vec<WindowsPath>, target: WindowsPath, now: DateTime<Utc>) -> Self {
+    pub fn new_copy(source: Vec<AbsolutePath>, target: AbsolutePath, now: DateTime<Utc>) -> Self {
         Self::new(
             OperationId::new(),
             OperationType::Copy,
@@ -114,7 +114,7 @@ impl Operation {
     }
 
     /// Create a Delete operation.
-    pub fn new_delete(source: Vec<WindowsPath>, now: DateTime<Utc>) -> Self {
+    pub fn new_delete(source: Vec<AbsolutePath>, now: DateTime<Utc>) -> Self {
         Self::new(
             OperationId::new(),
             OperationType::Delete,
@@ -127,7 +127,7 @@ impl Operation {
 
     /// Create a Rename operation.
     /// The `target` parameter holds the new path.
-    pub fn new_rename(source: Vec<WindowsPath>, target: WindowsPath, now: DateTime<Utc>) -> Self {
+    pub fn new_rename(source: Vec<AbsolutePath>, target: AbsolutePath, now: DateTime<Utc>) -> Self {
         Self::new(
             OperationId::new(),
             OperationType::Rename,
@@ -232,8 +232,8 @@ impl Default for Operation {
 mod tests {
     use super::*;
 
-    fn test_path(path: &str) -> WindowsPath {
-        WindowsPath::new(path).unwrap()
+    fn test_path(path: &str) -> AbsolutePath {
+        AbsolutePath::new(path).unwrap()
     }
 
     fn now() -> DateTime<Utc> {

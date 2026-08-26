@@ -13,7 +13,7 @@
 //! - `ConflictResolutionService` – determines the final destination path
 //!   when a file already exists, applying the chosen `OverwritePolicy`.
 //! - `PathNormalisationService` – normalises user-supplied paths (already
-//!   handled by `WindowsPath::new`, but more complex rules could be added).
+//!   handled by `AbsolutePath::new`, but more complex rules could be added).
 //!
 //! # Dependency Rule
 //! Domain services MAY depend on domain entities, value objects, and domain

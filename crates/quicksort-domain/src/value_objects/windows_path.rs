@@ -1,16 +1,18 @@
-//! Windows path value object – a validated, absolute filesystem path.
+//! Absolute path value object – a validated, absolute filesystem path.
 //!
-//! `WindowsPath` guarantees that the contained path is a valid, absolute
-//! Windows path (e.g., `C:\folder\file.txt` or `\\server\share\...`).
+//! `AbsolutePath` guarantees that the contained path is a valid, absolute
+//! path on the current platform (e.g., `C:\folder\file.txt` or
+//! `\\server\share\...` on Windows, `/home/user/file.txt` on Unix).
 //! It is the only type allowed to cross domain boundaries as a file location.
 //!
 //! # Invariants
 //! - The path is never empty.
-//! - The path is absolute (starts with a drive letter or a UNC prefix).
-//! - Backslashes are used as separators (forward slashes are normalised).
+//! - The path is absolute (starts with a drive letter / UNC prefix on Windows,
+//!   or a root separator on Unix).
+//! - Path traversal (`..`) is rejected.
 //!
 //! # Usage
-//! Construction is fallible – use `WindowsPath::new()` which validates the
+//! Construction is fallible – use `AbsolutePath::new()` which validates the
 //! input and returns a `DomainError` for invalid paths.  Once constructed,
 //! the value can be used safely everywhere in the domain.
 
@@ -21,58 +23,86 @@ use std::path::{Path, PathBuf};
 use crate::errors::DomainError;
 
 // ---------------------------------------------------------------------------
-// WindowsPath
+// AbsolutePath
 // ---------------------------------------------------------------------------
 
-/// A validated, absolute Windows filesystem path.
+/// A validated, absolute filesystem path.
+///
+/// Works cross-platform: accepts Windows drive-letter paths (`C:\...`),
+/// UNC paths (`\\server\share\...`), and Unix root-relative paths
+/// (`/home/user/...`).
 ///
 /// # Examples
 /// ```rust
-/// use quicksort_domain::value_objects::WindowsPath;
-/// let path = WindowsPath::new("C:\\Users\\Me\\Documents").unwrap();
+/// use quicksort_domain::value_objects::AbsolutePath;
+/// let path = AbsolutePath::new("C:\\Users\\Me\\Documents").unwrap();
 /// assert!(path.is_absolute());
 /// assert_eq!(path.file_name(), Some("Documents"));
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct WindowsPath(PathBuf);
+pub struct AbsolutePath(PathBuf);
 
 // An empty path violates the type's invariant.  A reasonable default is
-// the root of the current drive, which is always valid.
-impl Default for WindowsPath {
+// the root of the current filesystem, which is always valid.
+impl Default for AbsolutePath {
     fn default() -> Self {
-        // Use the current directory's drive root as a safe fallback.
-        // For example, if the process runs from C:\Projects, the root is C:\.
-        let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("C:\\"));
+        let current_dir = std::env::current_dir().unwrap_or_else(|_| {
+            #[cfg(target_os = "windows")]
+            {
+                PathBuf::from("C:\\")
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                PathBuf::from("/")
+            }
+        });
         let root = current_dir
             .ancestors()
             .last()
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| PathBuf::from("C:\\"));
-        // Ensure it ends with a backslash – WindowsPath::new would reject
-        // a root without one.
+            .unwrap_or_else(|| {
+                #[cfg(target_os = "windows")]
+                {
+                    PathBuf::from("C:\\")
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    PathBuf::from("/")
+                }
+            });
+        // Ensure the root ends with a separator so AbsolutePath::new accepts it.
         let mut root_str = root.to_string_lossy().to_string();
-        if !root_str.ends_with('\\') {
-            root_str.push('\\');
+        let separator = std::path::MAIN_SEPARATOR;
+        if !root_str.ends_with(separator) && !root_str.ends_with('/') {
+            root_str.push(separator);
         }
-        WindowsPath::new(&root_str).expect("Default WindowsPath must be valid")
+        AbsolutePath::new(&root_str).expect("Default AbsolutePath must be valid")
     }
 }
 
-impl WindowsPath {
-    /// Creates a new `WindowsPath` from a string, validating the format.
+impl AbsolutePath {
+    /// Creates a new `AbsolutePath` from a string, validating the format.
     ///
     /// # Validation rules
     /// - The path must not be empty.
-    /// - Forward slashes are normalised to backslashes.
-    /// - The path must start with a drive letter followed by `:\` (e.g., `C:\`)
-    ///   or with a UNC prefix (`\\`).
+    /// - The path must not contain `..` components (path traversal).
+    /// - On Windows: forward slashes are normalised to backslashes; the path
+    ///   must start with a drive letter (`C:\`), UNC prefix (`\\`), or root.
+    /// - On Unix: backslashes are normalised to forward slashes; the path
+    ///   must start with `/`.
+    /// - Platform-agnostic: uses `Path::is_absolute()` as the primary check.
     ///
     /// # Errors
-    /// Returns `DomainError::EmptyPath` or `DomainError::InvalidPath` if
-    /// the input does not meet the requirements.
+    /// Returns `DomainError::EmptyPath`, `DomainError::PathTraversalAttempt`,
+    /// or `DomainError::InvalidPath` if the input does not meet the requirements.
     pub fn new(path: &str) -> Result<Self, DomainError> {
-        // Normalise separators to backslashes.
-        let s = path.replace('/', "\\");
+        // Normalise separators: forward slash → backslash only on Windows,
+        // backslash → forward slash only on Unix.
+        let s = if cfg!(target_os = "windows") {
+            path.replace('/', "\\")
+        } else {
+            path.replace('\\', "/")
+        };
 
         // Reject empty strings immediately.
         if s.is_empty() {
@@ -84,31 +114,22 @@ impl WindowsPath {
             return Err(DomainError::PathTraversalAttempt(s));
         }
 
-        // Validate absolute Windows path.
-        let chars: Vec<char> = s.chars().collect();
-        if chars.len() >= 2 && chars[0].is_ascii_alphabetic() && chars[1] == ':' {
-            // Drive-letter path – must be at least "C:\" (3 characters).
-            if chars.len() < 3 || chars[2] != '\\' {
-                return Err(DomainError::InvalidPath(
-                    "Drive-letter path must be followed by :\\".to_string(),
-                ));
-            }
-        } else if !s.starts_with("\\\\") {
-            // Not a drive path and not a UNC path – reject.
+        // Must be absolute — platform-agnostic check.
+        let path_obj = Path::new(&s);
+        if !path_obj.is_absolute() {
             return Err(DomainError::InvalidPath(
-                "Path must be absolute (start with a drive letter or \\\\)".to_string(),
+                "Path must be absolute".to_string(),
             ));
         }
-        // UNC paths are accepted as-is (no further validation of server/share).
 
         Ok(Self(PathBuf::from(s)))
     }
 
     // This method is kept for backward compatibility but marked deprecated.
-    // New code should use `WindowsPath::new()` instead.
+    // New code should use `AbsolutePath::new()` instead.
     #[deprecated(
         since = "0.2.0",
-        note = "Use WindowsPath::new() for validated construction"
+        note = "Use AbsolutePath::new() for validated construction"
     )]
     pub fn try_from_str(path: &str) -> Result<Self, PathConversionError> {
         let inner = PathBuf::from(path);
@@ -121,14 +142,12 @@ impl WindowsPath {
     }
 
     /// Returns the path as a string slice, if it is valid UTF-8.
-    ///
-    /// Since Windows paths are usually representable as UTF-16,
-    /// this returns `None` only for paths containing unpaired surrogates.
     pub fn as_str(&self) -> Option<&str> {
         self.0.as_os_str().to_str()
     }
 
-    /// Returns the file name component (e.g., `file.txt` for `C:\dir\file.txt`).
+    /// Returns the file name component (e.g., `file.txt` for `C:\dir\file.txt`
+    /// or `/home/user/file.txt`).
     pub fn file_name(&self) -> Option<&str> {
         self.0.file_name().and_then(|s| s.to_str())
     }
@@ -139,8 +158,8 @@ impl WindowsPath {
     }
 
     /// Returns the parent directory, if any.
-    pub fn parent(&self) -> Option<WindowsPath> {
-        self.0.parent().map(|p| WindowsPath(p.to_path_buf()))
+    pub fn parent(&self) -> Option<AbsolutePath> {
+        self.0.parent().map(|p| AbsolutePath(p.to_path_buf()))
     }
 
     /// Checks whether the path is absolute (always `true` for validated paths).
@@ -152,28 +171,27 @@ impl WindowsPath {
     ///
     /// # Example
     /// ```rust
-    /// use quicksort_domain::value_objects::WindowsPath;
-    /// let base = WindowsPath::new("C:\\Users").unwrap();
+    /// use quicksort_domain::value_objects::AbsolutePath;
+    /// let base = AbsolutePath::new("C:\\Users").unwrap();
     /// let full = base.join("Documents");
     /// assert_eq!(full.to_string(), "C:\\Users\\Documents");
     /// ```
-    pub fn join(&self, component: impl AsRef<str>) -> WindowsPath {
+    pub fn join(&self, component: impl AsRef<str>) -> AbsolutePath {
         let joined = self.0.join(component.as_ref());
-        WindowsPath(joined)
+        AbsolutePath(joined)
     }
 
     /// Returns the drive letter portion (e.g., `"C:"` for `C:\folder`).
+    ///
+    /// Only available on Windows. On other platforms, this method does
+    /// not exist — use `root()` instead to get the root component.
+    #[cfg(target_os = "windows")]
     pub fn drive(&self) -> Option<String> {
         self.as_str().map(|s| s.chars().take(2).collect())
     }
 
-    // This method was taking characters until the first backslash, which is the
-    // drive/root component, not the short name.  Removing it because it was
-    // never used and its semantics are unclear.
-    // If a "short name" is needed later, it should be clearly defined.
-    // (Method removed – no replacement)
-
-    /// Returns the root component of the path (e.g., `"C:\\"` for `C:\folder\file`).
+    /// Returns the root component of the path (e.g., `"C:\\"` for
+    /// `C:\folder\file`, or `"/"` for `/home/user/file`).
     pub fn root(&self) -> Option<String> {
         self.0
             .components()
@@ -186,14 +204,14 @@ impl WindowsPath {
         self.extension().is_some()
     }
 
-    /// Checks whether the path refers to a directory (based on a trailing backslash).
+    /// Checks whether the path refers to a directory (based on a trailing separator).
     pub fn is_directory(&self) -> bool {
         self.as_str()
             .map(|s| s.ends_with('\\') || s.ends_with('/'))
             .unwrap_or(false)
     }
 
-    /// Checks whether the path is a drive root (e.g., `C:\`).
+    /// Checks whether the path is a root (e.g., `C:\` on Windows, `/` on Unix).
     /// A root path has no `Normal` components — only Prefix, RootDir, etc.
     pub fn is_root(&self) -> bool {
         use std::path::Component;
@@ -220,42 +238,51 @@ impl WindowsPath {
 // Trait implementations
 // ---------------------------------------------------------------------------
 
-impl fmt::Display for WindowsPath {
+impl fmt::Display for AbsolutePath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0.display())
     }
 }
 
-impl From<PathBuf> for WindowsPath {
-    /// Converts a `PathBuf` into a `WindowsPath` without validation.
+impl From<PathBuf> for AbsolutePath {
+    /// Converts a `PathBuf` into an `AbsolutePath` without validation.
     ///
     /// # Safety
     /// This bypasses all validation checks (empty, absolute, traversal).
     /// Only use with trusted data (e.g., internal domain operations).
-    /// For external/untrusted input, always use `WindowsPath::new()`.
+    /// For external/untrusted input, always use `AbsolutePath::new()`.
     fn from(path: PathBuf) -> Self {
         Self(path)
     }
 }
 
-impl AsRef<Path> for WindowsPath {
+impl AsRef<Path> for AbsolutePath {
     fn as_ref(&self) -> &Path {
         &self.0
     }
 }
 
-impl AsRef<PathBuf> for WindowsPath {
+impl AsRef<PathBuf> for AbsolutePath {
     fn as_ref(&self) -> &PathBuf {
         &self.0
     }
 }
 
-impl std::ops::Deref for WindowsPath {
+impl std::ops::Deref for AbsolutePath {
     type Target = PathBuf;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
+
+// ---------------------------------------------------------------------------
+// Backward compatibility type alias
+// ---------------------------------------------------------------------------
+
+/// Type alias for backward compatibility.
+///
+/// New code should use `AbsolutePath` directly.
+pub type WindowsPath = AbsolutePath;
 
 // ---------------------------------------------------------------------------
 // Legacy error type (kept for backward compatibility)
@@ -281,37 +308,29 @@ impl std::error::Error for PathConversionError {}
 mod tests {
     use super::*;
 
+    // -- Windows-style paths (still valid on Windows) --
+
     #[test]
     fn test_create_valid_drive_path() {
-        let path = WindowsPath::new("C:\\folder\\file.txt").unwrap();
+        let path = AbsolutePath::new("C:\\folder\\file.txt").unwrap();
         assert_eq!(path.to_string(), "C:\\folder\\file.txt");
     }
 
     #[test]
     fn test_create_unc_path() {
-        let path = WindowsPath::new("\\\\server\\share\\file.txt").unwrap();
+        let path = AbsolutePath::new("\\\\server\\share\\file.txt").unwrap();
         assert!(path.is_absolute());
     }
 
     #[test]
     fn test_reject_empty() {
-        assert!(matches!(WindowsPath::new(""), Err(DomainError::EmptyPath)));
+        assert!(matches!(AbsolutePath::new(""), Err(DomainError::EmptyPath)));
     }
 
     #[test]
     fn test_reject_relative() {
         assert!(matches!(
-            WindowsPath::new("folder\\file.txt"),
-            Err(DomainError::InvalidPath(_))
-        ));
-    }
-
-    #[test]
-    fn test_reject_drive_without_backslash() {
-        // "C:file" is technically a valid Windows path, but it's relative
-        // to the current directory on drive C.  We require absolute paths.
-        assert!(matches!(
-            WindowsPath::new("C:file.txt"),
+            AbsolutePath::new("folder\\file.txt"),
             Err(DomainError::InvalidPath(_))
         ));
     }
@@ -319,70 +338,129 @@ mod tests {
     #[test]
     fn test_reject_path_traversal() {
         assert!(matches!(
-            WindowsPath::new("C:\\folder\\..\\..\\Windows"),
+            AbsolutePath::new("C:\\folder\\..\\..\\Windows"),
             Err(DomainError::PathTraversalAttempt(_))
         ));
     }
 
     #[test]
     fn test_reject_path_traversal_encoded() {
-        // Even with forward slashes (normalised to backslashes)
+        // Even with forward slashes (normalised to backslashes on Windows)
         assert!(matches!(
-            WindowsPath::new("C:/folder/../Windows"),
+            AbsolutePath::new("C:/folder/../Windows"),
             Err(DomainError::PathTraversalAttempt(_))
         ));
     }
 
     #[test]
     fn test_normalise_forward_slashes() {
-        let path = WindowsPath::new("C:/folder/file.txt").unwrap();
+        let path = AbsolutePath::new("C:/folder/file.txt").unwrap();
         assert_eq!(path.to_string(), "C:\\folder\\file.txt");
     }
 
     #[test]
     fn test_file_name() {
-        let path = WindowsPath::new("C:\\folder\\file.txt").unwrap();
+        let path = AbsolutePath::new("C:\\folder\\file.txt").unwrap();
         assert_eq!(path.file_name(), Some("file.txt"));
     }
 
     #[test]
     fn test_extension() {
-        let path = WindowsPath::new("C:\\folder\\file.txt").unwrap();
+        let path = AbsolutePath::new("C:\\folder\\file.txt").unwrap();
         assert_eq!(path.extension(), Some("txt"));
     }
 
     #[test]
     fn test_parent() {
-        let path = WindowsPath::new("C:\\folder\\subfolder\\file.txt").unwrap();
+        let path = AbsolutePath::new("C:\\folder\\subfolder\\file.txt").unwrap();
         let parent = path.parent().unwrap();
         assert_eq!(parent.to_string(), "C:\\folder\\subfolder");
     }
 
     #[test]
     fn test_join() {
-        let path = WindowsPath::new("C:\\folder").unwrap();
+        let path = AbsolutePath::new("C:\\folder").unwrap();
         let joined = path.join("subfolder");
         assert_eq!(joined.to_string(), "C:\\folder\\subfolder");
     }
 
     #[test]
     fn test_is_root() {
-        let root = WindowsPath::new("C:\\").unwrap();
+        let root = AbsolutePath::new("C:\\").unwrap();
         assert!(root.is_root());
-        let not_root = WindowsPath::new("C:\\folder").unwrap();
+        let not_root = AbsolutePath::new("C:\\folder").unwrap();
         assert!(!not_root.is_root());
     }
 
     #[test]
     fn test_drive() {
-        let path = WindowsPath::new("D:\\folder\\file.txt").unwrap();
+        let path = AbsolutePath::new("D:\\folder\\file.txt").unwrap();
         assert_eq!(path.drive(), Some("D:".to_string()));
     }
 
     #[test]
     fn test_default_is_valid() {
-        let default_path = WindowsPath::default();
+        let default_path = AbsolutePath::default();
         assert!(default_path.is_absolute());
         assert!(!default_path.to_string().is_empty());
+    }
+
+    // -- Unix-style paths (valid on all platforms via Path::is_absolute) --
+
+    #[test]
+    fn test_create_valid_unix_path() {
+        let path = AbsolutePath::new("/home/user/documents").unwrap();
+        assert!(path.is_absolute());
+    }
+
+    #[test]
+    fn test_unix_root_is_root() {
+        let path = AbsolutePath::new("/").unwrap();
+        assert!(path.is_root());
+    }
+
+    #[test]
+    fn test_unix_file_name() {
+        let path = AbsolutePath::new("/home/user/file.txt").unwrap();
+        assert_eq!(path.file_name(), Some("file.txt"));
+    }
+
+    #[test]
+    fn test_unix_parent() {
+        let path = AbsolutePath::new("/home/user/file.txt").unwrap();
+        let parent = path.parent().unwrap();
+        assert_eq!(parent.to_string(), "/home/user");
+    }
+
+    #[test]
+    fn test_unix_join() {
+        let path = AbsolutePath::new("/home/user").unwrap();
+        let joined = path.join("documents");
+        assert_eq!(joined.to_string(), "/home/user/documents");
+    }
+
+    #[test]
+    fn test_unix_reject_relative() {
+        assert!(matches!(
+            AbsolutePath::new("home/user/file.txt"),
+            Err(DomainError::InvalidPath(_))
+        ));
+    }
+
+    #[test]
+    fn test_unix_reject_path_traversal() {
+        assert!(matches!(
+            AbsolutePath::new("/home/user/../../etc/passwd"),
+            Err(DomainError::PathTraversalAttempt(_))
+        ));
+    }
+
+    // -- Backward compatibility --
+
+    #[test]
+    fn test_windows_path_alias() {
+        let path = WindowsPath::new("C:\\folder\\file.txt").unwrap();
+        assert!(path.is_absolute());
+        assert_eq!(path.file_name(), Some("file.txt"));
     }
 }

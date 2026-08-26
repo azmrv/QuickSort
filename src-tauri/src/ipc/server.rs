@@ -19,9 +19,9 @@ use windows::Win32::System::Pipes::{
 };
 
 use quicksort_application::{
-    ApplicationFacadeImpl, DuplicateCheckMode, ExecuteOperation, FolderId, GetFolders,
-    OperationCommand, OperationType as DomainOpType, OverwritePolicy as AppOverwritePolicy,
-    WindowsPath,
+    AbsolutePath, ApplicationFacadeImpl, DuplicateCheckMode, ExecuteOperation, FolderId,
+    GetFolders, OperationCommand, OperationType as DomainOpType,
+    OverwritePolicy as AppOverwritePolicy,
 };
 use quicksort_ipc_contract::{
     CommandMessage, ExecuteOperationData, OperationType as IpcOpType,
@@ -77,10 +77,10 @@ fn convert_overwrite_policy(p: IpcOverwritePolicy) -> AppOverwritePolicy {
 }
 
 fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> {
-    let source_paths: Vec<WindowsPath> = data
+    let source_paths: Vec<AbsolutePath> = data
         .source_paths
         .iter()
-        .filter_map(|p| WindowsPath::new(p).ok())
+        .filter_map(|p| AbsolutePath::new(p).ok())
         .collect();
 
     if source_paths.is_empty() {

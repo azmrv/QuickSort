@@ -6,7 +6,7 @@
 //! Delete or Rename operation.
 //!
 //! # Design Decisions
-//! - Uses domain types (`OperationType`, `WindowsPath`, `FolderId`) directly
+//! - Uses domain types (`OperationType`, `AbsolutePath`, `FolderId`) directly
 //!   to avoid anemic DTOs and unnecessary mapping.  Per the Dependency Rule
 //!   (ADR-002), adapters depend on domain types via the Application Layer.
 //! - All fields are public but the struct is not `Copy` – this prevents
@@ -17,7 +17,7 @@
 //!   - Rename → `target_paths` is required, `target_folder_id` is `None`.
 //!   - Delete → both are `None`.
 
-use quicksort_domain::{DuplicateCheckMode, FolderId, OperationType, WindowsPath};
+use quicksort_domain::{AbsolutePath, DuplicateCheckMode, FolderId, OperationType};
 use serde::{Deserialize, Serialize};
 
 /// Command to execute a file operation.
@@ -41,7 +41,7 @@ pub struct OperationCommand {
 
     /// Absolute paths of the files or directories to operate on.
     /// Must contain at least one entry.
-    pub source_paths: Vec<WindowsPath>,
+    pub source_paths: Vec<AbsolutePath>,
 
     /// Target folder ID – used for Move/Copy operations where the
     /// destination is a container. Must be `Some` for Move/Copy,
@@ -51,7 +51,7 @@ pub struct OperationCommand {
     /// Explicit list of target paths – required for Rename operations.
     /// For Move/Copy this field must be `None`.
     /// When present, its length must match `source_paths`.
-    pub target_paths: Option<Vec<WindowsPath>>,
+    pub target_paths: Option<Vec<AbsolutePath>>,
 
     /// Conflict resolution strategy when a target file already exists.
     pub overwrite_policy: OverwritePolicy,
@@ -67,7 +67,7 @@ impl OperationCommand {
     /// # Panics (in debug builds)
     /// If `source_paths` is empty or `target_folder_id` is `None`.
     pub fn new_move(
-        source_paths: Vec<WindowsPath>,
+        source_paths: Vec<AbsolutePath>,
         target_folder_id: FolderId,
         policy: OverwritePolicy,
     ) -> Self {
@@ -84,7 +84,7 @@ impl OperationCommand {
 
     /// Creates a new Copy command.
     pub fn new_copy(
-        source_paths: Vec<WindowsPath>,
+        source_paths: Vec<AbsolutePath>,
         target_folder_id: FolderId,
         policy: OverwritePolicy,
     ) -> Self {
@@ -100,7 +100,7 @@ impl OperationCommand {
     }
 
     /// Creates a new Delete command.
-    pub fn new_delete(source_paths: Vec<WindowsPath>) -> Self {
+    pub fn new_delete(source_paths: Vec<AbsolutePath>) -> Self {
         debug_assert!(!source_paths.is_empty(), "source_paths must not be empty");
         Self {
             operation_type: OperationType::Delete,
@@ -117,8 +117,8 @@ impl OperationCommand {
     /// # Panics (in debug builds)
     /// If `source_paths` and `target_paths` have different lengths.
     pub fn new_rename(
-        source_paths: Vec<WindowsPath>,
-        target_paths: Vec<WindowsPath>,
+        source_paths: Vec<AbsolutePath>,
+        target_paths: Vec<AbsolutePath>,
         policy: OverwritePolicy,
     ) -> Self {
         debug_assert_eq!(

@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use chrono::Utc;
 
-use quicksort_domain::{OperationType, OperationState, WindowsPath};
+use quicksort_domain::{OperationType, OperationState, AbsolutePath};
 use quicksort_application::{
     ExecuteOperation, OperationCommand, OverwritePolicy, UseCaseError,
     use_cases::ExecuteOperationUseCase,
@@ -19,9 +19,9 @@ use crate::mocks::*;
 // Helper functions for this test module
 // ============================================================================
 
-/// Creates a `WindowsPath` from a string for test purposes.
-fn wp(path: &str) -> WindowsPath {
-    WindowsPath::new(path).expect("Invalid test path")
+/// Creates a `AbsolutePath` from a string for test purposes.
+fn wp(path: &str) -> AbsolutePath {
+    AbsolutePath::new(path).expect("Invalid test path")
 }
 
 // ============================================================================

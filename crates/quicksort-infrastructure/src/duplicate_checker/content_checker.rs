@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use quicksort_domain::{
-    DomainError, DuplicateCheckMode, DuplicateCheckResult, DuplicateChecker, WindowsPath,
+    AbsolutePath, DomainError, DuplicateCheckMode, DuplicateCheckResult, DuplicateChecker,
 };
 use sha2::{Digest, Sha256};
 use tokio::fs::File;
@@ -13,7 +13,7 @@ pub struct ContentChecker;
 
 impl ContentChecker {
     /// Calculate SHA-256 hash of a file.
-    async fn hash_file(path: &WindowsPath) -> Result<Vec<u8>, DomainError> {
+    async fn hash_file(path: &AbsolutePath) -> Result<Vec<u8>, DomainError> {
         let mut file = File::open(path.to_path_buf())
             .await
             .map_err(|e| DomainError::InvalidPath(e.to_string()))?;
@@ -42,8 +42,8 @@ impl ContentChecker {
 impl DuplicateChecker for ContentChecker {
     async fn check(
         &self,
-        source: &WindowsPath,
-        destination: &WindowsPath,
+        source: &AbsolutePath,
+        destination: &AbsolutePath,
         mode: &DuplicateCheckMode,
     ) -> Result<DuplicateCheckResult, DomainError> {
         // Only check if mode is Content
@@ -92,8 +92,8 @@ mod tests {
     #[tokio::test]
     async fn test_no_duplicate_when_file_not_exists() {
         let dir = tempdir().unwrap();
-        let source = WindowsPath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
-        let dest = WindowsPath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
+        let source = AbsolutePath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
+        let dest = AbsolutePath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
 
         let checker = ContentChecker;
         let result = checker
@@ -107,8 +107,8 @@ mod tests {
     #[tokio::test]
     async fn test_duplicate_when_same_content() {
         let dir = tempdir().unwrap();
-        let source = WindowsPath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
-        let dest = WindowsPath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
+        let source = AbsolutePath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
+        let dest = AbsolutePath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
 
         // Create both files with same content
         tokio::fs::write(source.to_path_buf(), "hello world")
@@ -130,8 +130,8 @@ mod tests {
     #[tokio::test]
     async fn test_no_duplicate_when_different_content() {
         let dir = tempdir().unwrap();
-        let source = WindowsPath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
-        let dest = WindowsPath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
+        let source = AbsolutePath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
+        let dest = AbsolutePath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
 
         // Create files with different content
         tokio::fs::write(source.to_path_buf(), "hello")

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use quicksort_application::errors::UseCaseError;
 use quicksort_application::ports::outbound::ConfigurationRepository;
-use quicksort_domain::{Folder, FolderId, WindowsPath};
+use quicksort_domain::{AbsolutePath, Folder, FolderId};
 
 #[derive(Serialize, Deserialize)]
 struct ConfigFile {
@@ -53,7 +53,7 @@ impl JsonConfigurationRepository {
         // Convert each folder data to domain Folder, handling potential path validation errors.
         let mut folders = Vec::with_capacity(config.folders.len());
         for f in config.folders {
-            let path = WindowsPath::new(&f.path)
+            let path = AbsolutePath::new(&f.path)
                 .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
             let id = FolderId::from_string(&f.id)
                 .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
@@ -127,7 +127,7 @@ impl ConfigurationRepository for JsonConfigurationRepository {
     /// If not found, creates a new FolderId for it.
     async fn get_default_folder_id(&self) -> Result<FolderId, UseCaseError> {
         // Look for an existing "Documents" folder by path
-        let documents_path = WindowsPath::new("C:\\Users\\Public\\Documents")
+        let documents_path = AbsolutePath::new("C:\\Users\\Public\\Documents")
             .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
 
         if let Some(folder) = self.find_by_path(&documents_path.to_string()).await? {

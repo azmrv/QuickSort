@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use quicksort_domain::{
-    DomainError, DuplicateCheckMode, DuplicateCheckResult, DuplicateChecker, WindowsPath,
+    AbsolutePath, DomainError, DuplicateCheckMode, DuplicateCheckResult, DuplicateChecker,
 };
 
 /// Checks for duplicates by file name and size.
@@ -12,8 +12,8 @@ pub struct SizeChecker;
 impl DuplicateChecker for SizeChecker {
     async fn check(
         &self,
-        source: &WindowsPath,
-        destination: &WindowsPath,
+        source: &AbsolutePath,
+        destination: &AbsolutePath,
         mode: &DuplicateCheckMode,
     ) -> Result<DuplicateCheckResult, DomainError> {
         // Only check if mode is Size
@@ -72,8 +72,8 @@ mod tests {
     #[tokio::test]
     async fn test_no_duplicate_when_file_not_exists() {
         let dir = tempdir().unwrap();
-        let source = WindowsPath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
-        let dest = WindowsPath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
+        let source = AbsolutePath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
+        let dest = AbsolutePath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
 
         let checker = SizeChecker;
         let result = checker
@@ -87,8 +87,8 @@ mod tests {
     #[tokio::test]
     async fn test_duplicate_when_same_size() {
         let dir = tempdir().unwrap();
-        let source = WindowsPath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
-        let dest = WindowsPath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
+        let source = AbsolutePath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
+        let dest = AbsolutePath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
 
         // Create both files with same content
         tokio::fs::write(source.to_path_buf(), "hello")
@@ -108,8 +108,8 @@ mod tests {
     #[tokio::test]
     async fn test_no_duplicate_when_different_size() {
         let dir = tempdir().unwrap();
-        let source = WindowsPath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
-        let dest = WindowsPath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
+        let source = AbsolutePath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
+        let dest = AbsolutePath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
 
         // Create files with different content
         tokio::fs::write(source.to_path_buf(), "hello")

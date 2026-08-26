@@ -7,7 +7,7 @@
 
 use crate::{
     errors::DomainError,
-    value_objects::{FolderId, WindowsPath},
+    value_objects::{AbsolutePath, FolderId},
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -26,8 +26,8 @@ pub struct FolderStats {
 /// # Examples
 /// ```rust
 /// use quicksort_domain::entities::Folder;
-/// use quicksort_domain::value_objects::WindowsPath;
-/// let folder = Folder::new("Documents", WindowsPath::new("C:\\Users\\Me\\Documents").unwrap()).unwrap();
+/// use quicksort_domain::value_objects::AbsolutePath;
+/// let folder = Folder::new("Documents", AbsolutePath::new("C:\\Users\\Me\\Documents").unwrap()).unwrap();
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Folder {
@@ -36,7 +36,7 @@ pub struct Folder {
     /// Display name shown in the context menu and UI.
     pub name: String,
     /// Absolute path to the folder.
-    pub path: WindowsPath,
+    pub path: AbsolutePath,
     /// Whether this folder appears as a favorite in the context menu.
     #[serde(default)]
     pub favorite: bool,
@@ -65,7 +65,7 @@ impl Folder {
     /// # Errors
     /// Returns `DomainError::InvalidFolderName` if name is empty or contains
     /// forbidden characters (`\`, `/`, `:`, `*`, `?`, `"`, `<`, `>`, `|`).
-    pub fn new(name: impl Into<String>, path: WindowsPath) -> Result<Self, DomainError> {
+    pub fn new(name: impl Into<String>, path: AbsolutePath) -> Result<Self, DomainError> {
         let name_str = name.into();
         Self::validate_name(&name_str)?;
         let now = Utc::now();
@@ -83,7 +83,7 @@ impl Folder {
     }
 
     /// Creates a new folder with an explicit ID (useful for testing or importing).
-    pub fn with_id(id: FolderId, name: impl Into<String>, path: WindowsPath) -> Self {
+    pub fn with_id(id: FolderId, name: impl Into<String>, path: AbsolutePath) -> Self {
         let now = Utc::now();
         Self {
             id,
@@ -119,7 +119,7 @@ impl Folder {
     /// # Errors
     /// Returns `DomainError::IllegalDirectoryTarget` if the path is a root
     /// directory (e.g., `C:\`), which is too broad for a target folder.
-    pub fn update_path(&mut self, new_path: WindowsPath) -> Result<(), DomainError> {
+    pub fn update_path(&mut self, new_path: AbsolutePath) -> Result<(), DomainError> {
         if new_path.is_root() {
             return Err(DomainError::IllegalDirectoryTarget);
         }
@@ -199,8 +199,8 @@ impl Folder {
 mod tests {
     use super::*;
 
-    fn test_path(path: &str) -> WindowsPath {
-        WindowsPath::new(path).unwrap()
+    fn test_path(path: &str) -> AbsolutePath {
+        AbsolutePath::new(path).unwrap()
     }
 
     #[test]
@@ -254,7 +254,7 @@ mod tests {
     #[test]
     fn test_update_path_root_fails() {
         let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
-        let result = f.update_path(WindowsPath::new("C:\\").unwrap());
+        let result = f.update_path(AbsolutePath::new("C:\\").unwrap());
         assert!(matches!(result, Err(DomainError::IllegalDirectoryTarget)));
     }
 

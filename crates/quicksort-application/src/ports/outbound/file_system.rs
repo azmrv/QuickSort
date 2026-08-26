@@ -5,13 +5,13 @@
 //! It is used by `ExecuteOperationUseCase` and `UndoOperationUseCase`.
 //!
 //! # Design Decision
-//! The port uses `quicksort_domain::WindowsPath` instead of `std::path::Path`
+//! The port uses `quicksort_domain::AbsolutePath` instead of `std::path::Path`
 //! to ensure that only validated domain paths are accepted. This prevents
 //! malformed or unsafe paths from reaching the file system adapter.
 
 use crate::errors::UseCaseError;
 use async_trait::async_trait;
-use quicksort_domain::WindowsPath;
+use quicksort_domain::AbsolutePath;
 
 /// Port for performing file operations on the local file system.
 ///
@@ -27,7 +27,7 @@ pub trait FileSystem: Send + Sync {
     /// # Errors
     /// Returns `FileSystemError` if the check fails (e.g., permission denied
     /// while traversing a parent directory).
-    async fn exists(&self, path: &WindowsPath) -> Result<bool, UseCaseError>;
+    async fn exists(&self, path: &AbsolutePath) -> Result<bool, UseCaseError>;
 
     /// Returns the size of a file in bytes.
     ///
@@ -35,7 +35,7 @@ pub trait FileSystem: Send + Sync {
     /// Returns `FileNotFound` if the path does not exist or is a directory.
     /// Returns `FileSystemError` if metadata retrieval fails.
     // English comment as per project standards
-    async fn get_file_size(&self, path: &WindowsPath) -> Result<u64, UseCaseError>;
+    async fn get_file_size(&self, path: &AbsolutePath) -> Result<u64, UseCaseError>;
 
     /// Moves a file from `from` to `to`.
     ///
@@ -52,7 +52,7 @@ pub trait FileSystem: Send + Sync {
     /// Returns `PermissionDenied` if access is restricted.
     /// Returns `Conflict` if the destination exists and the operation
     /// is not configured to overwrite.
-    async fn move_file(&self, from: &WindowsPath, to: &WindowsPath) -> Result<u64, UseCaseError>;
+    async fn move_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
 
     /// Copies a file from `from` to `to`, returning the file size in bytes.
     ///
@@ -62,7 +62,7 @@ pub trait FileSystem: Send + Sync {
     /// # Errors
     /// Returns `FileNotFound` if the source does not exist.
     /// Returns `FileSystemError` on I/O failure (disk full, etc.).
-    async fn copy_file(&self, from: &WindowsPath, to: &WindowsPath) -> Result<u64, UseCaseError>;
+    async fn copy_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
 
     /// Deletes a file at the given path.
     ///
@@ -75,7 +75,7 @@ pub trait FileSystem: Send + Sync {
     /// # Errors
     /// Returns `FileNotFound` if the path does not exist.
     /// Returns `PermissionDenied` if the file cannot be removed.
-    async fn delete_file(&self, path: &WindowsPath) -> Result<(), UseCaseError>;
+    async fn delete_file(&self, path: &AbsolutePath) -> Result<(), UseCaseError>;
 
     /// Renames a file or directory from `from` to `to`.
     ///
@@ -87,5 +87,6 @@ pub trait FileSystem: Send + Sync {
     /// # Errors
     /// Returns `FileNotFound` if the source does not exist.
     /// Returns `PermissionDenied` if access is restricted.
-    async fn rename_file(&self, from: &WindowsPath, to: &WindowsPath) -> Result<(), UseCaseError>;
+    async fn rename_file(&self, from: &AbsolutePath, to: &AbsolutePath)
+        -> Result<(), UseCaseError>;
 }

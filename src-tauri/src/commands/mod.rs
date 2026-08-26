@@ -1,8 +1,8 @@
 use crate::state::AppState;
 use quicksort_application::{
-    ExecuteOperation, Folder, FolderId, GetFolders, GetOperationHistory, LoadSettings,
-    ManageFolders, OperationId, PluginConfig, PluginInfoDto, PluginManager, SaveSettings, Settings,
-    UndoOperation, WindowsPath,
+    AbsolutePath, ExecuteOperation, Folder, FolderId, GetFolders, GetOperationHistory,
+    LoadSettings, ManageFolders, OperationId, PluginConfig, PluginInfoDto, PluginManager,
+    SaveSettings, Settings, UndoOperation,
 };
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
@@ -25,7 +25,7 @@ pub async fn add_folder_v2(
     path: String,
 ) -> Result<(), String> {
     tracing::info!(command = "add_folder_v2", name = %name, path = %path, "handling");
-    let windows_path = WindowsPath::new(&path).map_err(|e| {
+    let windows_path = AbsolutePath::new(&path).map_err(|e| {
         tracing::error!(command = "add_folder_v2", error = %e, "invalid path");
         format!("Invalid path: {}", e)
     })?;

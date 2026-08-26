@@ -11,6 +11,7 @@ mod search_query;
 mod windows_path;
 
 pub use self::search_query::{DateFilter, SearchFilter, SearchQuery, SizeOp};
+pub use self::windows_path::AbsolutePath;
 pub use self::windows_path::WindowsPath;
 
 // ============================================================================
@@ -153,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_windows_path() {
-        let Ok(p) = WindowsPath::new("C:\\Folder") else {
+        let Ok(p) = AbsolutePath::new("C:\\Folder") else {
             return;
         };
         assert_eq!(p.as_str(), Some("C:\\Folder"));
@@ -162,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_windows_path_unc() {
-        let Ok(p) = WindowsPath::new("\\\\server\\share") else {
+        let Ok(p) = AbsolutePath::new("\\\\server\\share") else {
             return;
         };
         assert_eq!(p.as_str(), Some("\\\\server\\share"));
@@ -171,8 +172,9 @@ mod tests {
 
     #[test]
     fn test_windows_path_invalid() {
-        assert!(WindowsPath::new("").is_err());
-        assert!(WindowsPath::new("folder").is_err());
-        assert!(WindowsPath::new("C:folder").is_err());
+        assert!(AbsolutePath::new("").is_err());
+        assert!(AbsolutePath::new("folder").is_err());
+        assert!(AbsolutePath::new("").is_err());
+        assert!(AbsolutePath::new("folder").is_err());
     }
 }

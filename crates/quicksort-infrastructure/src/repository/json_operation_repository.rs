@@ -93,11 +93,11 @@ impl OperationRepository for JsonOperationRepository {
 mod tests {
     use super::*;
     use chrono::Utc;
-    use quicksort_domain::{OperationState, WindowsPath};
+    use quicksort_domain::{AbsolutePath, OperationState};
     use tempfile::tempdir;
 
-    fn test_path(path: &str) -> WindowsPath {
-        WindowsPath::new(path).unwrap()
+    fn test_path(path: &str) -> AbsolutePath {
+        AbsolutePath::new(path).unwrap()
     }
 
     #[tokio::test]

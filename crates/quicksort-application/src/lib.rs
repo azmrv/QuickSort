@@ -67,9 +67,9 @@ pub use use_cases::SearchFiles;
 // without violating the Dependency Rule (adapters depend on Application,
 // which depends on Domain).
 pub use quicksort_domain::{
-    DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, DuplicateCheckMode, Folder,
-    FolderId, Locale, Operation, OperationId, OperationType, PluginConfig, SearchQuery, Settings,
-    ThemeMode, WindowsPath,
+    AbsolutePath, DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig,
+    DuplicateCheckMode, Folder, FolderId, Locale, Operation, OperationId, OperationType,
+    PluginConfig, SearchQuery, Settings, ThemeMode, WindowsPath,
 };
 
 // Pipeline is intentionally NOT re-exported – it is an internal mechanism

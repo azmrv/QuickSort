@@ -103,10 +103,10 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use chrono::Utc;
-    use quicksort_domain::value_objects::WindowsPath;
+    use quicksort_domain::value_objects::AbsolutePath;
 
-    fn test_path(path: &str) -> WindowsPath {
-        WindowsPath::new(path).unwrap()
+    fn test_path(path: &str) -> AbsolutePath {
+        AbsolutePath::new(path).unwrap()
     }
 
     #[test]
