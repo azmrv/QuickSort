@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { invoke } from '../lib/invoke';
 import { logger } from '../lib/logger';
 import { listen } from '@tauri-apps/api/event';
+import { useTranslation } from '../i18n/useTranslation';
 
 const StatusIndicator: React.FC = () => {
+    const { t } = useTranslation();
     const [active, setActive] = useState(false);
 
     useEffect(() => {
@@ -30,9 +32,9 @@ const StatusIndicator: React.FC = () => {
     return (
         <div className="status-bar">
             <div className={`status-dot ${active ? '' : 'error'}`}></div>
-            <span>Контекстное меню:</span>
+            <span>{t('status.context_menu')}</span>
             <span style={{ color: active ? 'var(--qs-success)' : 'var(--qs-danger)' }}>
-                {active ? 'Активно' : 'Неактивно'}
+                {active ? t('status.active') : t('status.inactive')}
             </span>
         </div>
     );

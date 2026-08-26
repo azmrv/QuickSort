@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { logger } from '../lib/logger';
 import { App } from 'antd';
 import { listen } from '@tauri-apps/api/event';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface BackendLog {
     timestamp: string;
@@ -25,6 +26,7 @@ const LEVEL_COLORS: Record<string, string> = {
 };
 
 const LogPage = () => {
+    const { t } = useTranslation();
     const [backendLogs, setBackendLogs] = useState<BackendLog[]>([]);
     const [frontendLogs, setFrontendLogs] = useState(logger.getLogs());
     const [filter, setFilter] = useState<LogLevel>('ALL');
@@ -75,14 +77,14 @@ const LogPage = () => {
             `[${l.timestamp}] [${l.level}] [${l.source}] ${l.message}`
         ).join('\n');
         await navigator.clipboard.writeText(text);
-        message.success(`Скопировано ${allLogs.length} записей`);
+        message.success(t('log.copy_success', { count: allLogs.length }));
     };
 
     return (
         <div className="log-page">
             <div className="log-toolbar">
                 <select value={filter} onChange={(e) => setFilter(e.target.value as LogLevel)}>
-                    <option value="ALL">Все уровни</option>
+                    <option value="ALL">{t('log.all_levels')}</option>
                     <option value="ERROR">ERROR+</option>
                     <option value="WARN">WARN+</option>
                     <option value="INFO">INFO+</option>
@@ -101,13 +103,13 @@ const LogPage = () => {
                 <span className="log-count">{allLogs.length}</span>
 
                 <button className="log-copy-btn" onClick={handleCopyAll}>
-                    Копировать всё
+                    {t('log.copy_all')}
                 </button>
             </div>
 
             <div className="log-list" ref={listRef}>
                 {allLogs.length === 0 ? (
-                    <div className="log-empty">Нет записей</div>
+                    <div className="log-empty">{t('log.empty')}</div>
                 ) : (
                     allLogs.map((log, i) => (
                         <div key={i} className="log-entry">

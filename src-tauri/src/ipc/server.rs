@@ -19,8 +19,9 @@ use windows::Win32::System::Pipes::{
 };
 
 use quicksort_application::{
-    ApplicationFacadeImpl, DuplicateCheckMode, ExecuteOperation, FolderId, OperationCommand,
-    OperationType as DomainOpType, OverwritePolicy as AppOverwritePolicy, WindowsPath,
+    ApplicationFacadeImpl, DuplicateCheckMode, ExecuteOperation, FolderId, GetFolders,
+    OperationCommand, OperationType as DomainOpType, OverwritePolicy as AppOverwritePolicy,
+    WindowsPath,
 };
 use quicksort_ipc_contract::{
     CommandMessage, ExecuteOperationData, OperationType as IpcOpType,
@@ -100,6 +101,19 @@ fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> 
     })
 }
 
+/// Resolves a raw `target_folder_path` to a registered folder ID.
+///
+/// Called when `target_folder_id` is `None` but `target_folder_path` is
+/// `Some` — the DLL sends a raw path (e.g. from the "ChoosePath" dialog)
+/// and the server must find the matching registered folder.
+async fn resolve_target_folder_path(
+    path: &str,
+    facade: &ApplicationFacadeImpl,
+) -> Option<FolderId> {
+    let folders = facade.get_all().await.ok()?;
+    folders.iter().find(|f| f.path.to_string() == path).map(|f| f.id.clone())
+}
+
 // ---------------------------------------------------------------------------
 // SelectFolder handler
 // ---------------------------------------------------------------------------
@@ -107,12 +121,12 @@ fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> 
 /// Payload for the `pending-file` Tauri event.
 #[derive(Clone, serde::Serialize)]
 struct PendingFilePayload {
-    file: String,
+    files: Vec<String>,
 }
 
 /// Handles a `SelectFolder` command from the DLL.
 ///
-/// Sets the first source file as pending, shows/focuses the main window,
+/// Stores all source file paths as pending, shows/focuses the main window,
 /// and emits a `pending-file` event so the frontend displays the SelectorPage.
 fn handle_select_folder(data: SelectFolderData) -> ResponseMessage {
     if data.source_paths.is_empty() {
@@ -124,9 +138,8 @@ fn handle_select_folder(data: SelectFolderData) -> ResponseMessage {
         };
     }
 
-    // Store the first file path for the frontend.
-    let first_file = &data.source_paths[0];
-    crate::pending::set_pending_file(first_file.clone());
+    // Store all file paths for the frontend.
+    crate::pending::set_pending_files(data.source_paths.clone());
 
     match crate::ipc::get_app_handle() {
         Some(app) => {
@@ -140,12 +153,11 @@ fn handle_select_folder(data: SelectFolderData) -> ResponseMessage {
             let _ = app.emit(
                 "pending-file",
                 PendingFilePayload {
-                    file: first_file.clone(),
+                    files: data.source_paths.clone(),
                 },
             );
 
             tracing::info!(
-                file = %first_file,
                 total_files = data.source_paths.len(),
                 "SelectFolder: window shown, event emitted"
             );
@@ -251,45 +263,90 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                 CommandMessage::ExecuteOperation(data) => {
                     tracing::info!("Received ExecuteOperation: {:?}", data);
 
-                    let response = match convert_execute_data(data) {
-                        Some(command) => match rt.block_on(facade.execute(command)) {
-                            Ok(result) => {
-                                let op_id = result.operation_id.to_string();
-                                let processed = result.processed_files;
-                                tracing::info!(
-                                    "ExecuteOperation OK: op_id={}, files={}, bytes={}",
-                                    op_id,
-                                    processed,
-                                    result.bytes_moved
-                                );
-                                ResponseMessage {
-                                    status: ResponseStatus::Ok,
-                                    message: format!("Processed {} files", processed),
-                                    operation_id: Some(op_id),
-                                    data: None,
+                    // Resolve target_folder_path to a registered folder ID
+                    // when target_folder_id is not provided.
+                    let mut data = data;
+                    let mut early_response: Option<ResponseMessage> = None;
+
+                    if data.target_folder_id.is_none() {
+                        if let Some(ref path) = data.target_folder_path.clone() {
+                            match rt.block_on(resolve_target_folder_path(path, &facade)) {
+                                Some(folder_id) => {
+                                    tracing::info!(
+                                        "Resolved target_folder_path '{}' to folder ID '{}'",
+                                        path,
+                                        folder_id
+                                    );
+                                    data.target_folder_id = Some(folder_id.to_string());
+                                }
+                                None => {
+                                    tracing::error!(
+                                        "Target folder path '{}' not found in registered folders",
+                                        path
+                                    );
+                                    early_response = Some(ResponseMessage {
+                                        status: ResponseStatus::Error,
+                                        message: format!("Target folder not found: {}", path),
+                                        operation_id: None,
+                                        data: None,
+                                    });
                                 }
                             }
-                            Err(e) => {
-                                tracing::error!("ExecuteOperation FAIL: {}", e);
-                                ResponseMessage {
-                                    status: ResponseStatus::Error,
-                                    message: e.to_string(),
-                                    operation_id: None,
-                                    data: None,
-                                }
-                            }
-                        },
-                        None => {
-                            tracing::error!("ExecuteOperation FAIL: no valid source paths");
-                            ResponseMessage {
+                        } else {
+                            early_response = Some(ResponseMessage {
                                 status: ResponseStatus::Error,
-                                message: "Invalid command: no valid source paths".to_string(),
+                                message: "Move/Copy requires target_folder_id or target_folder_path"
+                                    .to_string(),
                                 operation_id: None,
                                 data: None,
-                            }
+                            });
                         }
-                    };
-                    response
+                    }
+
+                    match early_response {
+                        Some(resp) => resp,
+                        None => {
+                            let response = match convert_execute_data(data) {
+                                Some(command) => match rt.block_on(facade.execute(command)) {
+                                    Ok(result) => {
+                                        let op_id = result.operation_id.to_string();
+                                        let processed = result.processed_files;
+                                        tracing::info!(
+                                            "ExecuteOperation OK: op_id={}, files={}, bytes={}",
+                                            op_id,
+                                            processed,
+                                            result.bytes_moved
+                                        );
+                                        ResponseMessage {
+                                            status: ResponseStatus::Ok,
+                                            message: format!("Processed {} files", processed),
+                                            operation_id: Some(op_id),
+                                            data: None,
+                                        }
+                                    }
+                                    Err(e) => {
+                                        tracing::error!("ExecuteOperation FAIL: {}", e);
+                                        ResponseMessage {
+                                            status: ResponseStatus::Error,
+                                            message: e.to_string(),
+                                            operation_id: None,
+                                            data: None,
+                                        }
+                                    }
+                                },
+                                None => {
+                                    tracing::error!("ExecuteOperation FAIL: no valid source paths");
+                                    ResponseMessage {
+                                        status: ResponseStatus::Error,
+                                        message: "Invalid command: no valid source paths".to_string(),
+                                        operation_id: None,
+                                        data: None,
+                                    }
+                                }
+                            };
+                            response
+                        }
+                    }
                 }
                 CommandMessage::Ping => ResponseMessage {
                     status: ResponseStatus::Ok,

@@ -47,6 +47,27 @@ pub fn move_to_folder(
         operation_type: OperationType::Move,
         source_paths: sources,
         target_folder_id: Some(target_folder_id),
+        target_folder_path: None,
+        overwrite_policy,
+    });
+    send_command(&cmd)
+}
+
+/// Sends a Move command to the server using a raw filesystem path as target.
+///
+/// Used by the "ChoosePath" handler where the user picks an arbitrary folder
+/// via `SHBrowseForFolderW`.  The server resolves the path to a registered
+/// folder and records the operation in history.
+pub fn move_to_path(
+    sources: Vec<String>,
+    target_path: String,
+    overwrite_policy: OverwritePolicy,
+) -> Result<ResponseMessage, PipeError> {
+    let cmd = CommandMessage::ExecuteOperation(ExecuteOperationData {
+        operation_type: OperationType::Move,
+        source_paths: sources,
+        target_folder_id: None,
+        target_folder_path: Some(target_path),
         overwrite_policy,
     });
     send_command(&cmd)

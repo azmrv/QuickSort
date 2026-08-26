@@ -2,6 +2,7 @@ import { useState, useEffect, type CSSProperties, type ReactNode } from 'react';
 import { invoke } from '../lib/invoke';
 import { message, Modal, Button } from 'antd';
 import { PoweroffOutlined } from '@ant-design/icons';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface Person {
     name: string;
@@ -103,13 +104,13 @@ const tagTextStyle: CSSProperties = {
     color: 'var(--qs-text-muted)',
 };
 
-const ChipLink = ({ href, children }: { href: string; children: ReactNode }) => (
+const ChipLink = ({ href, children, linkCopiedText }: { href: string; children: ReactNode; linkCopiedText: string }) => (
     <a
         href={href}
         onClick={(e) => {
             e.preventDefault();
             navigator.clipboard.writeText(href).then(() => {
-                message.success('Ссылка скопирована');
+                message.success(linkCopiedText);
             });
         }}
         style={chipLinkStyle}
@@ -126,7 +127,7 @@ const ChipLink = ({ href, children }: { href: string; children: ReactNode }) => 
     </a>
 );
 
-const PersonRow = ({ person }: { person: Person }) => (
+const PersonRow = ({ person, linkCopiedText }: { person: Person; linkCopiedText: string }) => (
     <div
         style={{
             ...cardStyle,
@@ -143,7 +144,7 @@ const PersonRow = ({ person }: { person: Person }) => (
                     onClick={(e) => {
                         e.preventDefault();
                         navigator.clipboard.writeText(person.url!).then(() => {
-                            message.success('Ссылка скопирована');
+                            message.success(linkCopiedText);
                         });
                     }}
                     style={textLinkStyle}
@@ -159,6 +160,7 @@ const PersonRow = ({ person }: { person: Person }) => (
 );
 
 const AboutPage = () => {
+    const { t } = useTranslation();
     const [metadata, setMetadata] = useState<AppMetadata | null>(null);
     const [showDependencies, setShowDependencies] = useState(false);
 
@@ -178,7 +180,7 @@ const AboutPage = () => {
                 fontSize: '13px',
                 color: 'var(--qs-text-muted)',
             }}>
-                Загрузка...
+                {t('about.loading')}
             </div>
         );
     }
@@ -246,16 +248,16 @@ const AboutPage = () => {
                     marginTop: 'var(--qs-space-lg)',
                 }}>
                     {metadata.repository && (
-                        <ChipLink href={metadata.repository}>Репозиторий</ChipLink>
+                        <ChipLink href={metadata.repository} linkCopiedText={t('about.link_copied')}>{t('about.repository')}</ChipLink>
                     )}
                     {metadata.homepage && (
-                        <ChipLink href={metadata.homepage}>Сайт</ChipLink>
+                        <ChipLink href={metadata.homepage} linkCopiedText={t('about.link_copied')}>{t('about.website')}</ChipLink>
                     )}
                 </div>
             )}
 
             <section style={sectionStyle}>
-                <div style={sectionTitleStyle}>Лицензия</div>
+                <div style={sectionTitleStyle}>{t('about.license')}</div>
                 <div style={{
                     ...cardStyle,
                     fontFamily: 'var(--qs-font-mono)',
@@ -268,12 +270,13 @@ const AboutPage = () => {
 
             {(metadata.authors.length > 0 || metadata.contributors.length > 0) && (
                 <section style={sectionStyle}>
-                    <div style={sectionTitleStyle}>Авторы</div>
+                    <div style={sectionTitleStyle}>{t('about.authors')}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--qs-space-sm)' }}>
                         {metadata.authors.map((person) => (
                             <PersonRow
                                 key={`${person.name}-${person.role}`}
                                 person={person}
+                                linkCopiedText={t('about.link_copied')}
                             />
                         ))}
                     </div>
@@ -283,13 +286,14 @@ const AboutPage = () => {
                                 ...sectionTitleStyle,
                                 margin: 'var(--qs-space-lg) 0 var(--qs-space-sm)',
                             }}>
-                                Контрибьюторы
+                                {t('about.contributors')}
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--qs-space-sm)' }}>
                                 {metadata.contributors.map((person) => (
                                     <PersonRow
                                         key={`${person.name}-${person.role}`}
                                         person={person}
+                                        linkCopiedText={t('about.link_copied')}
                                     />
                                 ))}
                             </div>
@@ -300,7 +304,7 @@ const AboutPage = () => {
 
             {metadata.credits.length > 0 && (
                 <section style={sectionStyle}>
-                    <div style={sectionTitleStyle}>Благодарности</div>
+                    <div style={sectionTitleStyle}>{t('about.credits')}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--qs-space-sm)' }}>
                         {metadata.credits.map((credit) => (
                             <div key={credit.name} style={cardStyle}>
@@ -310,7 +314,7 @@ const AboutPage = () => {
                                         onClick={(e) => {
                                             e.preventDefault();
                                             navigator.clipboard.writeText(credit.url).then(() => {
-                                                message.success('Ссылка скопирована');
+                                                message.success(t('about.link_copied'));
                                             });
                                         }}
                                         style={{ ...textLinkStyle, fontWeight: 500 }}
@@ -333,14 +337,14 @@ const AboutPage = () => {
 
             {metadata.donation_links.length > 0 && (
                 <section style={sectionStyle}>
-                    <div style={sectionTitleStyle}>Поддержать проект</div>
+                    <div style={sectionTitleStyle}>{t('about.support')}</div>
                     <div style={{
                         display: 'flex',
                         gap: 'var(--qs-space-md)',
                         flexWrap: 'wrap',
                     }}>
                         {metadata.donation_links.map((link) => (
-                            <ChipLink key={link.platform} href={link.url}>
+                            <ChipLink key={link.platform} href={link.url} linkCopiedText={t('about.link_copied')}>
                                 {link.label}
                             </ChipLink>
                         ))}
@@ -349,7 +353,7 @@ const AboutPage = () => {
             )}
 
             <section style={sectionStyle}>
-                <div style={sectionTitleStyle}>Обратная связь</div>
+                <div style={sectionTitleStyle}>{t('about.feedback')}</div>
                 <div style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -363,7 +367,7 @@ const AboutPage = () => {
                                     onClick={(e) => {
                                         e.preventDefault();
                                         navigator.clipboard.writeText(metadata.issues).then(() => {
-                                            message.success('Ссылка скопирована');
+                                            message.success(t('about.link_copied'));
                                         });
                                     }}
                                     style={{ ...textLinkStyle, fontWeight: 500 }}
@@ -376,7 +380,7 @@ const AboutPage = () => {
                                 fontSize: '12px',
                                 lineHeight: 1.5,
                             }}>
-                                Сообщения о багах и предложения по улучшению
+                                {t('about.bugs_description')}
                             </div>
                         </div>
                     )}
@@ -388,7 +392,7 @@ const AboutPage = () => {
                                     onClick={(e) => {
                                         e.preventDefault();
                                         navigator.clipboard.writeText(metadata.discussions).then(() => {
-                                            message.success('Ссылка скопирована');
+                                            message.success(t('about.link_copied'));
                                         });
                                     }}
                                     style={{ ...textLinkStyle, fontWeight: 500 }}
@@ -401,7 +405,7 @@ const AboutPage = () => {
                                 fontSize: '12px',
                                 lineHeight: 1.5,
                             }}>
-                                Обсуждение функционала и идей
+                                {t('about.discussions_description')}
                             </div>
                         </div>
                     )}
@@ -413,7 +417,7 @@ const AboutPage = () => {
                                     onClick={(e) => {
                                         e.preventDefault();
                                         navigator.clipboard.writeText(metadata.telegram).then(() => {
-                                            message.success('Ссылка скопирована');
+                                            message.success(t('about.link_copied'));
                                         });
                                     }}
                                     style={{ ...textLinkStyle, fontWeight: 500 }}
@@ -426,7 +430,7 @@ const AboutPage = () => {
                                 fontSize: '12px',
                                 lineHeight: 1.5,
                             }}>
-                                Прямая связь с автором
+                                {t('about.telegram_description')}
                             </div>
                         </div>
                     )}
@@ -435,7 +439,7 @@ const AboutPage = () => {
 
             {metadata.external_resources.length > 0 && (
                 <section style={sectionStyle}>
-                    <div style={sectionTitleStyle}>Внешние ресурсы</div>
+                    <div style={sectionTitleStyle}>{t('about.external_resources')}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--qs-space-sm)' }}>
                         {metadata.external_resources.map((resource) => (
                             <div key={resource.name} style={cardStyle}>
@@ -451,7 +455,7 @@ const AboutPage = () => {
                                         onClick={(e) => {
                                             e.preventDefault();
                                             navigator.clipboard.writeText(resource.url).then(() => {
-                                                message.success('Ссылка скопирована');
+                                                message.success(t('about.link_copied'));
                                             });
                                         }}
                                         style={{ ...textLinkStyle, fontWeight: 500 }}
@@ -493,7 +497,7 @@ const AboutPage = () => {
                             transition: 'all var(--qs-transition-fast)',
                         }}
                     >
-                        <span>Зависимости ({metadata.dependencies.length})</span>
+                        <span>{t('about.dependencies', { count: metadata.dependencies.length })}</span>
                         <span>{showDependencies ? '▾' : '▸'}</span>
                     </button>
                     {showDependencies && (
@@ -519,7 +523,7 @@ const AboutPage = () => {
                                         onClick={(e) => {
                                             e.preventDefault();
                                             navigator.clipboard.writeText(dependency.url).then(() => {
-                                                message.success('Ссылка скопирована');
+                                                message.success(t('about.link_copied'));
                                             });
                                         }}
                                         style={textLinkStyle}
@@ -544,23 +548,23 @@ const AboutPage = () => {
             )}
 
             <section style={{ ...sectionStyle, marginTop: 'var(--qs-space-2xl)' }}>
-                <div style={sectionTitleStyle}>Управление</div>
+                <div style={sectionTitleStyle}>{t('about.management')}</div>
                 <Button
                     danger
                     icon={<PoweroffOutlined />}
                     block
                     onClick={() => {
                         Modal.confirm({
-                            title: 'Завершить приложение?',
-                            content: 'Приложение будет закрыто полностью. Контекстное меню Проводника станет недоступно до следующего запуска.',
-                            okText: 'Выйти',
-                            cancelText: 'Отмена',
+                            title: t('about.quit_title'),
+                            content: t('about.quit_content'),
+                            okText: t('about.quit_ok'),
+                            cancelText: t('about.quit_cancel'),
                             okButtonProps: { danger: true },
                             onOk: () => invoke('quit_app'),
                         });
                     }}
                 >
-                    Выйти из приложения
+                    {t('about.quit_button')}
                 </Button>
             </section>
         </div>

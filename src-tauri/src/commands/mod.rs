@@ -241,6 +241,14 @@ pub fn get_pending_file() -> Option<String> {
 }
 
 #[tauri::command]
+pub fn get_pending_files() -> Vec<String> {
+    tracing::info!(command = "get_pending_files", "handling");
+    let files = crate::pending::get_pending_files();
+    tracing::info!(command = "get_pending_files", count = files.len(), "OK");
+    files
+}
+
+#[tauri::command]
 pub fn check_menu_status() -> bool {
     tracing::debug!(command = "check_menu_status", "handling");
     crate::com::is_registered()

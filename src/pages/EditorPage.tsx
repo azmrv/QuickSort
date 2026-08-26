@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { App } from 'antd';
 import { invoke } from '../lib/invoke';
 import { logger } from '../lib/logger';
+import { useTranslation } from '../i18n/useTranslation';
 import FolderList from '../components/FolderList';
 import AddFolderButton from '../components/AddFolderButton';
 import StatusIndicator from '../components/StatusIndicator';
@@ -26,6 +27,7 @@ function assignAutoColors(folders: Folder[]): Folder[] {
 }
 
 const EditorPage: React.FC = () => {
+    const { t } = useTranslation();
     const [folders, setFolders] = useState<Folder[]>([]);
     const { message } = App.useApp();
 
@@ -57,7 +59,7 @@ const EditorPage: React.FC = () => {
             })
             .catch(err => {
                 logger.error('EditorPage', 'failed to load folders', err);
-                message.error(`Ошибка загрузки: ${err}`);
+                message.error(`${t('editor.load_error')} ${err}`);
             });
     }, []);
 
@@ -74,7 +76,7 @@ const EditorPage: React.FC = () => {
             })
             .catch(err => {
                 logger.error('EditorPage', 'add folder failed', err);
-                message.error(`Ошибка добавления: ${err}`);
+                message.error(`${t('editor.add_error')} ${err}`);
             });
     };
 
@@ -99,7 +101,7 @@ const EditorPage: React.FC = () => {
         } catch (err) {
             logger.error('EditorPage', 'toggle favorite failed', err);
             setFolders(folders);
-            message.error('Ошибка обновления избранного');
+            message.error(t('editor.favorite_error'));
         }
     };
 
@@ -113,7 +115,7 @@ const EditorPage: React.FC = () => {
         } catch (err) {
             logger.error('EditorPage', 'set color failed', err);
             setFolders(folders);
-            message.error('Ошибка сохранения цвета');
+            message.error(t('editor.color_error'));
         }
     };
 

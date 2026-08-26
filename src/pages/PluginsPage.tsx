@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Typography, Table, Switch, Button, Space, Tag, message } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
+import { useTranslation } from '../i18n/useTranslation';
 import type { PluginInfoDto } from '../types';
 
 const { Title, Text } = Typography;
 
 export default function PluginsPage() {
+    const { t } = useTranslation();
     const [plugins, setPlugins] = useState<PluginInfoDto[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -106,14 +108,14 @@ export default function PluginsPage() {
     return (
         <div style={{ padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Title level={4} style={{ margin: 0 }}>Plugins</Title>
+                <Title level={4} style={{ margin: 0 }}>{t('plugins.title')}</Title>
                 <Space>
                     <Button
                         icon={<ReloadOutlined />}
                         onClick={handleRescan}
                         loading={loading}
                     >
-                        Rescan
+                        {t('plugins.rescan')}
                     </Button>
                 </Space>
             </div>
@@ -124,12 +126,12 @@ export default function PluginsPage() {
                 rowKey="id"
                 loading={loading}
                 pagination={false}
-                locale={{ emptyText: 'No plugins found' }}
+                locale={{ emptyText: t('plugins.empty') }}
             />
 
             <div style={{ marginTop: 16 }}>
                 <Text type="secondary">
-                    Plugin directory: %APPDATA%/QuickSort/plugins/
+                    {t('plugins.directory')}
                 </Text>
             </div>
         </div>

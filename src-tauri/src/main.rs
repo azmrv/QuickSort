@@ -344,6 +344,7 @@ fn start_tauri() {
             commands::set_folder_color_v2,
             commands::get_mode,
             commands::get_pending_file,
+            commands::get_pending_files,
             commands::check_menu_status,
             commands::get_logs,
             commands::register_com_server,

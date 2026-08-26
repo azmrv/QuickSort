@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react';
 import { App } from 'antd';
 import { invoke } from '../lib/invoke';
 import { logger } from '../lib/logger';
+import { useTranslation } from '../i18n/useTranslation';
 import { Folder, OperationCommand } from '../types';
 
 interface SelectorPageProps {
-    file: string | null;
+    files: string[];
     onClose: () => void;
 }
 
-const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
+const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
+    const { t } = useTranslation();
     const [folders, setFolders] = useState<Folder[]>([]);
     const [search, setSearch] = useState('');
     const [showAddFolder, setShowAddFolder] = useState(false);
@@ -25,12 +27,12 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
             })
             .catch(err => {
                 logger.error('SelectorPage', 'failed to load folders', err);
-                message.error(`Ошибка загрузки: ${err}`);
+                message.error(`${t('selector.load_error')} ${err}`);
             });
     };
 
     useEffect(() => {
-        logger.action('SelectorPage', `mount — loading folders for file: ${file}`);
+        logger.action('SelectorPage', `mount — loading folders for ${files.length} file(s)`);
         loadFolders();
     }, []);
 
@@ -44,43 +46,43 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
     const otherFolders = filtered.filter(f => !f.favorite);
 
     const handleSelect = async (folder: Folder) => {
-        if (!file) {
-            message.error('Нет файла для перемещения');
+        if (files.length === 0) {
+            message.error(t('selector.no_files'));
             return;
         }
-        logger.action('SelectorPage', `move file "${file}" -> "${folder.name}" (${folder.path})`);
+        logger.action('SelectorPage', `move ${files.length} file(s) -> "${folder.name}" (${folder.path})`);
         try {
             const command: OperationCommand = {
                 operation_type: 'Move',
-                source_paths: [file],
+                source_paths: files,
                 target_folder_id: folder.id,
                 target_paths: null,
                 overwrite_policy: 'Skip',
             };
             const result = await invoke('execute_operation_v2', { command });
-            logger.info('SelectorPage', 'file moved successfully', result);
-            message.success(`Файл перемещён в ${folder.name}`);
+            logger.info('SelectorPage', 'files moved successfully', result);
+            message.success(t('selector.move_success', { count: files.length, folder: folder.name }));
             onClose();
         } catch (err) {
-            logger.error('SelectorPage', 'move file failed', err);
-            message.error(`Ошибка: ${err}`);
+            logger.error('SelectorPage', 'move files failed', err);
+            message.error(`${t('selector.move_error')} ${err}`);
         }
     };
 
     const handleAddFolder = async () => {
         if (!newFolderName.trim() || !newFolderPath.trim()) {
-            message.error('Заполните имя и путь');
+            message.error(t('selector.fill_name_path'));
             return;
         }
         try {
             await invoke('add_folder_v2', { name: newFolderName.trim(), path: newFolderPath.trim() });
-            message.success(`Папка "${newFolderName}" добавлена`);
+            message.success(t('selector.folder_added', { name: newFolderName }));
             setNewFolderName('');
             setNewFolderPath('');
             setShowAddFolder(false);
             loadFolders();
         } catch (err) {
-            message.error(`Ошибка: ${err}`);
+            message.error(`${t('selector.move_error')} ${err}`);
         }
     };
 
@@ -117,14 +119,22 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
     return (
         <div className="selector-container">
             <header className="selector-header">
-                <div className="selector-title">Переместить файл в:</div>
-                <div className="selector-file">{file || 'Файл не выбран'}</div>
+                <div className="selector-title">
+                    {files.length > 1 ? t('selector.title.move_many') : t('selector.title.move_one')}
+                </div>
+                <div className="selector-file">
+                    {files.length === 0
+                        ? t('selector.files_none')
+                        : files.length === 1
+                        ? files[0]
+                        : t('selector.files_count', { count: files.length })}
+                </div>
             </header>
 
             <div className="selector-search">
                 <input
                     type="text"
-                    placeholder="Поиск папки..."
+                    placeholder={t('selector.search_placeholder')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     style={{
@@ -153,25 +163,25 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
                 {filtered.length === 0 ? (
                     <div className="empty-state">
                         <div className="empty-state-icon">{'\uD83D\uDD0D'}</div>
-                        <div className="empty-state-title">Папки не найдены</div>
+                        <div className="empty-state-title">{t('selector.empty_title')}</div>
                         <div className="empty-state-description">
-                            {search ? 'Попробуйте другой запрос' : 'Добавьте папки в настройках'}
+                            {search ? t('selector.empty_try') : t('selector.empty_add')}
                         </div>
                     </div>
                 ) : (
                     <>
                         {favoriteFolders.length > 0 && (
                             <div className="selector-section">
-                                <div className="selector-section-label">Избранные</div>
+                                <div className="selector-section-label">{t('selector.favorites')}</div>
                                 {favoriteFolders.map((f, i) => renderFolderItem(f, i))}
                             </div>
                         )}
                         {otherFolders.length > 0 && (
                             <div className="selector-section">
                                 {favoriteFolders.length > 0 ? (
-                                    <div className="selector-section-label">Остальные</div>
+                                    <div className="selector-section-label">{t('selector.other')}</div>
                                 ) : (
-                                    <div className="selector-section-label">Все папки</div>
+                                    <div className="selector-section-label">{t('selector.all_folders')}</div>
                                 )}
                                 {otherFolders.map((f, i) => renderFolderItem(f, i + favoriteFolders.length))}
                             </div>
@@ -191,14 +201,14 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
                 }}>
                     <input
                         type="text"
-                        placeholder="Имя папки"
+                        placeholder={t('selector.add_folder_name')}
                         value={newFolderName}
                         onChange={(e) => setNewFolderName(e.target.value)}
                         style={inputStyle}
                     />
                     <input
                         type="text"
-                        placeholder="Путь (C:\Users\...)"
+                        placeholder={t('selector.add_folder_path')}
                         value={newFolderPath}
                         onChange={(e) => setNewFolderPath(e.target.value)}
                         style={inputStyle}
@@ -217,7 +227,7 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
                             cursor: 'pointer',
                         }}
                     >
-                        Добавить
+                        {t('selector.add_folder_confirm')}
                     </button>
                 </div>
             )}
@@ -245,7 +255,7 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
                         transition: 'all var(--qs-transition-fast)',
                     }}
                 >
-                    + Добавить папку
+                    {t('selector.add_folder')}
                 </button>
                 <button
                     onClick={onClose}
@@ -263,7 +273,7 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ file, onClose }) => {
                         transition: 'all var(--qs-transition-fast)',
                     }}
                 >
-                    Отмена (Esc)
+                    {t('selector.cancel')}
                 </button>
             </div>
         </div>

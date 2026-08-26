@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { App } from 'antd';
 import { invoke } from '../lib/invoke';
 import { logger } from '../lib/logger';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface Operation {
     id: string;
@@ -14,6 +15,7 @@ interface Operation {
 }
 
 const HistoryPage = () => {
+    const { t } = useTranslation();
     const [operations, setOperations] = useState<Operation[]>([]);
     const [loading, setLoading] = useState(true);
     const { message } = App.useApp();
@@ -27,7 +29,7 @@ const HistoryPage = () => {
             })
             .catch(err => {
                 logger.error('HistoryPage', 'failed to load operations', err);
-                message.error(`Ошибка загрузки: ${err}`);
+                message.error(`${t('editor.load_error')} ${err}`);
             })
             .finally(() => setLoading(false));
     };
@@ -62,61 +64,61 @@ const HistoryPage = () => {
     const handleUndo = async (operationId: string) => {
         try {
             await invoke('undo_operation_v2', { operationId });
-            message.success('Операция отменена');
+            message.success(t('history.undo_success'));
             loadOperations();
         } catch (err) {
-            message.error(`Ошибка отмены: ${err}`);
+            message.error(`${t('history.undo_error')} ${err}`);
         }
     };
 
     const handleRepeat = async (operationId: string) => {
         try {
             await invoke('repeat_operation_v2', { operationId });
-            message.success('Операция повторена');
+            message.success(t('history.repeat_success'));
             loadOperations();
         } catch (err) {
-            message.error(`Ошибка повтора: ${err}`);
+            message.error(`${t('history.repeat_error')} ${err}`);
         }
     };
 
     const getStateLabel = (state: unknown): { text: string; color: string } => {
         // Serde serializes unit variants as strings ("Undone"), not objects.
         if (typeof state === 'string') {
-            if (state === 'Undone') return { text: 'Отменено', color: '#f59e0b' };
-            if (state === 'Pending') return { text: 'Ожидание', color: '#6b7280' };
-            if (state === 'Executing') return { text: 'Выполняется', color: '#3b82f6' };
+            if (state === 'Undone') return { text: t('history.state.undone'), color: '#f59e0b' };
+            if (state === 'Pending') return { text: t('history.state.pending'), color: '#6b7280' };
+            if (state === 'Executing') return { text: t('history.state.executing'), color: '#3b82f6' };
             return { text: state, color: '#6b7280' };
         }
         if (typeof state !== 'object' || state === null) {
-            return { text: 'Неизвестно', color: '#6b7280' };
+            return { text: t('history.state.unknown'), color: '#6b7280' };
         }
         const s = state as Record<string, unknown>;
         if ('Completed' in s) {
             const completed = s.Completed as { processed_files: number; bytes_processed: number };
-            return { text: `Выполнено (${completed.processed_files} файлов)`, color: '#22c55e' };
+            return { text: t('history.state.completed', { count: completed.processed_files }), color: '#22c55e' };
         }
         if ('Failed' in s) {
             const failed = s.Failed as { reason: string };
-            return { text: `Ошибка: ${failed.reason}`, color: '#ef4444' };
+            return { text: `${t('history.state.failed')} ${failed.reason}`, color: '#ef4444' };
         }
         if ('Undone' in s) {
-            return { text: 'Отменено', color: '#f59e0b' };
+            return { text: t('history.state.undone'), color: '#f59e0b' };
         }
         if ('Executing' in s) {
-            return { text: 'Выполняется', color: '#3b82f6' };
+            return { text: t('history.state.executing'), color: '#3b82f6' };
         }
         if ('Pending' in s) {
-            return { text: 'Ожидание', color: '#6b7280' };
+            return { text: t('history.state.pending'), color: '#6b7280' };
         }
-        return { text: 'Неизвестно', color: '#6b7280' };
+        return { text: t('history.state.unknown'), color: '#6b7280' };
     };
 
     const getOperationLabel = (type: string): string => {
         switch (type) {
-            case 'Move': return 'Перемещение';
-            case 'Copy': return 'Копирование';
-            case 'Delete': return 'Удаление';
-            case 'Rename': return 'Переименование';
+            case 'Move': return t('history.operation.move');
+            case 'Copy': return t('history.operation.copy');
+            case 'Delete': return t('history.operation.delete');
+            case 'Rename': return t('history.operation.rename');
             default: return type;
         }
     };
@@ -150,7 +152,7 @@ const HistoryPage = () => {
                     color: 'var(--qs-text-primary)',
                     margin: 0,
                 }}>
-                    История операций
+                    {t('history.title')}
                 </h3>
                 <button
                     onClick={loadOperations}
@@ -166,7 +168,7 @@ const HistoryPage = () => {
                         cursor: loading ? 'not-allowed' : 'pointer',
                     }}
                 >
-                    {loading ? 'Загрузка...' : 'Обновить'}
+                    {loading ? t('history.loading') : t('history.refresh')}
                 </button>
             </div>
 
@@ -177,7 +179,7 @@ const HistoryPage = () => {
                     color: 'var(--qs-text-muted)',
                 }}>
                     <div style={{ fontSize: '32px', marginBottom: 'var(--qs-space-md)' }}>{'\uD83D\uDCCB'}</div>
-                    <div>Нет операций</div>
+                    <div>{t('history.empty')}</div>
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -263,7 +265,7 @@ const HistoryPage = () => {
                                         e.currentTarget.style.background = 'transparent';
                                     }}
                                 >
-                                    Отменить
+                                    {t('history.undo')}
                                 </button>
                                 <button
                                     onClick={() => handleRepeat(op.id)}
@@ -287,7 +289,7 @@ const HistoryPage = () => {
                                         e.currentTarget.style.background = 'transparent';
                                     }}
                                 >
-                                    Повторить
+                                    {t('history.repeat')}
                                 </button>
                             </div>
                         );

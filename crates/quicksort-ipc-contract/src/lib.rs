@@ -95,6 +95,15 @@ pub struct ExecuteOperationData {
     /// Must be `Some` for Move and Copy, `None` for Delete and Rename.
     pub target_folder_id: Option<String>,
 
+    /// Raw filesystem path of the target folder, for Move/Copy operations
+    /// where no registered folder ID is available (e.g., "ChoosePath").
+    ///
+    /// When `target_folder_id` is `None` but this is `Some`, the server
+    /// resolves the path to a matching registered folder.  If no match is
+    /// found, the operation fails with an error.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub target_folder_path: Option<String>,
+
     /// Conflict resolution strategy when a destination file already exists.
     pub overwrite_policy: OverwritePolicy,
 }

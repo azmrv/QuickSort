@@ -567,13 +567,11 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
 }
 
 // ============================================================================
-// "Выбрать путь..." handler — native folder picker + direct file move
+// "Выбрать путь..." handler — native folder picker + IPC move
 // ============================================================================
 
-/// Shows the native Windows folder picker and moves files to the selected folder.
-///
-/// Uses `SHBrowseForFolderW` for the picker dialog and `MoveFileW` for the
-/// actual move. Falls back to copy+delete for cross-drive moves.
+/// Shows the native Windows folder picker and sends the selected files
+/// to the server via the IPC pipe, so the operation is recorded in history.
 impl QuickSortShellExt_Impl {
     fn handle_choose_path(&self, sources: Vec<String>) {
         let title: Vec<u16> = unsafe {
@@ -610,83 +608,22 @@ impl QuickSortShellExt_Impl {
                         .to_string();
                 log::info!("ChoosePath: target directory = {}", target_dir);
 
-                let target = std::path::PathBuf::from(&target_dir);
-                let target_path = target.clone();
-
-                // Move files in a background thread to avoid blocking Explorer.
+                // Send the move command via IPC pipe so it is recorded in history.
+                let sources_clone = sources.clone();
+                let target = target_dir.clone();
                 std::thread::spawn(move || {
-                    let mut moved = 0u32;
-                    let mut errors = 0u32;
-
-                    for src_str in &sources {
-                        let src = std::path::PathBuf::from(src_str);
-                        let file_name = match src.file_name() {
-                            Some(name) => name.to_owned(),
-                            None => {
-                                log::warn!("ChoosePath: no file name in {}", src_str);
-                                errors += 1;
-                                continue;
-                            }
-                        };
-                        let dest = target_path.join(&file_name);
-
-                        // Try MoveFileW first (same-drive fast path).
-                        let src_wide: Vec<u16> = OsString::from(&src)
-                            .encode_wide()
-                            .chain(Some(0))
-                            .collect();
-                        let dest_wide: Vec<u16> = OsString::from(&dest)
-                            .encode_wide()
-                            .chain(Some(0))
-                            .collect();
-
-                        let move_ok = windows::Win32::Storage::FileSystem::MoveFileW(
-                            PCWSTR::from_raw(src_wide.as_ptr()),
-                            PCWSTR::from_raw(dest_wide.as_ptr()),
-                        );
-
-                        if move_ok.is_ok() {
-                            moved += 1;
-                            log::info!("ChoosePath: moved {} → {}", src.display(), dest.display());
-                        } else {
-                            // Cross-drive fallback: copy + delete.
-                            log::info!(
-                                "ChoosePath: MoveFileW failed (cross-drive?), trying copy+delete for {}",
-                                src.display()
-                            );
-                            let copy_ok = windows::Win32::Storage::FileSystem::CopyFileW(
-                                PCWSTR::from_raw(src_wide.as_ptr()),
-                                PCWSTR::from_raw(dest_wide.as_ptr()),
-                                false,
-                            );
-
-                            if copy_ok.is_ok() {
-                                let _ = windows::Win32::Storage::FileSystem::DeleteFileW(
-                                    PCWSTR::from_raw(src_wide.as_ptr()),
-                                );
-                                moved += 1;
-                                log::info!(
-                                    "ChoosePath: copy+delete {} → {}",
-                                    src.display(),
-                                    dest.display()
-                                );
-                            } else {
-                                errors += 1;
-                                log::error!(
-                                    "ChoosePath: failed to move {} → {}: {:?}",
-                                    src.display(),
-                                    dest.display(),
-                                    copy_ok
-                                );
-                            }
+                    match crate::pipe_client::client::move_to_path(
+                        sources_clone,
+                        target,
+                        quicksort_ipc_contract::OverwritePolicy::AutoRename,
+                    ) {
+                        Ok(resp) => {
+                            log::info!("ChoosePath: server responded: status={:?}, msg={}", resp.status, resp.message);
+                        }
+                        Err(e) => {
+                            log::error!("ChoosePath: IPC call failed: {:?}", e);
                         }
                     }
-
-                    log::info!(
-                        "ChoosePath: done — moved={}, errors={}",
-                        moved,
-                        errors
-                    );
                 });
             } else {
                 log::warn!("ChoosePath: SHGetPathFromIDListW failed");

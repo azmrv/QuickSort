@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Folder } from '../types';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface FolderListProps {
     folders: Folder[];
@@ -12,6 +13,7 @@ interface FolderListProps {
 const DEFAULT_COLOR = '#4a9eff';
 
 const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavorite, onSetColor, onApply }) => {
+    const { t } = useTranslation();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
 
@@ -36,9 +38,9 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
         return (
             <div className="empty-state">
                 <div className="empty-state-icon">📁</div>
-                <div className="empty-state-title">Нет добавленных папок</div>
+                <div className="empty-state-title">{t('folder_list.empty_title')}</div>
                 <div className="empty-state-description">
-                    Нажмите "Добавить папку" чтобы начать
+                    {t('folder_list.empty_description')}
                 </div>
             </div>
         );
@@ -90,13 +92,13 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
                         <button
                             className={`folder-action-btn star ${folder.favorite ? 'active' : ''}`}
                             onClick={() => onToggleFavorite(folder.id)}
-                            title={folder.favorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                            title={folder.favorite ? t('folder_list.remove_favorite') : t('folder_list.add_favorite')}
                         >
                             {folder.favorite ? '★' : '☆'}
                         </button>
                         <label
                             className={`folder-action-btn color ${folder.color ? '' : 'empty'}`}
-                            title={folder.color ? `Цвет: ${folder.color} (ПКМ — сбросить)` : 'Задать цвет'}
+                            title={folder.color ? t('folder_list.color', { color: folder.color }) : t('folder_list.set_color')}
                             onContextMenu={(e) => {
                                 e.preventDefault();
                                 if (folder.color) {
@@ -118,7 +120,7 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
                             <button
                                 className="folder-action-btn"
                                 onClick={confirmEdit}
-                                title="Сохранить"
+                                title={t('folder_list.save')}
                             >
                                 ✓
                             </button>
@@ -126,7 +128,7 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
                             <button
                                 className="folder-action-btn"
                                 onClick={() => startEdit(folder.id, folder.name)}
-                                title="Переименовать"
+                                title={t('folder_list.rename')}
                             >
                                 ✎
                             </button>
@@ -134,7 +136,7 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
                         <button
                             className="folder-action-btn danger"
                             onClick={() => handleRemove(folder.id)}
-                            title="Удалить"
+                            title={t('folder_list.delete')}
                         >
                             ×
                         </button>
