@@ -1,17 +1,18 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(target_os = "windows")]
 mod com;
 mod commands;
 mod ipc;
 mod logging;
 mod metadata;
 mod pending;
+mod platform;
 mod progress;
 mod state;
 
 use clap::{Parser, Subcommand};
 use state::AppState;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
@@ -101,6 +102,7 @@ fn main() {
 
     let cli = Cli::parse();
 
+    #[cfg(target_os = "windows")]
     if cli.unregister {
         tracing::info!("--unregister flag: unregistering COM server and exiting");
         match com::unregister() {
@@ -124,98 +126,37 @@ fn main() {
         return;
     }
 
-    start_tauri();
+    start_tauri()
 }
 
+#[cfg(target_os = "windows")]
 fn ensure_dll_copied() {
-    let exe_dir = match std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-    {
-        Some(d) => d,
-        None => {
-            tracing::warn!("Cannot determine exe directory");
-            return;
-        }
-    };
-
-    // Copy DLL next to exe if not already there.
-    // In dev builds the DLL is in target/{debug,release}/deps/ — copy it.
-    // In installed builds it's already bundled via tauri.conf.json resources.
-    let dll = exe_dir.join("context_menu_dll.dll");
-    if !dll.exists() {
-        let deps_dll = exe_dir.join("deps").join("context_menu_dll.dll");
-        if deps_dll.exists() {
-            match std::fs::copy(&deps_dll, &dll) {
-                Ok(_) => {
-                    tracing::info!(src = %deps_dll.display(), dst = %dll.display(), "Copied DLL next to exe")
-                }
-                Err(e) => tracing::error!(error = %e, "Failed to copy DLL next to exe"),
-            }
-        } else {
-            tracing::warn!(
-                path = %dll.display(),
-                "DLL not found — COM registration will fail until DLL is built"
-            );
-        }
-    } else {
-        tracing::debug!(path = %dll.display(), "DLL found next to exe");
-    }
-
-    // Copy quicksort.ico next to exe so the shell extension DLL can find it.
-    // The DLL looks for quicksort.ico in its own directory (next to the DLL).
-    let icon_dest = exe_dir.join("quicksort.ico");
-    if !icon_dest.exists() {
-        // Try CARGO_MANIFEST_DIR/../resources/quicksort.ico (build-time path)
-        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-            let icon_src = std::path::PathBuf::from(manifest_dir)
-                .join("..")
-                .join("resources")
-                .join("quicksort.ico");
-            if icon_src.exists() {
-                match std::fs::copy(&icon_src, &icon_dest) {
-                    Ok(_) => {
-                        tracing::info!(src = %icon_src.display(), dst = %icon_dest.display(), "Copied icon next to exe")
-                    }
-                    Err(e) => tracing::warn!(error = %e, "Failed to copy icon next to exe"),
-                }
-            } else {
-                tracing::debug!(path = %icon_src.display(), "Icon source not found at build-time path, trying runtime path");
-            }
-        }
-        // Fallback: try relative to current working directory
-        if !icon_dest.exists() {
-            let icon_cwd = std::path::Path::new("resources").join("quicksort.ico");
-            if icon_cwd.exists() {
-                match std::fs::copy(&icon_cwd, &icon_dest) {
-                    Ok(_) => {
-                        tracing::info!(src = %icon_cwd.display(), dst = %icon_dest.display(), "Copied icon next to exe (cwd fallback)")
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, "Failed to copy icon next to exe (cwd fallback)")
-                    }
-                }
-            }
-        }
-    }
+    platform::windows::ensure_dll_copied();
 }
 
+#[cfg(target_os = "linux")]
+fn ensure_dll_copied() {
+    // No DLL on Linux
+}
+
+#[cfg(target_os = "macos")]
+fn ensure_dll_copied() {
+    // No DLL on macOS
+}
+
+#[cfg(target_os = "windows")]
 fn write_owner_pid() {
-    let pid = std::process::id();
-    let appdata = match std::env::var("APPDATA") {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::error!(error = %e, "cannot read APPDATA for PID file");
-            return;
-        }
-    };
-    let dir = PathBuf::from(&appdata).join("QuickSort");
-    let _ = std::fs::create_dir_all(&dir);
-    let pid_path = dir.join("dll_owner.pid");
-    match std::fs::write(&pid_path, pid.to_string()) {
-        Ok(()) => tracing::info!(pid, path = %pid_path.display(), "owner PID written"),
-        Err(e) => tracing::error!(error = %e, "failed to write owner PID"),
-    }
+    platform::windows::write_owner_pid();
+}
+
+#[cfg(target_os = "linux")]
+fn write_owner_pid() {
+    // No PID file on Linux
+}
+
+#[cfg(target_os = "macos")]
+fn write_owner_pid() {
+    // No PID file on macOS
 }
 
 fn start_tauri() {
@@ -224,13 +165,11 @@ fn start_tauri() {
     ensure_dll_copied();
     write_owner_pid();
 
-    let config_dir = std::env::var("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("QuickSort");
+    // Use cross-platform config paths
+    let config_dir = platform::paths::config_dir();
     std::fs::create_dir_all(&config_dir).unwrap_or(());
-    let config_path = config_dir.join("folders.json");
-    let settings_path = config_dir.join("settings.json");
+    let config_path = platform::paths::folders_config_path();
+    let settings_path = platform::paths::settings_config_path();
 
     let config_repo = Arc::new(JsonConfigurationRepository::new(config_path.clone()));
     let settings_repo = Arc::new(quicksort_infrastructure::JsonSettingsRepository::new(
@@ -239,7 +178,7 @@ fn start_tauri() {
 
     // Shared operation repository — all use cases must reference the same instance
     // so that execute writes to the same store that history reads from.
-    let operations_path = config_dir.join("operations.json");
+    let operations_path = platform::paths::operations_path();
     let operation_repo =
         quicksort_infrastructure::repository::JsonOperationRepository::new(operations_path);
 
@@ -371,38 +310,41 @@ fn start_tauri() {
             crate::ipc::set_app_handle(app.handle().clone());
 
             let handle = app.handle().clone();
-            std::thread::Builder::new()
-                .name("com-register".into())
-                .spawn(move || {
-                    use com::RegistrationStatus;
-                    let status = com::check_registration();
-                    match &status {
-                        RegistrationStatus::Active => {
-                            tracing::info!("COM registration: {}", status);
-                            let _ = handle.emit("com-status", "active");
-                        }
-                        RegistrationStatus::NotRegistered
-                        | RegistrationStatus::PathMismatch { .. } => {
-                            tracing::info!("COM registration: {} — registering", status);
-                            let _ = handle.emit("com-status", "registering");
-                            match com::register() {
-                                Ok(()) => {
-                                    tracing::info!("COM registered");
-                                    let _ = handle.emit("com-status", "active");
-                                }
-                                Err(e) => {
-                                    tracing::error!(error = %e, "COM registration failed");
-                                    let _ = handle.emit("com-status", "error");
+            #[cfg(target_os = "windows")]
+            {
+                std::thread::Builder::new()
+                    .name("com-register".into())
+                    .spawn(move || {
+                        use com::RegistrationStatus;
+                        let status = com::check_registration();
+                        match &status {
+                            RegistrationStatus::Active => {
+                                tracing::info!("COM registration: {}", status);
+                                let _ = handle.emit("com-status", "active");
+                            }
+                            RegistrationStatus::NotRegistered
+                            | RegistrationStatus::PathMismatch { .. } => {
+                                tracing::info!("COM registration: {} — registering", status);
+                                let _ = handle.emit("com-status", "registering");
+                                match com::register() {
+                                    Ok(()) => {
+                                        tracing::info!("COM registered");
+                                        let _ = handle.emit("com-status", "active");
+                                    }
+                                    Err(e) => {
+                                        tracing::error!(error = %e, "COM registration failed");
+                                        let _ = handle.emit("com-status", "error");
+                                    }
                                 }
                             }
+                            RegistrationStatus::DllMissing => {
+                                tracing::warn!("COM registration: {} — skipping", status);
+                                let _ = handle.emit("com-status", "error");
+                            }
                         }
-                        RegistrationStatus::DllMissing => {
-                            tracing::warn!("COM registration: {} — skipping", status);
-                            let _ = handle.emit("com-status", "error");
-                        }
-                    }
-                })
-                .expect("failed to spawn COM register thread");
+                    })
+                    .expect("failed to spawn COM register thread");
+            }
 
             let open = MenuItemBuilder::with_id("open", "Open editor").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Exit").build(app)?;
@@ -425,7 +367,10 @@ fn start_tauri() {
                     "quit" => {
                         tracing::info!("tray quit — performing cleanup");
                         // Best-effort COM cleanup so Explorer releases the DLL from memory.
-                        let _ = crate::com::unregister();
+                        #[cfg(target_os = "windows")]
+                        {
+                            let _ = crate::com::unregister();
+                        }
                         tracing::info!("all cleanup done, exiting");
                         app.exit(0);
                     }

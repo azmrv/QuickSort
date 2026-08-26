@@ -251,7 +251,14 @@ pub fn get_pending_files() -> Vec<String> {
 #[tauri::command]
 pub fn check_menu_status() -> bool {
     tracing::debug!(command = "check_menu_status", "handling");
-    crate::com::is_registered()
+    #[cfg(target_os = "windows")]
+    {
+        crate::com::is_registered()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
+    }
 }
 
 #[tauri::command]
@@ -263,20 +270,34 @@ pub fn get_logs() -> Vec<serde_json::Value> {
 #[tauri::command]
 pub fn register_com_server() -> Result<String, String> {
     tracing::info!(command = "register_com_server", "handling");
-    crate::com::register()?;
-    tracing::info!(
-        command = "register_com_server",
-        "OK — registry keys written"
-    );
-    Ok("COM server registered successfully.".to_string())
+    #[cfg(target_os = "windows")]
+    {
+        crate::com::register()?;
+        tracing::info!(
+            command = "register_com_server",
+            "OK — registry keys written"
+        );
+        Ok("COM server registered successfully.".to_string())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("COM registration is only supported on Windows".to_string())
+    }
 }
 
 #[tauri::command]
 pub fn unregister_com_server() -> Result<String, String> {
     tracing::info!(command = "unregister_com_server", "handling");
-    crate::com::unregister()?;
-    tracing::info!(command = "unregister_com_server", "OK");
-    Ok("COM server unregistered successfully.".to_string())
+    #[cfg(target_os = "windows")]
+    {
+        crate::com::unregister()?;
+        tracing::info!(command = "unregister_com_server", "OK");
+        Ok("COM server unregistered successfully.".to_string())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("COM unregistration is only supported on Windows".to_string())
+    }
 }
 
 #[tauri::command]
@@ -339,43 +360,57 @@ pub async fn get_operations(
 pub async fn launch_teracopy(files: Vec<String>) -> Result<(), String> {
     tracing::info!(command = "launch_teracopy", count = files.len(), "handling");
 
-    // Default TeraCopy paths
-    let teracopy_paths = [
-        "C:\\Program Files\\TeraCopy\\TeraCopy.exe",
-        "C:\\Program Files (x86)\\TeraCopy\\TeraCopy.exe",
-    ];
+    #[cfg(target_os = "windows")]
+    {
+        // Default TeraCopy paths
+        let teracopy_paths = [
+            "C:\\Program Files\\TeraCopy\\TeraCopy.exe",
+            "C:\\Program Files (x86)\\TeraCopy\\TeraCopy.exe",
+        ];
 
-    let teracopy_exe = teracopy_paths
-        .iter()
-        .find(|p| PathBuf::from(p).exists())
-        .ok_or("TeraCopy not found at standard paths")?;
+        let teracopy_exe = teracopy_paths
+            .iter()
+            .find(|p| PathBuf::from(p).exists())
+            .ok_or("TeraCopy not found at standard paths")?;
 
-    // Write file list to temp file (Windows-1251 encoding for TeraCopy compatibility)
-    let temp_dir = std::env::temp_dir();
-    let list_path = temp_dir.join("quicksort_tc_list.txt");
-    let content = files.join("\n");
-    std::fs::write(&list_path, &content)
-        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+        // Write file list to temp file (Windows-1251 encoding for TeraCopy compatibility)
+        let temp_dir = std::env::temp_dir();
+        let list_path = temp_dir.join("quicksort_tc_list.txt");
+        let content = files.join("\n");
+        std::fs::write(&list_path, &content)
+            .map_err(|e| format!("Failed to write temp file: {}", e))?;
 
-    // Launch TeraCopy
-    std::process::Command::new(teracopy_exe)
-        .arg("AddList")
-        .arg(format!("*\"{}\"", list_path.to_string_lossy()))
-        .spawn()
-        .map_err(|e| format!("Failed to launch TeraCopy: {}", e))?;
+        // Launch TeraCopy
+        std::process::Command::new(teracopy_exe)
+            .arg("AddList")
+            .arg(format!("*\"{}\"", list_path.to_string_lossy()))
+            .spawn()
+            .map_err(|e| format!("Failed to launch TeraCopy: {}", e))?;
 
-    tracing::info!(command = "launch_teracopy", "OK");
-    Ok(())
+        tracing::info!(command = "launch_teracopy", "OK");
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("TeraCopy integration is only supported on Windows".to_string())
+    }
 }
 
 /// Check if TeraCopy is installed on the system.
 #[tauri::command]
 pub fn check_teracopy_installed() -> bool {
-    let teracopy_paths = [
-        "C:\\Program Files\\TeraCopy\\TeraCopy.exe",
-        "C:\\Program Files (x86)\\TeraCopy\\TeraCopy.exe",
-    ];
-    teracopy_paths.iter().any(|p| PathBuf::from(p).exists())
+    #[cfg(target_os = "windows")]
+    {
+        let teracopy_paths = [
+            "C:\\Program Files\\TeraCopy\\TeraCopy.exe",
+            "C:\\Program Files (x86)\\TeraCopy\\TeraCopy.exe",
+        ];
+        teracopy_paths.iter().any(|p| PathBuf::from(p).exists())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
+    }
 }
 
 /// Create a new folder in the specified parent directory.
@@ -544,18 +579,20 @@ pub fn get_app_metadata() -> crate::metadata::AppMetadata {
 pub async fn quit_app(app: AppHandle) -> Result<(), String> {
     tracing::info!("quit_app command — performing full shutdown");
 
-    let pid_path = std::env::var("APPDATA")
-        .ok()
-        .map(|a| PathBuf::from(a).join("QuickSort").join("dll_owner.pid"));
-    if let Some(path) = pid_path {
-        match std::fs::remove_file(&path) {
+    #[cfg(target_os = "windows")]
+    {
+        let pid_path = crate::platform::paths::pid_file_path();
+        match std::fs::remove_file(&pid_path) {
             Ok(()) => tracing::info!("owner PID file removed"),
             Err(e) => tracing::debug!(error = %e, "PID file already absent"),
         }
     }
 
     // Best-effort COM cleanup so Explorer releases the DLL from memory.
-    let _ = crate::com::unregister();
+    #[cfg(target_os = "windows")]
+    {
+        let _ = crate::com::unregister();
+    }
 
     tracing::info!("all cleanup done, exiting");
     app.exit(0);

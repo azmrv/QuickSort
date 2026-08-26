@@ -43,32 +43,11 @@ tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# ========== Windows API ==========
+# ========== Windows API (conditional) ==========
 
+[target.'cfg(windows)'.dependencies]
 # Registry access (registering/unregistering the COM server)
 winreg = "0.56"
-
-# CLI argument parsing
-clap = { version = "4", features = ["derive"] }
-
-# General-purpose error handling
-anyhow = "1"
-
-# Date and time types (used in activity logs)
-chrono = { version = "0.4", features = ["serde"] }
-
-# Project directories (obtaining AppData path) – kept for backward compatibility
-directories = "6"
-
-# UUID generation (for operation IDs)
-uuid = { version = "1", features = ["v4", "serde"] }
-
-# Structured logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-# Efficient mutex for shared state
-parking_lot = "0.12"
 
 # Windows context menu integration (for registering the COM server)
 win-ctx = "1.4.1"
@@ -83,6 +62,30 @@ windows = { version = "0.62.2", features = [
     "Win32_System_IO",
     "Win32_Security",
 ] }
+
+# ========== Cross-platform dependencies ==========
+
+# CLI argument parsing
+clap = { version = "4", features = ["derive"] }
+
+# General-purpose error handling
+anyhow = "1"
+
+# Date and time types (used in activity logs)
+chrono = { version = "0.4", features = ["serde"] }
+
+# Project directories (cross-platform config paths)
+directories = "6"
+
+# UUID generation (for operation IDs)
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Structured logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Efficient mutex for shared state
+parking_lot = "0.12"
 
 # Async trait support (needed for ProgressReporter implementation)
 async-trait = "0.1"

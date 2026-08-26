@@ -111,7 +111,10 @@ async fn resolve_target_folder_path(
     facade: &ApplicationFacadeImpl,
 ) -> Option<FolderId> {
     let folders = facade.get_all().await.ok()?;
-    folders.iter().find(|f| f.path.to_string() == path).map(|f| f.id)
+    folders
+        .iter()
+        .find(|f| f.path.to_string() == path)
+        .map(|f| f.id)
 }
 
 // ---------------------------------------------------------------------------
@@ -295,8 +298,9 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                         } else {
                             early_response = Some(ResponseMessage {
                                 status: ResponseStatus::Error,
-                                message: "Move/Copy requires target_folder_id or target_folder_path"
-                                    .to_string(),
+                                message:
+                                    "Move/Copy requires target_folder_id or target_folder_path"
+                                        .to_string(),
                                 operation_id: None,
                                 data: None,
                             });
@@ -338,7 +342,8 @@ pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
                                     tracing::error!("ExecuteOperation FAIL: no valid source paths");
                                     ResponseMessage {
                                         status: ResponseStatus::Error,
-                                        message: "Invalid command: no valid source paths".to_string(),
+                                        message: "Invalid command: no valid source paths"
+                                            .to_string(),
                                         operation_id: None,
                                         data: None,
                                     }

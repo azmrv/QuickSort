@@ -29,8 +29,8 @@ use windows::Win32::System::Ole::{ReleaseStgMedium, CF_HDROP};
 use windows::Win32::System::Registry::HKEY;
 use windows::Win32::UI::Shell::{
     Common::ITEMIDLIST, IContextMenu, IContextMenu_Impl, IShellExtInit, IShellExtInit_Impl,
-    CMF_DEFAULTONLY, CMINVOKECOMMANDINFO, DROPFILES, GCS_VALIDATEA, GCS_VALIDATEW,
-    SHBrowseForFolderW, SHGetPathFromIDListW, BROWSEINFOW, BIF_RETURNONLYFSDIRS,
+    SHBrowseForFolderW, SHGetPathFromIDListW, BIF_RETURNONLYFSDIRS, BROWSEINFOW, CMF_DEFAULTONLY,
+    CMINVOKECOMMANDINFO, DROPFILES, GCS_VALIDATEA, GCS_VALIDATEW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreatePopupMenu, InsertMenuItemW, HMENU, MENUITEMINFOW, MFS_ENABLED, MFT_SEPARATOR,
@@ -392,10 +392,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             }
 
             // Separator — only when we have favorites and at least one bottom item
-            if !favorites.is_empty()
-                && (has_all_folders_entry || true)
-                && used < available
-            {
+            if !favorites.is_empty() && (has_all_folders_entry || true) && used < available {
                 let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &make_separator(current_id));
                 current_id += 1;
                 used += 1;
@@ -531,14 +528,12 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             if verb == all_folders_id && has_folders {
                 // "Все папки..." — open folder selector via IPC pipe
                 let source_clone = sources.clone();
-                std::thread::spawn(move || {
-                    match select_folder(source_clone) {
-                        Ok(resp) => {
-                            log::info!("SelectFolder OK: {:?}", resp);
-                        }
-                        Err(e) => {
-                            log::error!("SelectFolder failed: {}", e);
-                        }
+                std::thread::spawn(move || match select_folder(source_clone) {
+                    Ok(resp) => {
+                        log::info!("SelectFolder OK: {:?}", resp);
+                    }
+                    Err(e) => {
+                        log::error!("SelectFolder failed: {}", e);
                     }
                 });
             } else if verb == choose_path_id {
@@ -603,9 +598,10 @@ impl QuickSortShellExt_Impl {
 
             let mut path_buf = [0u16; 260];
             if SHGetPathFromIDListW(pidl, &mut path_buf).as_bool() {
-                let target_dir =
-                    String::from_utf16_lossy(&path_buf[..path_buf.iter().position(|&c| c == 0).unwrap_or(260)])
-                        .to_string();
+                let target_dir = String::from_utf16_lossy(
+                    &path_buf[..path_buf.iter().position(|&c| c == 0).unwrap_or(260)],
+                )
+                .to_string();
                 log::info!("ChoosePath: target directory = {}", target_dir);
 
                 // Send the move command via IPC pipe so it is recorded in history.
@@ -618,7 +614,11 @@ impl QuickSortShellExt_Impl {
                         quicksort_ipc_contract::OverwritePolicy::AutoRename,
                     ) {
                         Ok(resp) => {
-                            log::info!("ChoosePath: server responded: status={:?}, msg={}", resp.status, resp.message);
+                            log::info!(
+                                "ChoosePath: server responded: status={:?}, msg={}",
+                                resp.status,
+                                resp.message
+                            );
                         }
                         Err(e) => {
                             log::error!("ChoosePath: IPC call failed: {:?}", e);

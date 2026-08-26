@@ -77,9 +77,7 @@ pub fn move_to_path(
 ///
 /// The server will show/focus the main window and emit a `pending-file`
 /// event so the frontend displays the SelectorPage.
-pub fn select_folder(
-    source_paths: Vec<String>,
-) -> Result<ResponseMessage, PipeError> {
+pub fn select_folder(source_paths: Vec<String>) -> Result<ResponseMessage, PipeError> {
     let cmd = CommandMessage::SelectFolder(SelectFolderData { source_paths });
     send_command(&cmd)
 }
