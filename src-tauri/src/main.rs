@@ -44,7 +44,16 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    SelectFolder { file: String },
+    /// Open QuickSort with the given files in selector mode.
+    SelectFolder {
+        /// Source file paths to operate on (repeatable).
+        #[arg(long = "file")]
+        files: Vec<String>,
+
+        /// Operation type: "move" (default) or "copy".
+        #[arg(long, default_value = "move")]
+        operation: String,
+    },
 }
 
 use quicksort_application::errors::UseCaseError;
@@ -119,9 +128,9 @@ fn main() {
         return;
     }
 
-    if let Some(Commands::SelectFolder { file }) = &cli.command {
-        tracing::info!(file = %file, "select-folder subcommand");
-        crate::pending::set_pending_file(file.clone());
+    if let Some(Commands::SelectFolder { files, operation }) = &cli.command {
+        tracing::info!(files = ?files, operation = %operation, "select-folder subcommand");
+        crate::pending::set_pending_files(files.clone());
         start_tauri();
         return;
     }

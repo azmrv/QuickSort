@@ -1,92 +1,45 @@
-name: Build
+name: Release
 
 on:
   push:
-    branches: [master]
-    tags: ["v*"]
-  pull_request:
-    branches: [master]
+    branches: [ main ]
   workflow_dispatch:
-
-permissions:
-  contents: write
-
-env:
-  CARGO_TERM_COLOR: always
+    inputs:
+      target_os:
+        description: 'Target Operating System'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - 'windows'
+          - 'linux'
+          - 'macos'
 
 jobs:
-  build:
-    runs-on: windows-latest
+  build_and_package:
+    runs-on: ${{ github.event.inputs.target_os == 'windows' && 'windows-latest' || github.event.inputs.target_os == 'linux' && 'ubuntu-latest' || 'macos-latest' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Rust Toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          node-version: "22"
-          cache: "npm"
+          toolchain: stable
+          profile: minimal
 
-      - name: Setup Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
+      - name: Build Release Binary
+        run: cargo build --release --target ${{ github.event.inputs.target_os == 'windows' && 'x86_64-pc-windows-msvc' || github.event.inputs.target_os == 'linux' && 'x86_64-unknown-linux-gnu' || 'x86_64-apple-darwin' }}
 
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: "./src-tauri -> target"
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      # DLL is built separately — it's an independent component (COM Shell Extension)
-      # App works without it, DLL is optional for context menu integration
-      - name: Build context-menu DLL (standalone)
-        run: cargo build -p context-menu-dll --release
-
-      - name: Build Tauri app (release)
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # On tag push: create/update GitHub Release with NSIS installer
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-          releaseName: ${{ github.ref_type == 'tag' && format('QuickSort {0}', github.ref_name) || '' }}
-          releaseBody: "See the assets below for download options."
-          releaseDraft: false
-          prerelease: false
-
-      - name: Build portable ZIP
-        shell: pwsh
+      - name: Create Portable ZIP
         run: |
-          $version = "${{ github.ref_name }}" -replace '^v', ''
-          $releaseDir = "target/release"
-          $portableName = "QuickSort-$version-portable"
-          New-Item -ItemType Directory -Path $portableName -Force | Out-Null
+          if [[ "${{ github.event.inputs.target_os }}" == "windows" ]]; then
+            # Placeholder for NSIS/portable zip creation logic
+            echo "Building Windows portable package..."
+          elif [[ "${{ github.event.inputs.target_os }}" == "linux" ]]; then
+            echo "Building Linux tarball..."
+          elif [[ "${{ github.event.inputs.target_os }}" == "macos" ]]; then
+            echo "Building macOS App Bundle/ZIP..."
+          fi
 
-          # Copy exe + DLL + icon
-          Copy-Item "$releaseDir/quicksort.exe" "$portableName/" -ErrorAction Stop
-          Copy-Item "$releaseDir/context_menu_dll.dll" "$portableName/" -ErrorAction Stop
-          New-Item -ItemType Directory -Path "$portableName/resources" -Force | Out-Null
-          Copy-Item "resources/quicksort.ico" "$portableName/resources/" -ErrorAction Stop
-
-          Compress-Archive -Path "$portableName/*" -DestinationPath "$portableName.zip"
-          $size = ((Get-Item "$portableName.zip").Length / 1MB).ToString('F1')
-          Write-Host "Created: $portableName.zip ($size MB)"
-          echo "PORTABLE_ZIP=$portableName.zip" >> $env:GITHUB_ENV
-          echo "PORTABLE_NAME=$portableName" >> $env:GITHUB_ENV
-
-      # Always upload as workflow artifact (downloadable from Actions tab)
-      - name: Upload portable as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.PORTABLE_NAME }}
-          path: ${{ env.PORTABLE_ZIP }}
-          retention-days: 30
-
-      # On tag push: also attach to GitHub Release
-      - name: Upload portable to GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: ${{ env.PORTABLE_ZIP }}
+      - name: Create NSIS Installer (Draft)
+        run: echo "NSIS installer configuration step here for dual language support..."

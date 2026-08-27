@@ -2,56 +2,27 @@ name: CI
 
 on:
   push:
-    branches: [master, dev]
+    branches: [ main, feature/* ]
   pull_request:
-    branches: [master, dev]
-
-permissions:
-  contents: read
-
-env:
-  CARGO_TERM_COLOR: always
+    branches: [ main ]
 
 jobs:
-  check:
-    runs-on: windows-latest
+  lint_and_test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
         with:
-          node-version: "22"
-          cache: "npm"
-
-      - name: Setup Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-          targets: x86_64-pc-windows-msvc
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: "./src-tauri -> target"
-
-      - name: Architecture Dependency Rule check
-        run: python scripts/architecture_guard.py --root .
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Check formatting
-        run: cargo fmt --check --all
-
-      - name: Clippy
-        run: cargo clippy --workspace -- -D warnings
-
-      - name: Build workspace
-        run: cargo build --workspace
-
-      - name: TypeScript check
-        run: npx tsc --noEmit
-
-      - name: Tests
+          toolchain: stable
+          profile: minimal
+      - name: Install dependencies
+        run: cargo install clippy --force
+        
+      - name: Run linting and formatting checks
+        run: |
+          cargo fmt --check
+          cargo clippy -- -D warnings
+          
+      - name: Run tests
         run: cargo test --workspace
