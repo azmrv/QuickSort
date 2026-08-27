@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=KonqPopupMenu/Plugin
+MimeType=all/all;
+X-KDE-Priority=TopLevel
+X-KDE-Submenu=QuickSort
+Icon=quicksort
+
+[Desktop Action moveTo]
+Name=Move to...
+Exec=quicksort select-folder --file %F --operation move
+Icon=quicksort
+
+[Desktop Action copyTo]
+Name=Copy to...
+Exec=quicksort select-folder --file %F --operation copy
+Icon=quicksort
+
+[Desktop Action openEditor]
+Name=Open Editor
+Exec=quicksort
+Icon=quicksort

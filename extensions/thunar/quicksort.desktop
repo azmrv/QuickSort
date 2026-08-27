@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Action
+Name=QuickSort
+Tooltip=QuickSort file manager
+Icon=quicksort
+Profiles=quickSortProfile;
+
+[X-FCE/Action]
+Name=QuickSort
+Tooltip=QuickSort file manager
+Icon=quicksort
+
+[quickSortProfile]
+Name=QuickSort
+Selections=Any
+Mimetypes=all/all;
