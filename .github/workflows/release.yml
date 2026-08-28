@@ -1,45 +1,191 @@
+# Release workflow for QuickSort — unified CI/CD pipeline (ADR-017, v2).
+# Two stages:
+#   1. build:   parallel native bundles per platform (NSIS / DMG / TAR.GZ)
+#   2. publish: atomic GitHub Release on v* tags only (after ALL builds pass)
+# On plain `main` pushes the build stage uploads run artifacts only — no release.
+#
+# Key decisions (engineering audit 2026-08-28, ADR-017 v2):
+#   - dtolnay/rust-toolchain instead of abandoned actions-rs/toolchain@v1
+#   - tauri-apps/tauri-action encapsulates frontend + binary + bundling
+#   - macOS uses universal-apple-darwin target (one DMG: arm64 + x64)
+#   - SHA256 checksums.txt generated for every release artifact
+
 name: Release
 
 on:
   push:
     branches: [ main ]
+    tags:
+      - 'v*'
   workflow_dispatch:
-    inputs:
-      target_os:
-        description: 'Target Operating System'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - 'windows'
-          - 'linux'
-          - 'macos'
 
 jobs:
-  build_and_package:
-    runs-on: ${{ github.event.inputs.target_os == 'windows' && 'windows-latest' || github.event.inputs.target_os == 'linux' && 'ubuntu-latest' || 'macos-latest' }}
+  # ---------------------------------------------------------------------
+  # Stage 1: Build native bundles for all platforms in parallel
+  # ---------------------------------------------------------------------
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            artifact: nsis
+            arch: x64
+            args: ''
+          # universal-apple-darwin = fat binary (Apple Silicon + Intel)
+          - os: macos-latest
+            platform: macos
+            artifact: dmg
+            arch: universal
+            args: '--target universal-apple-darwin'
+          - os: ubuntu-22.04 # Pinned LTS: stable glibc linking for the Linux bundle
+            platform: linux
+            artifact: tar.gz
+            arch: x64
+            args: ''
+
+    runs-on: ${{ matrix.os }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up Rust Toolchain
-        uses: actions-rs/toolchain@v1
+      # Tauri is a hybrid app: the frontend must be built before the Rust binary.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          toolchain: stable
-          profile: minimal
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
 
-      - name: Build Release Binary
-        run: cargo build --release --target ${{ github.event.inputs.target_os == 'windows' && 'x86_64-pc-windows-msvc' || github.event.inputs.target_os == 'linux' && 'x86_64-unknown-linux-gnu' || 'x86_64-apple-darwin' }}
+      # dtolnay/rust-toolchain replaces the abandoned actions-rs/toolchain@v1
+      # (broken on Node 20+, unmaintained since 2020).
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
-      - name: Create Portable ZIP
+      - name: Add macOS universal targets
+        # Required so tauri-action can build --target universal-apple-darwin
+        if: matrix.platform == 'macos'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './ -> target' # .cargo/config.toml sets target-dir = "target"
+
+      # Tauri 2 requires WebKitGTK 4.1 (not 4.0 which is for Tauri 1).
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-22.04'
         run: |
-          if [[ "${{ github.event.inputs.target_os }}" == "windows" ]]; then
-            # Placeholder for NSIS/portable zip creation logic
-            echo "Building Windows portable package..."
-          elif [[ "${{ github.event.inputs.target_os }}" == "linux" ]]; then
-            echo "Building Linux tarball..."
-          elif [[ "${{ github.event.inputs.target_os }}" == "macos" ]]; then
-            echo "Building macOS App Bundle/ZIP..."
-          fi
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
 
-      - name: Create NSIS Installer (Draft)
-        run: echo "NSIS installer configuration step here for dual language support..."
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # The context-menu COM DLL is an independent workspace member (AGENTS.md).
+      # It must be built before the Tauri bundler runs so that it can be
+      # packaged next to the main executable.
+      - name: Build context-menu DLL
+        if: matrix.platform == 'windows'
+        run: cargo build -p context-menu-dll --release
+
+      # Key step: tauri-action builds the app and native bundles (NSIS/DMG).
+      # No tagName -> it never creates a GitHub Release; the publish job owns that.
+      - name: Build and Package App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # --- Code signing (provision certs in repo Settings → Secrets) ---
+          # Windows Authenticode signing (EV cert base64 → TAURI_SIGNING_*):
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS Developer ID + notarization:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          args: ${{ matrix.args }}
+
+      # Linux: Tauri natively produces deb + AppImage + rpm; wrap them into the
+      # portable TAR.GZ artifact promised by ADR-017.
+      - name: Post-package Linux to TAR.GZ
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}" # strip leading 'v' from the tag
+          else
+            VERSION="dev"
+          fi
+          cd target/release/bundle
+          tar -czf "../../../quicksort-${VERSION}-linux-x64.tar.gz" -- *
+
+      # SHA256 checksums for the bundle (release integrity, ADR-017 v2).
+      - name: Generate SHA256 checksums
+        shell: bash
+        run: |
+          cd target/release/bundle
+          find . -type f | sort | xargs sha256sum > checksums.txt
+          cat checksums.txt
+
+      # Persist build outputs as run artifacts (also on non-tag main pushes).
+      - name: Upload bundle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: quicksort-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            target/release/bundle/
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------
+  # Stage 2: Publish — runs ONLY on v* tag pushes, after all builds pass.
+  # Atomic: no partial releases (all-or-nothing across platforms).
+  # ---------------------------------------------------------------------
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write # Create the GitHub Release
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # Regenerate a single authoritative checksum set in the release.
+      - name: Generate release checksums
+        shell: bash
+        run: |
+          cd artifacts
+          find . -type f | sort | xargs sha256sum > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release (draft)
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true # Published manually after review
+          files: |
+            artifacts/*.exe
+            artifacts/*.dmg
+            artifacts/*.tar.gz
+            artifacts/*.deb
+            artifacts/*.AppImage
+            artifacts/*.rpm
+            artifacts/checksums.txt
+          fail_on_unmatched_files: false
