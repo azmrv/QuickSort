@@ -43,7 +43,7 @@ tempfile = "3"
 anyhow = "1.0"
 
 # SHA-256 hashing for content-based duplicate detection
-sha2 = "0.10"
+sha2 = "0.11"
 
 # Windows API for DLL loading (WCX plugin support)
 [target.'cfg(windows)'.dependencies]
