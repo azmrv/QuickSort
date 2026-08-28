@@ -30,9 +30,11 @@ jobs:
             patchelf
 
       - name: Run linting and formatting checks
+        # context-menu-dll is Windows-only; its windows 0.62 dependency pulls
+        # windows-future 0.3.2, which does not compile on Linux runners.
         run: |
           cargo fmt --check
-          cargo clippy --workspace -- -D warnings
+          cargo clippy --workspace --exclude context-menu-dll -- -D warnings
 
       - name: Run tests
-        run: cargo test --workspace
+        run: cargo test --workspace --exclude context-menu-dll
