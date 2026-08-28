@@ -318,9 +318,9 @@ fn start_tauri() {
             progress::set_app_handle(app.handle().clone());
             crate::ipc::set_app_handle(app.handle().clone());
 
-            let handle = app.handle().clone();
             #[cfg(target_os = "windows")]
             {
+                let handle = app.handle().clone();
                 std::thread::Builder::new()
                     .name("com-register".into())
                     .spawn(move || {
