@@ -43,26 +43,6 @@ tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# ========== Windows API (conditional) ==========
-
-[target.'cfg(windows)'.dependencies]
-# Registry access (registering/unregistering the COM server)
-winreg = "0.56"
-
-# Windows context menu integration (for registering the COM server)
-win-ctx = "1.4.1"
-
-# Low-level Windows API (ShellExecuteW, MessageBoxW, Named Pipes, etc.)
-windows = { version = "0.62.2", features = [
-    "Win32_UI_Shell",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_Foundation",
-    "Win32_Storage_FileSystem",
-    "Win32_System_Pipes",
-    "Win32_System_IO",
-    "Win32_Security",
-] }
-
 # ========== Cross-platform dependencies ==========
 
 # CLI argument parsing
@@ -114,6 +94,26 @@ quicksort-ipc-contract = { path = "../crates/quicksort-ipc-contract" }
 
 # Async runtime for Tauri commands and pipe server
 tokio = { workspace = true, features = ["rt", "net", "time", "macros", "io-util"] }
+
+# ========== Windows API (conditional) ==========
+
+[target.'cfg(windows)'.dependencies]
+# Registry access (registering/unregistering the COM server)
+winreg = "0.56"
+
+# Windows context menu integration (for registering the COM server)
+win-ctx = "1.4.1"
+
+# Low-level Windows API (ShellExecuteW, MessageBoxW, Named Pipes, etc.)
+windows = { version = "0.62.2", features = [
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Pipes",
+    "Win32_System_IO",
+    "Win32_Security",
+] }
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.189"
