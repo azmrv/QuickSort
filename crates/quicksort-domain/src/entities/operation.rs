@@ -233,7 +233,14 @@ mod tests {
     use super::*;
 
     fn test_path(path: &str) -> AbsolutePath {
-        AbsolutePath::new(path).unwrap()
+        // Use the path as-is on Windows; convert drive-letter fixtures to
+        // Unix root-relative paths so the same tests run on any platform.
+        let portable = if cfg!(target_os = "windows") {
+            path.to_string()
+        } else {
+            path.replace('\\', "/").trim_start_matches("C:").to_string()
+        };
+        AbsolutePath::new(&portable).unwrap()
     }
 
     fn now() -> DateTime<Utc> {

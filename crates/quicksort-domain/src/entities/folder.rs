@@ -27,7 +27,11 @@ pub struct FolderStats {
 /// ```rust
 /// use quicksort_domain::entities::Folder;
 /// use quicksort_domain::value_objects::AbsolutePath;
-/// let folder = Folder::new("Documents", AbsolutePath::new("C:\\Users\\Me\\Documents").unwrap()).unwrap();
+/// # #[cfg(target_os = "windows")]
+/// # let path = AbsolutePath::new("C:\\Users\\Me\\Documents").unwrap();
+/// # #[cfg(not(target_os = "windows"))]
+/// # let path = AbsolutePath::new("/home/me/Documents").unwrap();
+/// let folder = Folder::new("Documents", path).unwrap();
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Folder {
@@ -200,7 +204,14 @@ mod tests {
     use super::*;
 
     fn test_path(path: &str) -> AbsolutePath {
-        AbsolutePath::new(path).unwrap()
+        // Use the path as-is on Windows; convert drive-letter fixtures to
+        // Unix root-relative paths so the same tests run on any platform.
+        let portable = if cfg!(target_os = "windows") {
+            path.to_string()
+        } else {
+            path.replace('\\', "/").trim_start_matches("C:").to_string()
+        };
+        AbsolutePath::new(&portable).unwrap()
     }
 
     #[test]
@@ -254,7 +265,7 @@ mod tests {
     #[test]
     fn test_update_path_root_fails() {
         let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
-        let result = f.update_path(AbsolutePath::new("C:\\").unwrap());
+        let result = f.update_path(test_path("C:\\"));
         assert!(matches!(result, Err(DomainError::IllegalDirectoryTarget)));
     }
 

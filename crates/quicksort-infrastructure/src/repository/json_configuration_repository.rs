@@ -126,12 +126,15 @@ impl ConfigurationRepository for JsonConfigurationRepository {
     /// Returns the ID of the default "Documents" folder.
     /// If not found, creates a new FolderId for it.
     async fn get_default_folder_id(&self) -> Result<FolderId, UseCaseError> {
-        // Look for an existing "Documents" folder by path
-        let documents_path = AbsolutePath::new("C:\\Users\\Public\\Documents")
-            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+        // On Windows, look for an existing "Documents" folder by path.
+        #[cfg(target_os = "windows")]
+        {
+            let documents_path = AbsolutePath::new("C:\\Users\\Public\\Documents")
+                .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
 
-        if let Some(folder) = self.find_by_path(&documents_path.to_string()).await? {
-            return Ok(folder.id);
+            if let Some(folder) = self.find_by_path(&documents_path.to_string()).await? {
+                return Ok(folder.id);
+            }
         }
 
         // If not found, create a new ID (for use when first saving)

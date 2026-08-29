@@ -35,7 +35,10 @@ use crate::errors::DomainError;
 /// # Examples
 /// ```rust
 /// use quicksort_domain::value_objects::AbsolutePath;
-/// let path = AbsolutePath::new("C:\\Users\\Me\\Documents").unwrap();
+/// # #[cfg(target_os = "windows")]
+/// # let path = AbsolutePath::new("C:\\Users\\Me\\Documents").unwrap();
+/// # #[cfg(not(target_os = "windows"))]
+/// # let path = AbsolutePath::new("/home/me/Documents").unwrap();
 /// assert!(path.is_absolute());
 /// assert_eq!(path.file_name(), Some("Documents"));
 /// ```
@@ -172,9 +175,12 @@ impl AbsolutePath {
     /// # Example
     /// ```rust
     /// use quicksort_domain::value_objects::AbsolutePath;
-    /// let base = AbsolutePath::new("C:\\Users").unwrap();
+    /// # #[cfg(target_os = "windows")]
+    /// # let base = AbsolutePath::new("C:\\Users").unwrap();
+    /// # #[cfg(not(target_os = "windows"))]
+    /// # let base = AbsolutePath::new("/home/user").unwrap();
     /// let full = base.join("Documents");
-    /// assert_eq!(full.to_string(), "C:\\Users\\Documents");
+    /// assert_eq!(full.file_name(), Some("Documents"));
     /// ```
     pub fn join(&self, component: impl AsRef<str>) -> AbsolutePath {
         let joined = self.0.join(component.as_ref());
@@ -311,6 +317,7 @@ mod tests {
     // -- Windows-style paths (still valid on Windows) --
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn test_create_valid_drive_path() {
         let path = AbsolutePath::new("C:\\folder\\file.txt").unwrap();
         assert_eq!(path.to_string(), "C:\\folder\\file.txt");
@@ -353,24 +360,28 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn test_normalise_forward_slashes() {
         let path = AbsolutePath::new("C:/folder/file.txt").unwrap();
         assert_eq!(path.to_string(), "C:\\folder\\file.txt");
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn test_file_name() {
         let path = AbsolutePath::new("C:\\folder\\file.txt").unwrap();
         assert_eq!(path.file_name(), Some("file.txt"));
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn test_extension() {
         let path = AbsolutePath::new("C:\\folder\\file.txt").unwrap();
         assert_eq!(path.extension(), Some("txt"));
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn test_parent() {
         let path = AbsolutePath::new("C:\\folder\\subfolder\\file.txt").unwrap();
         let parent = path.parent().unwrap();
@@ -378,6 +389,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn test_join() {
         let path = AbsolutePath::new("C:\\folder").unwrap();
         let joined = path.join("subfolder");
@@ -385,6 +397,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn test_is_root() {
         let root = AbsolutePath::new("C:\\").unwrap();
         assert!(root.is_root());
@@ -393,6 +406,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn test_drive() {
         let path = AbsolutePath::new("D:\\folder\\file.txt").unwrap();
         assert_eq!(path.drive(), Some("D:".to_string()));
@@ -405,27 +419,32 @@ mod tests {
         assert!(!default_path.to_string().is_empty());
     }
 
-    // -- Unix-style paths (valid on all platforms via Path::is_absolute) --
+    // -- Unix-style paths (valid only on non-Windows: a bare root-relative
+    // path lacks a drive prefix on Windows, so Path::is_absolute is false) --
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_create_valid_unix_path() {
         let path = AbsolutePath::new("/home/user/documents").unwrap();
         assert!(path.is_absolute());
     }
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_unix_root_is_root() {
         let path = AbsolutePath::new("/").unwrap();
         assert!(path.is_root());
     }
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_unix_file_name() {
         let path = AbsolutePath::new("/home/user/file.txt").unwrap();
         assert_eq!(path.file_name(), Some("file.txt"));
     }
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_unix_parent() {
         let path = AbsolutePath::new("/home/user/file.txt").unwrap();
         let parent = path.parent().unwrap();
@@ -433,6 +452,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_unix_join() {
         let path = AbsolutePath::new("/home/user").unwrap();
         let joined = path.join("documents");
@@ -458,6 +478,7 @@ mod tests {
     // -- Backward compatibility --
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn test_windows_path_alias() {
         let path = WindowsPath::new("C:\\folder\\file.txt").unwrap();
         assert!(path.is_absolute());

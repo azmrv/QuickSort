@@ -377,7 +377,12 @@ pub fn test_folder() -> Folder {
     Folder {
         id: FolderId::from_string("00000000-0000-0000-0000-000000000001").unwrap(),
         name: "Documents".to_string(),
-        path: AbsolutePath::new("C:\\Users\\Test\\Documents").unwrap(),
+        path: AbsolutePath::new(if cfg!(target_os = "windows") {
+            "C:\\Users\\Test\\Documents"
+        } else {
+            "/home/test/Documents"
+        })
+        .unwrap(),
         favorite: false,
         order: 0,
         color: None,
