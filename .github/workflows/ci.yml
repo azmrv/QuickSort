@@ -10,7 +10,7 @@ jobs:
   lint_and_test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Rust
         # dtolnay/rust-toolchain replaces the abandoned actions-rs/toolchain@v1
         # (unmaintained since 2020, broken on Node 20+ runners).
