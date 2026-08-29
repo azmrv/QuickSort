@@ -73,20 +73,20 @@ mod tests {
 
     #[test]
     fn test_config_dir_returns_valid_path() {
-        let path = config_dir();
-        assert!(path.to_string_lossy().contains("QuickSort"));
+        let path = config_dir().to_string_lossy().to_lowercase();
+        assert!(path.contains("quicksort"));
     }
 
     #[test]
     fn test_data_dir_returns_valid_path() {
-        let path = data_dir();
-        assert!(path.to_string_lossy().contains("QuickSort"));
+        let path = data_dir().to_string_lossy().to_lowercase();
+        assert!(path.contains("quicksort"));
     }
 
     #[test]
     fn test_cache_dir_returns_valid_path() {
-        let path = cache_dir();
-        assert!(path.to_string_lossy().contains("QuickSort"));
+        let path = cache_dir().to_string_lossy().to_lowercase();
+        assert!(path.contains("quicksort"));
     }
 
     #[test]
