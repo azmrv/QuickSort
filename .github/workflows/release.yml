@@ -2,7 +2,7 @@
 # Two stages:
 #   1. build:   parallel native bundles per platform (NSIS / DMG / TAR.GZ)
 #   2. publish: atomic GitHub Release on v* tags only (after ALL builds pass)
-# On plain `main` pushes the build stage uploads run artifacts only — no release.
+# On plain `master` pushes the build stage uploads run artifacts only — no release.
 #
 # Key decisions (engineering audit 2026-08-28, ADR-017 v2):
 #   - dtolnay/rust-toolchain instead of abandoned actions-rs/toolchain@v1
@@ -14,7 +14,7 @@ name: Release
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
     tags:
       - 'v*'
   workflow_dispatch:
@@ -33,17 +33,21 @@ jobs:
             artifact: nsis
             arch: x64
             args: ''
+            bundle_dir: target/release/bundle
           # universal-apple-darwin = fat binary (Apple Silicon + Intel)
           - os: macos-latest
             platform: macos
             artifact: dmg
             arch: universal
             args: '--target universal-apple-darwin'
+            # macOS builds to a per-target dir, not the default target/release
+            bundle_dir: target/universal-apple-darwin/release/bundle
           - os: ubuntu-22.04 # Pinned LTS: stable glibc linking for the Linux bundle
             platform: linux
             artifact: tar.gz
             arch: x64
             args: ''
+            bundle_dir: target/release/bundle
 
     runs-on: ${{ matrix.os }}
 
@@ -108,12 +112,17 @@ jobs:
           # Windows Authenticode signing (EV cert base64 → TAURI_SIGNING_*):
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS Developer ID + notarization:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # macOS Developer ID + notarization.
+          # IMPORTANT: DO NOT enable APPLE_* while the secrets are empty. An unset
+          # secret evaluates to an empty string, and tauri-bundler treats a present
+          # APPLE_CERTIFICATE env var as a signing request, failing with
+          # "failed codesign application: failed to run command security import".
+          # Uncomment once real Apple Developer credentials exist in Secrets:
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           args: ${{ matrix.args }}
 
@@ -128,24 +137,24 @@ jobs:
           else
             VERSION="dev"
           fi
-          cd target/release/bundle
+          cd ${{ matrix.bundle_dir }}
           tar -czf "../../../quicksort-${VERSION}-linux-x64.tar.gz" -- *
 
       # SHA256 checksums for the bundle (release integrity, ADR-017 v2).
       - name: Generate SHA256 checksums
         shell: bash
         run: |
-          cd target/release/bundle
+          cd ${{ matrix.bundle_dir }}
           find . -type f | sort | xargs sha256sum > checksums.txt
           cat checksums.txt
 
-      # Persist build outputs as run artifacts (also on non-tag main pushes).
+      # Persist build outputs as run artifacts (also on non-tag master pushes).
       - name: Upload bundle artifacts
         uses: actions/upload-artifact@v4
         with:
           name: quicksort-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
           path: |
-            target/release/bundle/
+            ${{ matrix.bundle_dir }}/
           if-no-files-found: warn
           retention-days: 14
 
