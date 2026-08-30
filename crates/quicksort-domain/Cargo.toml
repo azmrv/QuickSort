@@ -30,7 +30,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Error handling.
 # Domain errors are defined with thiserror for ergonomic Display/Debug.
-thiserror = "1.0"
+thiserror = "2.0"
 
 # Async traits for domain services.
 async-trait = "0.1"

@@ -24,6 +24,10 @@ jobs:
   # Stage 1: Build native bundles for all platforms in parallel
   # ---------------------------------------------------------------------
   build:
+    # CodeQL: least-privilege — the build job only reads sources and uploads
+    # run artifacts; it never creates releases (that is publish's job).
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -126,8 +130,28 @@ jobs:
         with:
           args: ${{ matrix.args }}
 
+      # Windows: portable ZIP = raw exe + context-menu DLL + icon, no installer.
+      # Mirrors the pre-ADR-017 v2 release asset (QuickSort-{version}-portable.zip).
+      # Staged in RUNNER_TEMP so the archive (and nothing else) lands in bundle_dir.
+      - name: Build portable ZIP (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          if ("$env:GITHUB_REF_TYPE" -eq "tag") {
+            $version = "$env:GITHUB_REF_NAME".TrimStart('v')
+          } else {
+            $version = "dev"
+          }
+          $staging = Join-Path $env:RUNNER_TEMP "QuickSort-portable"
+          New-Item -ItemType Directory -Path "$staging/resources" -Force | Out-Null
+          Copy-Item "target/release/quicksort.exe" "$staging/" -ErrorAction Stop
+          Copy-Item "target/release/context_menu_dll.dll" "$staging/" -ErrorAction Stop
+          Copy-Item "resources/quicksort.ico" "$staging/resources/" -ErrorAction Stop
+          Compress-Archive -Path "$staging/*" -DestinationPath "${{ matrix.bundle_dir }}/QuickSort-$version-portable.zip" -Force
+
       # Linux: Tauri natively produces deb + AppImage + rpm; wrap them into the
-      # portable TAR.GZ artifact promised by ADR-017.
+      # portable TAR.GZ artifact promised by ADR-017. Kept inside bundle_dir so
+      # the Upload step (below) ships it to the release (v0.2.5 bug: ../../../ escaped bundle_dir).
       - name: Post-package Linux to TAR.GZ
         if: matrix.platform == 'linux'
         shell: bash
@@ -138,7 +162,7 @@ jobs:
             VERSION="dev"
           fi
           cd ${{ matrix.bundle_dir }}
-          tar -czf "../../../quicksort-${VERSION}-linux-x64.tar.gz" -- *
+          tar -czf "quicksort-${VERSION}-linux-x64.tar.gz" -- *
 
       # SHA256 checksums for the bundle (release integrity, ADR-017 v2).
       - name: Generate SHA256 checksums
@@ -150,7 +174,7 @@ jobs:
 
       # Persist build outputs as run artifacts (also on non-tag master pushes).
       - name: Upload bundle artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: quicksort-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
           path: |
@@ -172,7 +196,7 @@ jobs:
 
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
           merge-multiple: true
@@ -200,5 +224,7 @@ jobs:
             artifacts/appimage/*.AppImage
             artifacts/deb/*.deb
             artifacts/rpm/*.rpm
+            artifacts/QuickSort-*-portable.zip
+            artifacts/quicksort-*-linux-x64.tar.gz
             artifacts/checksums.txt
           fail_on_unmatched_files: false
