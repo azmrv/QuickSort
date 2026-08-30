@@ -15,9 +15,19 @@ QuickSort сочетает скорость shell-расширения с мощ
 
 ---
 
-[English](README.md) | **Русский** | [中文](../cn/README.md) | [Deutsch](../de/README.md) | [Español](../es/README.md)
+[English](../../README.md) | **Русский** | [中文](../cn/README.md) | [Deutsch](../de/README.md) | [Español](../es/README.md)
 
 ---
+
+<div align="center">
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/83fc5efaa96d7d4b84317e957f628e38/png"><img src="https://i8.imageban.ru/thumbs/2026.08.25/83fc5efaa96d7d4b84317e957f628e38.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/b80ebefd51e54a070cc292b0f427fa49/png"><img src="https://i3.imageban.ru/thumbs/2026.08.25/b80ebefd51e54a070cc292b0f427fa49.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/2c0472a156b387eda9d595667fd24381/png"><img src="https://i2.imageban.ru/thumbs/2026.08.25/2c0472a156b387eda9d595667fd24381.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/f2007bd5ce1f0283353c986e2dd5d881/png"><img src="https://i7.imageban.ru/thumbs/2026.08.25/f2007bd5ce1f0283353c986e2dd5d881.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/a784d47f47a701c2f6c01cb4f20544af/png"><img src="https://i7.imageban.ru/thumbs/2026.08.25/a784d47f47a701c2f6c01cb4f20544af.png" border="0" style='border: 1px solid #000000'></a>
+</div>
+
+
 
 ## Возможности
 
@@ -46,7 +56,7 @@ QuickSort сочетает скорость shell-расширения с мощ
 
 QuickSort развивается в полноценный файловый менеджер:
 
-- **Командная строка** — интерактивный ввод с синтаксисом поиска в стиле Everything
+- **Командная строка** — интерактивный ввод с синтаксисом поиска в стиле Everything для расширенных файловых запросов, фильтрации и сортировки
 - **Пакетные операции** — очередь обработки для масштабных перемещений с прогрессом
 - **Умный анализ файлов** — обнаружение дубликатов по содержимому, распознавание типов, индексация метаданных
 
@@ -75,7 +85,7 @@ Domain <- Application <- Infrastructure <- Adapters (src-tauri, context-menu-dll
 |--------|------|----------|
 | `quicksort-domain` | Domain | Сущности, value objects, события |
 | `quicksort-application` | Application | Use cases, порты, DTO, фасад |
-| `quicksort-infrastructure` | Infrastructure | JSON-репозитории, FileSystem, UUID |
+| `quicksort-infrastructure` | Infrastructure | JSON-репозитории, FileSystem, UUID, Clock |
 | `quicksort-ipc-contract` | Contract | Контракты Named Pipe |
 | `src-tauri` | Adapter | Tauri-приложение, CLI, IPC-сервер, регистрация COM |
 | `context-menu-dll` | Adapter | COM Shell Extension (загружается Проводником) |
@@ -179,5 +189,15 @@ QuickSort/
 <div align="center">
 
 **QuickSort** — файловое управление нового поколения для Windows.
+
+</div>
+
+
+
+<div align="center">
+
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/40f71dff67252d956c04edd889115666/png"><img src="https://i5.imageban.ru/thumbs/2026.08.25/40f71dff67252d956c04edd889115666.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/66a4921c12ff6afc4f030dde050b02e2/png"><img src="https://i4.imageban.ru/thumbs/2026.08.25/66a4921c12ff6afc4f030dde050b02e2.png" border="0" style='border: 1px solid #000000'></a>  
+
 
 </div>

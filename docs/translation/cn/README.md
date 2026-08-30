@@ -19,6 +19,16 @@ QuickSort 结合了 Shell 扩展的速度和现代文件管理系统的强大功
 
 ---
 
+<div align="center">
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/83fc5efaa96d7d4b84317e957f628e38/png"><img src="https://i8.imageban.ru/thumbs/2026.08.25/83fc5efaa96d7d4b84317e957f628e38.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/b80ebefd51e54a070cc292b0f427fa49/png"><img src="https://i3.imageban.ru/thumbs/2026.08.25/b80ebefd51e54a070cc292b0f427fa49.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/2c0472a156b387eda9d595667fd24381/png"><img src="https://i2.imageban.ru/thumbs/2026.08.25/2c0472a156b387eda9d595667fd24381.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/f2007bd5ce1f0283353c986e2dd5d881/png"><img src="https://i7.imageban.ru/thumbs/2026.08.25/f2007bd5ce1f0283353c986e2dd5d881.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/a784d47f47a701c2f6c01cb4f20544af/png"><img src="https://i7.imageban.ru/thumbs/2026.08.25/a784d47f47a701c2f6c01cb4f20544af.png" border="0" style='border: 1px solid #000000'></a>
+</div>
+
+
+
 ## 功能特性
 
 ### 核心功能
@@ -46,7 +56,7 @@ QuickSort 结合了 Shell 扩展的速度和现代文件管理系统的强大功
 
 QuickSort 正在发展为全功能文件管理器：
 
-- **命令行界面** — 支持 Everything 风格搜索语法的交互式文本输入
+- **命令行界面** — 支持 Everything 风格搜索语法的交互式文本输入，用于高级文件查询、筛选和排序
 - **批量操作** — 基于队列的大规模文件移动处理，带进度跟踪
 - **智能文件分析** — 基于内容的重复检测、文件类型识别和元数据索引
 
@@ -75,7 +85,7 @@ Domain <- Application <- Infrastructure <- Adapters (src-tauri, context-menu-dll
 |-------|------|------|
 | `quicksort-domain` | Domain | 实体、值对象、事件 |
 | `quicksort-application` | Application | 用例、端口、DTO、门面 |
-| `quicksort-infrastructure` | Infrastructure | JSON 仓库、文件系统、UUID |
+| `quicksort-infrastructure` | Infrastructure | JSON 仓库、文件系统、UUID、Clock |
 | `quicksort-ipc-contract` | Contract | Named Pipe 契约 |
 | `src-tauri` | Adapter | Tauri 应用、CLI、IPC 服务器、COM 注册 |
 | `context-menu-dll` | Adapter | COM Shell 扩展（由资源管理器加载） |
@@ -179,5 +189,15 @@ QuickSort/
 <div align="center">
 
 **QuickSort** — Windows 下一代文件管理。
+
+</div>
+
+
+
+<div align="center">
+
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/40f71dff67252d956c04edd889115666/png"><img src="https://i5.imageban.ru/thumbs/2026.08.25/40f71dff67252d956c04edd889115666.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/66a4921c12ff6afc4f030dde050b02e2/png"><img src="https://i4.imageban.ru/thumbs/2026.08.25/66a4921c12ff6afc4f030dde050b02e2.png" border="0" style='border: 1px solid #000000'></a>  
+
 
 </div>
