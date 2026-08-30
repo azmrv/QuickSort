@@ -19,6 +19,16 @@ QuickSort combina la velocidad de una extensión de shell con la potencia de un 
 
 ---
 
+<div align="center">
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/83fc5efaa96d7d4b84317e957f628e38/png"><img src="https://i8.imageban.ru/thumbs/2026.08.25/83fc5efaa96d7d4b84317e957f628e38.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/b80ebefd51e54a070cc292b0f427fa49/png"><img src="https://i3.imageban.ru/thumbs/2026.08.25/b80ebefd51e54a070cc292b0f427fa49.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/2c0472a156b387eda9d595667fd24381/png"><img src="https://i2.imageban.ru/thumbs/2026.08.25/2c0472a156b387eda9d595667fd24381.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/f2007bd5ce1f0283353c986e2dd5d881/png"><img src="https://i7.imageban.ru/thumbs/2026.08.25/f2007bd5ce1f0283353c986e2dd5d881.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/a784d47f47a701c2f6c01cb4f20544af/png"><img src="https://i7.imageban.ru/thumbs/2026.08.25/a784d47f47a701c2f6c01cb4f20544af.png" border="0" style='border: 1px solid #000000'></a>
+</div>
+
+
+
 ## Características
 
 ### Funciones principales
@@ -46,7 +56,7 @@ QuickSort combina la velocidad de una extensión de shell con la potencia de un 
 
 QuickSort evoluciona hacia un gestor de archivos completo con:
 
-- **Línea de comandos** — entrada de texto interactivo con sintaxis de búsqueda estilo Everything
+- **Línea de comandos** — entrada de texto interactivo con sintaxis de búsqueda estilo Everything para consultas de archivos avanzadas, filtrado y ordenación
 - **Operaciones por lotes** — procesamiento basado en colas para movimientos a gran escala con seguimiento de progreso
 - **Análisis inteligente de archivos** — detección de duplicados por contenido, reconocimiento de tipos e indexación de metadatos
 
@@ -75,7 +85,7 @@ Domain <- Application <- Infrastructure <- Adapters (src-tauri, context-menu-dll
 |-------|-----|-------------|
 | `quicksort-domain` | Domain | Entidades, objetos de valor, eventos |
 | `quicksort-application` | Application | Casos de uso, puertos, DTOs, fachada |
-| `quicksort-infrastructure` | Infrastructure | Repositorios JSON, FileSystem, UUID |
+| `quicksort-infrastructure` | Infrastructure | Repositorios JSON, FileSystem, UUID, Clock |
 | `quicksort-ipc-contract` | Contract | Contratos Named Pipe |
 | `src-tauri` | Adapter | App Tauri, CLI, servidor IPC, registro COM |
 | `context-menu-dll` | Adapter | Extensión COM Shell (cargada por el Explorador) |
@@ -179,5 +189,15 @@ Este proyecto está inspirado en el trabajo de muchos desarrolladores y proyecto
 <div align="center">
 
 **QuickSort** — gestión de archivos de próxima generación para Windows.
+
+</div>
+
+
+
+<div align="center">
+
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/40f71dff67252d956c04edd889115666/png"><img src="https://i5.imageban.ru/thumbs/2026.08.25/40f71dff67252d956c04edd889115666.png" border="0" style='border: 1px solid #000000'></a> 
+ <a target="_blank" href="https://imageban.ru/show/2026/08/25/66a4921c12ff6afc4f030dde050b02e2/png"><img src="https://i4.imageban.ru/thumbs/2026.08.25/66a4921c12ff6afc4f030dde050b02e2.png" border="0" style='border: 1px solid #000000'></a>  
+
 
 </div>
