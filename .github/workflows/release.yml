@@ -150,7 +150,7 @@ jobs:
 
       # Persist build outputs as run artifacts (also on non-tag master pushes).
       - name: Upload bundle artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: quicksort-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
           path: |
