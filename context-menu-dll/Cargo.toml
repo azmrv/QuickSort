@@ -6,8 +6,11 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+# NOTE: do NOT add a dependency on ../src-tauri back here. The DLL must remain an
+# independent component: src-tauri's build script validates the DLL resource
+# (`../target/release/context_menu_dll.dll`) and fails when it does not exist yet,
+# which creates a build-order cycle when compiling the DLL for the first time on CI.
 [dependencies]
-quicksort = {path = "../src-tauri" }
 quicksort-ipc-contract = { path = "../crates/quicksort-ipc-contract" }
 log = "0.4"
 simplelog = "0.12"

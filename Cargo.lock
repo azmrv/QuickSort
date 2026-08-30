@@ -591,7 +591,6 @@ dependencies = [
  "embed-resource",
  "log",
  "parking_lot",
- "quicksort",
  "quicksort-ipc-contract",
  "serde",
  "serde_json",
