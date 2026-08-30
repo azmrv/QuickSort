@@ -8,6 +8,8 @@ on:
 
 jobs:
   lint_and_test:
+    permissions:
+      contents: read # CodeQL: least-privilege — CI only reads sources
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
