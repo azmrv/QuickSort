@@ -189,12 +189,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: true # Published manually after review
+          # download-artifact (merge-multiple) keeps Tauri's bundle layout
+          # (nsis/, msi/, dmg/, appimage/, deb/, rpm/  subdirectories), so the
+          # installers must be globbed with their subdirectory prefix, not
+          # from artifacts/ root (v0.2.5 released only checksums.txt).
           files: |
-            artifacts/*.exe
-            artifacts/*.dmg
-            artifacts/*.tar.gz
-            artifacts/*.deb
-            artifacts/*.AppImage
-            artifacts/*.rpm
+            artifacts/nsis/*.exe
+            artifacts/msi/*.msi
+            artifacts/dmg/*.dmg
+            artifacts/appimage/*.AppImage
+            artifacts/deb/*.deb
+            artifacts/rpm/*.rpm
             artifacts/checksums.txt
           fail_on_unmatched_files: false
