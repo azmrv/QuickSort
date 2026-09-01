@@ -385,8 +385,10 @@ Function PageLeaveReinstall
 FunctionEnd
 
 ; 5. Choose install directory page
-; QuickSort: Ensure the chosen directory always gets the "\quicksort" subfolder appended.
-!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
+; QuickSort: DirectoryPre skips the page in passive installs and shows the PARENT
+; directory; EnsureProductNameSubfolder (LEAVE) appends "\quicksort" so the files
+; always land in a quicksort subfolder of the folder the user picked.
+!define MUI_PAGE_CUSTOMFUNCTION_PRE DirectoryPre
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE EnsureProductNameSubfolder
 !insertmacro MUI_PAGE_DIRECTORY
 
@@ -643,6 +645,10 @@ Section WebView2
 SectionEnd
 
 Section Install
+  ; Ensure the install directory ends with "\${PRODUCTNAME}". Silent/passive
+  ; installs skip the directory page (and its LEAVE handler), so enforce the
+  ; subfolder here as well — the installer always creates the quicksort folder.
+  Call EnsureProductNameSubfolder
   SetOutPath $INSTDIR
 
   !ifmacrodef NSIS_HOOK_PREINSTALL
@@ -920,6 +926,21 @@ Function EnsureProductNameSubfolder
     ${Else}
       StrCpy $INSTDIR "$R0\${PRODUCTNAME}"
     ${EndIf}
+  ${EndIf}
+FunctionEnd
+
+; QuickSort: PRE handler for the directory page. Aborts the page in passive
+; installs and strips a trailing "\${PRODUCTNAME}" from the shown path so the
+; selector displays the PARENT directory. The files themselves always go into a
+; "<picked folder>\quicksort" subfolder (restored by EnsureProductNameSubfolder).
+Function DirectoryPre
+  ${IfThen} $PassiveMode = 1  ${|} Abort ${|}
+  StrLen $R2 "${PRODUCTNAME}"
+  IntOp $R2 $R2 + 1 ; length of "\${PRODUCTNAME}"
+  StrCpy $R1 "$INSTDIR" "" -$R2
+  ${If} $R1 == "\${PRODUCTNAME}"
+    StrCpy $R0 "$INSTDIR" -$R2
+    StrCpy $INSTDIR $R0
   ${EndIf}
 FunctionEnd
 

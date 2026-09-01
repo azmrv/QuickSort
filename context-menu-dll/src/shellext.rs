@@ -103,7 +103,6 @@ struct MenuFolder {
 pub struct QuickSortShellExt {
     item_paths: RefCell<Vec<PathBuf>>,
     folders: Mutex<Vec<MenuFolder>>,
-    min_cmd_id: std::cell::Cell<u32>,
 }
 
 impl Default for QuickSortShellExt {
@@ -114,7 +113,6 @@ impl Default for QuickSortShellExt {
         Self {
             item_paths: Default::default(),
             folders: Mutex::new(Vec::new()),
-            min_cmd_id: std::cell::Cell::new(0),
         }
     }
 }
@@ -343,6 +341,21 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 log::info!("QueryContextMenu: no item paths, skipping (system dialog?)");
                 return S_OK;
             }
+
+            // Explorer calls QueryContextMenu twice for a shortcut: once for the
+            // .lnk file itself and once for the target object. Rendering on both
+            // instances produced a duplicate "QuickSort" entry (QA report). We
+            // render only on the target instance — when every selected path is a
+            // shortcut file we bail out here.
+            let all_shortcuts = paths.iter().all(|p| {
+                p.is_file()
+                    && p.extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("lnk"))
+            });
+            if all_shortcuts {
+                log::info!("QueryContextMenu: all items are .lnk shortcuts, skipping (target instance renders the menu)");
+                return S_OK;
+            }
         }
 
         let folders = match load_folders_from_json() {
@@ -353,7 +366,6 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             }
         };
 
-        self.this.min_cmd_id.set(min_cmd_id);
         *self.this.folders.lock() = folders.clone();
 
         let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
@@ -369,6 +381,17 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             favorites.len() as u32,
             available.saturating_sub(bottom_items),
         );
+
+        // QA report: for folders Explorer passes a larger menu_index (folder menus
+        // contain more built-in entries), which pushed "QuickSort" below the
+        // separator into the second section. Insert at the very top (position 0)
+        // when the selection contains at least one folder so the entry always
+        // stays in the first section.
+        let insert_at = if self.this.item_paths.borrow().iter().any(|p| p.is_dir()) {
+            0
+        } else {
+            menu_index
+        };
 
         unsafe {
             let h_submenu = CreatePopupMenu().unwrap();
@@ -448,7 +471,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             );
             let _ = InsertMenuItemW(
                 menu,
-                menu_index,
+                insert_at,
                 true,
                 &MENUITEMINFOW {
                     fMask: MIIM_ID | MIIM_STATE | MIIM_STRING | MIIM_BITMAP | MIIM_SUBMENU,
