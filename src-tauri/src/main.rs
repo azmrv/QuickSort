@@ -37,6 +37,10 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
 
+    /// Register the COM server and exit
+    #[arg(long)]
+    register: bool,
+
     /// Unregister the COM server and exit
     #[arg(long)]
     unregister: bool,
@@ -110,6 +114,23 @@ fn main() {
     tracing::info!(app = "quicksort", "starting");
 
     let cli = Cli::parse();
+
+    #[cfg(target_os = "windows")]
+    if cli.register {
+        tracing::info!("--register flag: registering COM server and exiting");
+        match com::register() {
+            Ok(()) => {
+                tracing::info!("COM server registered successfully");
+                println!("COM server registered successfully.");
+            }
+            Err(e) => {
+                tracing::error!("Failed to register COM server: {}", e);
+                eprintln!("Failed to register COM server: {}", e);
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
 
     #[cfg(target_os = "windows")]
     if cli.unregister {

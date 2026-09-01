@@ -141,13 +141,12 @@ fn write_registry_keys() -> Result<(), String> {
     Ok(())
 }
 
-/// Register COM server keys. Explorer picks up the handler on next context menu invocation.
-pub fn register() -> Result<(), String> {
-    // Remove stale handler keys from previous versions that are no longer in HANDLERS.
-    // `*` was removed because Windows file-type ProgIDs override it.
-    // `Directory\Background` was removed because it shows the menu on desktop right-click.
-    // `Directory` and `Drive` were removed because they cause double entries for shortcuts
-    // and inconsistent positioning across file types.
+/// Remove stale handler keys from previous versions that are no longer in HANDLERS.
+/// `*` was removed because Windows file-type ProgIDs override it.
+/// `Directory\Background` was removed because it shows the menu on desktop right-click.
+/// `Directory` and `Drive` were removed because they cause double entries for shortcuts
+/// and inconsistent positioning across file types.
+fn remove_stale_handler_keys() {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let stale_handlers = ["*", "Directory\\Background", "Directory", "Drive"];
     for handler in &stale_handlers {
@@ -167,12 +166,23 @@ pub fn register() -> Result<(), String> {
             }
         }
     }
+}
 
+/// Register COM server keys. Explorer restarts to pick up the handler immediately.
+pub fn register() -> Result<(), String> {
+    remove_stale_handler_keys();
     write_registry_keys()?;
+    // Restart Explorer so it unloads an old DLL instance and re-reads the
+    // fresh registration. Needed after updates where the DLL file changed.
+    restart_explorer();
     Ok(())
 }
 
 pub fn unregister() -> Result<(), String> {
+    // Also clean up stale handlers from older versions so no dead
+    // QuickSort entries remain in Explorer after uninstall.
+    remove_stale_handler_keys();
+
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
     // Delete handler keys so Explorer won't load this extension anymore.

@@ -469,8 +469,23 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         }
         let ici = unsafe { *info };
         // Explorer sends the wID from InsertMenuItemW in the low 16 bits of lpVerb.
-        // The dispatch below uses wID-based lookup, not position-based.
+        // When HIWORD is non-zero, lpVerb is a canonical string verb, not a command ID.
+        if (ici.lpVerb.0 as usize) & 0xFFFF0000 != 0 {
+            log::warn!("InvokeCommand: string verbs are not supported, ignoring");
+            return E_FAIL.ok();
+        }
         let verb = (ici.lpVerb.0 as usize) & 0xFFFF;
+        let min_cmd_id = self.this.min_cmd_id.get() as usize;
+        if verb < min_cmd_id {
+            log::warn!(
+                "InvokeCommand: verb={} below min_cmd_id={}, ignoring foreign command",
+                verb,
+                min_cmd_id
+            );
+            return E_FAIL.ok();
+        }
+        // Normalize to the 0-based slot index used by QueryContextMenu.
+        let command = verb - min_cmd_id;
 
         let folders = self.this.folders.lock();
         let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
@@ -490,15 +505,17 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         }
 
         log::info!(
-            "InvokeCommand: verb={}, max_fav={}, sources={}",
+            "InvokeCommand: verb={}, min_cmd_id={}, command={}, max_fav={}, sources={}",
             verb,
+            min_cmd_id,
+            command,
             max_fav,
             sources.len()
         );
 
-        // Position 0..max_fav-1 → favorite folder
-        if verb < max_fav {
-            let target = favorites[verb];
+        // Slot 0..max_fav-1 → favorite folder (mirrors QueryContextMenu)
+        if command < max_fav {
+            let target = favorites[command];
             log::info!("Moving to: {} ({})", target.name, target.id);
 
             let target_id = target.id.clone();
@@ -512,20 +529,19 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                     }
                 }
             });
-        // Position max_fav = separator (not clickable)
-        // Position max_fav+1 = "All folders" (only if has_all_folders_entry)
-        // Position max_fav+2 (or max_fav+1) = "Choose path"
+        // Slot layout mirrors QueryContextMenu:
+        // favorites [max_fav], separator (only when favorites exist),
+        // "Все папки..." (only when folders non-empty), "Выбрать путь..." always.
         } else {
-            // Calculate the ID for "All folders" and "Choose path"
             let has_folders = !folders.is_empty();
-            let all_folders_id = max_fav + 1; // separator + 1
+            let all_folders_id = max_fav + usize::from(max_fav > 0); // after favorites + separator
             let choose_path_id = if has_folders {
                 all_folders_id + 1
             } else {
                 all_folders_id
             };
 
-            if verb == all_folders_id && has_folders {
+            if command == all_folders_id && has_folders {
                 // "Все папки..." — open folder selector via IPC pipe
                 let source_clone = sources.clone();
                 std::thread::spawn(move || match select_folder(source_clone) {
@@ -536,9 +552,11 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                         log::error!("SelectFolder failed: {}", e);
                     }
                 });
-            } else if verb == choose_path_id {
+            } else if command == choose_path_id {
                 // "Выбрать путь..." — open native folder picker
                 self.handle_choose_path(sources);
+            } else {
+                log::warn!("InvokeCommand: unhandled command slot {}", command);
             }
         }
 
@@ -640,9 +658,13 @@ impl QuickSortShellExt_Impl {
 // ============================================================================
 
 fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
+    // Keep in sync with the app's `platform::paths::folders_config_path()`:
+    // the `directories` crate resolves config to `%APPDATA%\QuickSort\config\`.
+    // Regression 3c87501 left the DLL reading the root, which emptied the menu.
     let appdata = std::env::var("APPDATA").map_err(|_| "APPDATA not set".to_string())?;
     let mut path = PathBuf::from(appdata);
     path.push("QuickSort");
+    path.push("config");
     path.push("folders.json");
 
     if !path.exists() {
