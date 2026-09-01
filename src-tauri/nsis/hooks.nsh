@@ -1,17 +1,17 @@
 ; QuickSort NSIS installer hooks
 ; Included by tauri's custom installer template via installerHooks option.
 ;
-; POSTINSTALL  - register the COM handler right after install so the context
-;                menu works without requiring the user to launch the app first.
-; PREUNINSTALL - remove COM registry keys and unload the shell extension DLL
-;                before the uninstaller deletes files.
+; POSTINSTALL  - intentionally empty: the installer must not register anything.
+;                The COM handler is registered by the application itself on
+;                first launch (see src-tauri main.rs), never by the installer.
+; PREUNINSTALL - remove COM registry keys before the uninstaller deletes files.
+;                Explorer is intentionally NOT restarted (product requirement:
+;                the installer/uninstaller never interferes with Explorer).
 ; POSTUNINSTALL - delete per-user application settings when the checkbox is ticked.
 
 ; Runs after files are copied, registry keys written, and shortcuts created.
-; ExecWait blocks until the register call completes (explorer restart is inside).
+; Nothing to do here: registration belongs to the application (first launch).
 !macro NSIS_HOOK_POSTINSTALL
-  IfFileExists "$INSTDIR\${MAINBINARYNAME}.exe" 0 +2
-    ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --register'
 !macroend
 
 ; Runs at the very start of uninstall, before any files are removed.
@@ -27,13 +27,10 @@
   DeleteRegKey HKCU "Software\Classes\Directory\Background\shellex\ContextMenuHandlers\QuickSort"
   DeleteRegKey HKCU "Software\Classes\Directory\shellex\ContextMenuHandlers\QuickSort"
   DeleteRegKey HKCU "Software\Classes\Drive\shellex\ContextMenuHandlers\QuickSort"
-  ; Kill Explorer so the DLL mapping is released before the uninstaller
-  ; tries to delete the DLL file.
-  nsExec::ExecToStack 'taskkill /f /im explorer.exe'
-  Pop $0
-  Sleep 500
-  nsExec::ExecToStack 'start explorer.exe'
-  Pop $0
+  ; Note: Explorer is intentionally not restarted — per product requirement the
+  ; installer/uninstaller must never interfere with Explorer. If the DLL is
+  ; still mapped by Explorer, its deletion only completes after Explorer is
+  ; restarted by the OS/user; that is preferred over killing the shell here.
 !macroend
 
 ; Runs after files, registry keys, and shortcuts have been removed.
