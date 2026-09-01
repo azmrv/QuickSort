@@ -468,24 +468,20 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             return E_POINTER.ok();
         }
         let ici = unsafe { *info };
-        // Explorer sends the wID from InsertMenuItemW in the low 16 bits of lpVerb.
-        // When HIWORD is non-zero, lpVerb is a canonical string verb, not a command ID.
-        if (ici.lpVerb.0 as usize) & 0xFFFF0000 != 0 {
+        // Explorer passes the selected command in the low 16 bits of lpVerb as a
+        // 0-based SLOT offset (relative to the idCmdFirst value we received in
+        // QueryContextMenu), NOT as an absolute menu ID. When HIWORD(lpVerb) is
+        // non-zero, lpVerb is a canonical string verb (foreign — we define no
+        // string verbs), so those are ignored.
+        if (ici.lpVerb.0 as usize) & 0xFFFF_0000 != 0 {
             log::warn!("InvokeCommand: string verbs are not supported, ignoring");
             return E_FAIL.ok();
         }
-        let verb = (ici.lpVerb.0 as usize) & 0xFFFF;
-        let min_cmd_id = self.this.min_cmd_id.get() as usize;
-        if verb < min_cmd_id {
-            log::warn!(
-                "InvokeCommand: verb={} below min_cmd_id={}, ignoring foreign command",
-                verb,
-                min_cmd_id
-            );
-            return E_FAIL.ok();
-        }
-        // Normalize to the 0-based slot index used by QueryContextMenu.
-        let command = verb - min_cmd_id;
+        // Low word is already the slot index used inside QueryContextMenu
+        // (0.. favorites / separator / "Все папки..." / "Выбрать путь...").
+        // Do NOT compare it against min_cmd_id: slots are small numbers and
+        // every real click (verb=1,4,5 in the field) was wrongly rejected.
+        let command = (ici.lpVerb.0 as usize) & 0xFFFF;
 
         let folders = self.this.folders.lock();
         let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
@@ -505,9 +501,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         }
 
         log::info!(
-            "InvokeCommand: verb={}, min_cmd_id={}, command={}, max_fav={}, sources={}",
-            verb,
-            min_cmd_id,
+            "InvokeCommand: slot={}, max_fav={}, sources={}",
             command,
             max_fav,
             sources.len()
