@@ -18,7 +18,18 @@ const HistoryPage = () => {
     const { t } = useTranslation();
     const [operations, setOperations] = useState<Operation[]>([]);
     const [loading, setLoading] = useState(true);
+    // Tracks operations whose Undo/Repeat cannot be performed anymore (e.g. the
+    // target/source files no longer exist). Once the backend rejects the action
+    // with "Operation not undoable", the id is added here so the buttons stay
+    // disabled instead of re-raising the error on every click.
+    const [unavailable, setUnavailable] = useState<Set<string>>(new Set());
     const { message } = App.useApp();
+
+    // The backend reports an impossible action as `UndoNotPossible`, whose
+    // Display message starts with this prefix. Match on it to treat the failure
+    // as "action not available" rather than a transient error.
+    const isUnavailableError = (err: unknown): boolean =>
+        String(err).includes('Operation not undoable');
 
     const loadOperations = () => {
         setLoading(true);
@@ -67,7 +78,12 @@ const HistoryPage = () => {
             message.success(t('history.undo_success'));
             loadOperations();
         } catch (err) {
-            message.error(`${t('history.undo_error')} ${err}`);
+            if (isUnavailableError(err)) {
+                setUnavailable(prev => new Set(prev).add(operationId));
+                message.info(t('history.action_unavailable'));
+            } else {
+                message.error(`${t('history.undo_error')} ${err}`);
+            }
         }
     };
 
@@ -77,7 +93,12 @@ const HistoryPage = () => {
             message.success(t('history.repeat_success'));
             loadOperations();
         } catch (err) {
-            message.error(`${t('history.repeat_error')} ${err}`);
+            if (isUnavailableError(err)) {
+                setUnavailable(prev => new Set(prev).add(operationId));
+                message.info(t('history.action_unavailable'));
+            } else {
+                message.error(`${t('history.repeat_error')} ${err}`);
+            }
         }
     };
 
@@ -124,6 +145,7 @@ const HistoryPage = () => {
     };
 
     const canUndo = (op: Operation): boolean => {
+        if (unavailable.has(op.id)) return false;
         if (typeof op.state === 'string') return false;
         if (typeof op.state !== 'object' || op.state === null) return false;
         return 'Completed' in op.state && op.operation_type !== 'Delete';
@@ -132,6 +154,7 @@ const HistoryPage = () => {
     // Repeat is offered for operations that finished (Completed) and for
     // undone ones (redo). Unit variants arrive as plain strings via serde.
     const canRepeat = (op: Operation): boolean => {
+        if (unavailable.has(op.id)) return false;
         if (typeof op.state === 'string') return op.state === 'Undone';
         if (typeof op.state !== 'object' || op.state === null) return false;
         return 'Completed' in op.state || 'Undone' in op.state;
