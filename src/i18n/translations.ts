@@ -87,8 +87,9 @@ export const translations: Record<Locale, Record<string, string>> = {
         // Editor
         'editor.load_error': 'Load error:',
         'editor.add_error': 'Add error:',
-        'editor.favorite_error': 'Error updating favorite',
-        'editor.color_error': 'Error saving color',
+'editor.favorite_error': 'Error updating favorite',
+    'editor.color_error': 'Error saving color',
+    'editor.remove_error': 'Remove error:',
 
         // History
         'history.title': 'Operation History',
@@ -253,8 +254,9 @@ export const translations: Record<Locale, Record<string, string>> = {
         // Editor
         'editor.load_error': 'Ошибка загрузки:',
         'editor.add_error': 'Ошибка добавления:',
-        'editor.favorite_error': 'Ошибка обновления избранного',
-        'editor.color_error': 'Ошибка сохранения цвета',
+'editor.favorite_error': 'Ошибка обновления избранного',
+    'editor.color_error': 'Ошибка сохранения цвета',
+    'editor.remove_error': 'Ошибка удаления:',
 
         // History
         'history.title': 'История операций',
@@ -408,8 +410,9 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         'editor.load_error': 'Ladefehler:',
         'editor.add_error': 'Hinzufügefehler:',
-        'editor.favorite_error': 'Fehler beim Aktualisieren der Favoriten',
-        'editor.color_error': 'Fehler beim Speichern der Farbe',
+'editor.favorite_error': 'Fehler beim Aktualisieren der Favoriten',
+    'editor.color_error': 'Fehler beim Speichern der Farbe',
+    'editor.remove_error': 'Entfernungsfehler:',
 
         'history.title': 'Operationsverlauf',
         'history.loading': 'Laden...',
@@ -556,8 +559,9 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         'editor.load_error': 'Error de carga:',
         'editor.add_error': 'Error al agregar:',
-        'editor.favorite_error': 'Error al actualizar favorito',
-        'editor.color_error': 'Error al guardar color',
+'editor.favorite_error': 'Error al actualizar favorito',
+    'editor.color_error': 'Error al guardar color',
+    'editor.remove_error': 'Error al eliminar:',
 
         'history.title': 'Historial de operaciones',
         'history.loading': 'Cargando...',
@@ -704,8 +708,9 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         'editor.load_error': '加载错误：',
         'editor.add_error': '添加错误：',
-        'editor.favorite_error': '更新收藏失败',
-        'editor.color_error': '保存颜色失败',
+'editor.favorite_error': '更新收藏失败',
+    'editor.color_error': '保存颜色失败',
+    'editor.remove_error': '删除错误：',
 
         'history.title': '操作历史',
         'history.loading': '加载中...',
@@ -852,8 +857,9 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         'editor.load_error': '読み込みエラー：',
         'editor.add_error': '追加エラー：',
-        'editor.favorite_error': 'お気に入りの更新に失敗しました',
-        'editor.color_error': '色の保存に失敗しました',
+'editor.favorite_error': 'お気に入りの更新に失敗しました',
+    'editor.color_error': '色の保存に失敗しました',
+    'editor.remove_error': '削除エラー：',
 
         'history.title': '操作履歴',
         'history.loading': '読み込み中...',

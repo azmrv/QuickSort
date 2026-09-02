@@ -7,12 +7,12 @@ interface FolderListProps {
     onRename: (id: string, newName: string) => void;
     onToggleFavorite: (id: string) => void;
     onSetColor: (id: string, color: string | null) => void;
-    onApply: (folders: Folder[]) => void;
+    onRemove: (id: string) => void;
 }
 
 const DEFAULT_COLOR = '#4a9eff';
 
-const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavorite, onSetColor, onApply }) => {
+const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavorite, onSetColor, onRemove }) => {
     const { t } = useTranslation();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
@@ -30,8 +30,7 @@ const FolderList: React.FC<FolderListProps> = ({ folders, onRename, onToggleFavo
     };
 
     const handleRemove = (id: string) => {
-        const updated = folders.filter(f => f.id !== id);
-        onApply(updated);
+        onRemove(id);
     };
 
     if (folders.length === 0) {

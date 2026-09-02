@@ -119,8 +119,16 @@ const EditorPage: React.FC = () => {
         }
     };
 
-    const handleApply = async (newFolders: Folder[]) => {
-        setFolders(newFolders);
+    const handleRemove = async (id: string) => {
+        logger.action('EditorPage', `remove folder: ${id}`);
+        try {
+            await invoke('remove_folder_v2', { id });
+            setFolders(folders => folders.filter(f => f.id !== id));
+            logger.info('EditorPage', `folder removed: ${id}`);
+        } catch (err) {
+            logger.error('EditorPage', 'remove folder failed', err);
+            message.error(`${t('editor.remove_error')} ${err}`);
+        }
     };
 
     return (
@@ -132,7 +140,7 @@ const EditorPage: React.FC = () => {
                 onRename={handleRename}
                 onToggleFavorite={handleToggleFavorite}
                 onSetColor={handleSetColor}
-                onApply={handleApply}
+                onRemove={handleRemove}
             />
         </div>
     );
