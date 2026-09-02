@@ -84,7 +84,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
         let total = command.source_paths.len() as u32;
         let mut total_files: u32 = 0;
         let mut total_bytes: u64 = 0;
-        let mut last_error: Option<String> = None;
+        let mut last_error: Option<UseCaseError> = None;
 
         for (idx, source) in command.source_paths.iter().enumerate() {
             self.report_progress(idx as u32, total, "processing", Some(source.to_string()))
@@ -96,7 +96,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
                     total_bytes += bytes;
                 }
                 Err(e) => {
-                    last_error = Some(e.to_string());
+                    last_error = Some(e);
                     break;
                 }
             }
@@ -104,7 +104,8 @@ impl ExecuteOperation for ExecuteOperationUseCase {
 
         self.report_progress(total, total, "complete", None).await;
 
-        if let Some(reason) = last_error {
+        if let Some(error) = last_error {
+            let reason = error.to_string();
             operation
                 .fail(reason.clone())
                 .map_err(|e| UseCaseError::Domain(e.to_string()))?;
@@ -112,7 +113,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
                 .save(&operation)
                 .await
                 .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
-            return Err(UseCaseError::FileSystemError(reason));
+            return Err(error);
         }
 
         operation
