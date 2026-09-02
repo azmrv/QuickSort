@@ -187,7 +187,13 @@ pub fn register(was_active: bool) -> Result<(), String> {
     Ok(())
 }
 
-pub fn unregister() -> Result<(), String> {
+/// Unregister COM server keys.
+///
+/// `restart` controls whether Explorer is restarted afterwards. Restarting is
+/// only needed when the in-memory DLL must be unloaded right away (explicit
+/// unregister / uninstall). Normal application quit should NOT kill Explorer —
+/// doing so on every exit is what caused Explorer to appear to close in a loop.
+pub fn unregister(restart: bool) -> Result<(), String> {
     // Also clean up stale handlers from older versions so no dead
     // QuickSort entries remain in Explorer after uninstall.
     remove_stale_handler_keys();
@@ -218,8 +224,10 @@ pub fn unregister() -> Result<(), String> {
         }
     }
 
-    // Restart Explorer so it unloads the DLL from memory.
-    restart_explorer();
+    if restart {
+        // Restart Explorer so it unloads the DLL from memory.
+        restart_explorer();
+    }
 
     Ok(())
 }

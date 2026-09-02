@@ -139,7 +139,7 @@ fn main() {
     #[cfg(target_os = "windows")]
     if cli.unregister {
         tracing::info!("--unregister flag: unregistering COM server and exiting");
-        match com::unregister() {
+        match com::unregister(true) {
             Ok(()) => {
                 tracing::info!("COM server unregistered successfully");
                 println!("COM server unregistered successfully.");
@@ -406,10 +406,13 @@ fn start_tauri() {
                     }
                     "quit" => {
                         tracing::info!("tray quit — performing cleanup");
-                        // Best-effort COM cleanup so Explorer releases the DLL from memory.
+                        // Best-effort COM cleanup: remove registry keys so Explorer
+                        // stops loading the shell extension. Explorer is NOT restarted
+                        // here — restarting it on every app exit is what caused the
+                        // reported endless Explorer restart loop.
                         #[cfg(target_os = "windows")]
                         {
-                            let _ = crate::com::unregister();
+                            let _ = crate::com::unregister(false);
                         }
                         tracing::info!("all cleanup done, exiting");
                         app.exit(0);

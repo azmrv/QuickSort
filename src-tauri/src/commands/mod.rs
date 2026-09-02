@@ -294,7 +294,7 @@ pub fn unregister_com_server() -> Result<String, String> {
     tracing::info!(command = "unregister_com_server", "handling");
     #[cfg(target_os = "windows")]
     {
-        crate::com::unregister()?;
+        crate::com::unregister(true)?;
         tracing::info!(command = "unregister_com_server", "OK");
         Ok("COM server unregistered successfully.".to_string())
     }
@@ -592,10 +592,12 @@ pub async fn quit_app(app: AppHandle) -> Result<(), String> {
         }
     }
 
-    // Best-effort COM cleanup so Explorer releases the DLL from memory.
+    // Best-effort COM cleanup: remove registry keys so Explorer stops loading
+    // the DLL. Explorer is NOT restarted here — on every app exit that caused the
+    // reported endless Explorer restart loop.
     #[cfg(target_os = "windows")]
     {
-        let _ = crate::com::unregister();
+        let _ = crate::com::unregister(false);
     }
 
     tracing::info!("all cleanup done, exiting");
