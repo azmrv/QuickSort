@@ -4,7 +4,7 @@
 //! all platform-specific transport implementations.  The transport loop
 //! is generic over [`IpcTransport`].
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use quicksort_application::{
     AbsolutePath, ApplicationFacadeImpl, DuplicateCheckMode, ExecuteOperation, FolderId,
@@ -155,10 +155,14 @@ fn handle_select_folder(data: SelectFolderData) -> ResponseMessage {
 // ---------------------------------------------------------------------------
 
 /// Processes a single command and returns a response.
+///
+/// `op_lock` serializes background file operations: the JSON history
+/// repository is file-backed and not safe for concurrent read-modify-write.
 fn process_command(
     cmd: CommandMessage,
-    facade: &ApplicationFacadeImpl,
+    facade: &Arc<ApplicationFacadeImpl>,
     rt: &tokio::runtime::Runtime,
+    op_lock: &Arc<Mutex<()>>,
 ) -> ResponseMessage {
     match cmd {
         CommandMessage::ExecuteOperation(data) => {
@@ -207,33 +211,58 @@ fn process_command(
             match early_response {
                 Some(resp) => resp,
                 None => match convert_execute_data(data) {
-                    Some(command) => match rt.block_on(facade.execute(command)) {
-                        Ok(result) => {
-                            let op_id = result.operation_id.to_string();
-                            let processed = result.processed_files;
-                            tracing::info!(
-                                "ExecuteOperation OK: op_id={}, files={}, bytes={}",
-                                op_id,
-                                processed,
-                                result.bytes_moved
-                            );
-                            ResponseMessage {
-                                status: ResponseStatus::Ok,
-                                message: format!("Processed {} files", processed),
-                                operation_id: Some(op_id),
-                                data: None,
+                    // Run the operation in the background so the accept loop
+                    // stays responsive and the DLL never waits on a blocking
+                    // pipe read for the whole operation duration.  The result
+                    // is logged on the worker thread.
+                    Some(command) => {
+                        let facade = Arc::clone(facade);
+                        let op_lock = Arc::clone(op_lock);
+                        std::thread::spawn(move || {
+                            // Serialize operations: a single worker at a time
+                            // so history writes cannot race.
+                            let _guard = op_lock.lock().unwrap_or_else(|e| e.into_inner());
+
+                            // Fresh runtime per background operation; the IPC
+                            // runtime must not be shared across threads.
+                            let worker_rt = match tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                            {
+                                Ok(rt) => rt,
+                                Err(e) => {
+                                    tracing::error!(
+                                        "ExecuteOperation: failed to create worker runtime: {}",
+                                        e
+                                    );
+                                    return;
+                                }
+                            };
+
+                            match worker_rt.block_on(facade.execute(command)) {
+                                Ok(result) => {
+                                    let op_id = result.operation_id.to_string();
+                                    let processed = result.processed_files;
+                                    tracing::info!(
+                                        "ExecuteOperation OK: op_id={}, files={}, bytes={}",
+                                        op_id,
+                                        processed,
+                                        result.bytes_moved
+                                    );
+                                }
+                                Err(e) => {
+                                    tracing::error!("ExecuteOperation FAIL: {}", e);
+                                }
                             }
+                        });
+
+                        ResponseMessage {
+                            status: ResponseStatus::Ok,
+                            message: "Operation started".to_string(),
+                            operation_id: None,
+                            data: None,
                         }
-                        Err(e) => {
-                            tracing::error!("ExecuteOperation FAIL: {}", e);
-                            ResponseMessage {
-                                status: ResponseStatus::Error,
-                                message: e.to_string(),
-                                operation_id: None,
-                                data: None,
-                            }
-                        }
-                    },
+                    }
                     None => {
                         tracing::error!("ExecuteOperation FAIL: no valid source paths");
                         ResponseMessage {
@@ -282,6 +311,8 @@ pub fn start_ipc_server<T: IpcTransport>(transport: T, facade: Arc<ApplicationFa
         .build()
         .expect("failed to create tokio runtime for IPC server");
 
+    let op_lock = Arc::new(Mutex::new(()));
+
     loop {
         let mut stream = match transport.accept() {
             Ok(s) => s,
@@ -326,7 +357,7 @@ pub fn start_ipc_server<T: IpcTransport>(transport: T, facade: Arc<ApplicationFa
                 }
             };
 
-            let response = process_command(cmd, &facade, &rt);
+            let response = process_command(cmd, &facade, &rt, &op_lock);
 
             let response_bytes = match serde_json::to_vec(&response) {
                 Ok(b) => b,
