@@ -145,12 +145,7 @@ impl ExecuteOperationUseCase {
         match command.operation_type {
             OperationType::Move | OperationType::Copy => {
                 // Check if source file still exists (re-move protection)
-                if !self
-                    .file_system
-                    .exists(source)
-                    .await
-                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
-                {
+                if !self.file_system.exists(source).await? {
                     return Err(UseCaseError::FileSystemError(format!(
                         "Source file not found (may have been moved already): {}",
                         source
@@ -193,16 +188,12 @@ impl ExecuteOperationUseCase {
                         OverwritePolicy::AutoRename => {
                             let resolved = self.unique_name(&dest).await?;
                             return match command.operation_type {
-                                OperationType::Move => self
-                                    .file_system
-                                    .move_file(source, &resolved)
-                                    .await
-                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
-                                OperationType::Copy => self
-                                    .file_system
-                                    .copy_file(source, &resolved)
-                                    .await
-                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                                OperationType::Move => {
+                                    self.file_system.move_file(source, &resolved).await
+                                }
+                                OperationType::Copy => {
+                                    self.file_system.copy_file(source, &resolved).await
+                                }
                                 _ => unreachable!(),
                             };
                         }
@@ -210,16 +201,12 @@ impl ExecuteOperationUseCase {
                             // In non-interactive mode (IPC from DLL), fall back to AutoRename
                             let resolved = self.unique_name(&dest).await?;
                             return match command.operation_type {
-                                OperationType::Move => self
-                                    .file_system
-                                    .move_file(source, &resolved)
-                                    .await
-                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
-                                OperationType::Copy => self
-                                    .file_system
-                                    .copy_file(source, &resolved)
-                                    .await
-                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                                OperationType::Move => {
+                                    self.file_system.move_file(source, &resolved).await
+                                }
+                                OperationType::Copy => {
+                                    self.file_system.copy_file(source, &resolved).await
+                                }
                                 _ => unreachable!(),
                             };
                         }
