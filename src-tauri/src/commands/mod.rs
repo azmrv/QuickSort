@@ -272,7 +272,11 @@ pub fn register_com_server() -> Result<String, String> {
     tracing::info!(command = "register_com_server", "handling");
     #[cfg(target_os = "windows")]
     {
-        crate::com::register()?;
+        let was_active = matches!(
+            crate::com::check_registration(),
+            crate::com::RegistrationStatus::PathMismatch { .. }
+        );
+        crate::com::register(was_active)?;
         tracing::info!(
             command = "register_com_server",
             "OK — registry keys written"

@@ -118,7 +118,11 @@ fn main() {
     #[cfg(target_os = "windows")]
     if cli.register {
         tracing::info!("--register flag: registering COM server and exiting");
-        match com::register() {
+        let was_active = matches!(
+            com::check_registration(),
+            com::RegistrationStatus::PathMismatch { .. }
+        );
+        match com::register(was_active) {
             Ok(()) => {
                 tracing::info!("COM server registered successfully");
                 println!("COM server registered successfully.");
@@ -356,7 +360,13 @@ fn start_tauri() {
                             | RegistrationStatus::PathMismatch { .. } => {
                                 tracing::info!("COM registration: {} — registering", status);
                                 let _ = handle.emit("com-status", "registering");
-                                match com::register() {
+                                // Explorer needs a restart only when an older copy of the DLL
+                                // may already be mapped in it (upgrade / path change). A fresh
+                                // install has nothing mapped, so no restart is required — this
+                                // also keeps the installer from appearing to poke Explorer.
+                                let was_active =
+                                    matches!(status, RegistrationStatus::PathMismatch { .. });
+                                match com::register(was_active) {
                                     Ok(()) => {
                                         tracing::info!("COM registered");
                                         let _ = handle.emit("com-status", "active");
