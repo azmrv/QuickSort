@@ -41,13 +41,11 @@ function AppContent() {
         return true;
     });
     const [activeTab, setActiveTab] = useState('folders');
-    const [version, setVersion] = useState('0.0.0');
     const [paletteOpen, setPaletteOpen] = useState(false);
 
     // Load settings and apply theme on startup
     useEffect(() => {
         logger.info('App', 'startup');
-        invoke<string>('get_app_version').then(setVersion);
         invoke<Settings>('get_settings').then((settings) => {
             setThemeMode(settings.theme_mode || 'System');
             const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
@@ -174,7 +172,6 @@ function AppContent() {
                             <div className="app-logo">
                                 <div className="app-logo-icon">Q</div>
                                 <span className="app-logo-text">QuickSort</span>
-                                <span className="app-logo-version">v{version}</span>
                             </div>
                             <div className="header-right">
                                 <button className="theme-toggle" onClick={toggleTheme}>
