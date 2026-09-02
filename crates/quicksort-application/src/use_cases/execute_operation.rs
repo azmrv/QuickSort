@@ -221,11 +221,7 @@ impl ExecuteOperationUseCase {
                     _ => unreachable!(),
                 }
             }
-            OperationType::Delete => self
-                .file_system
-                .delete_file(source)
-                .await
-                .map(|_| 0u64),
+            OperationType::Delete => self.file_system.delete_file(source).await.map(|_| 0u64),
             OperationType::Rename => {
                 let new_path = command
                     .target_paths
