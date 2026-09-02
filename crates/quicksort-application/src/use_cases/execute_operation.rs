@@ -215,16 +215,8 @@ impl ExecuteOperationUseCase {
 
                 // No duplicate or Overwrite policy — proceed
                 match command.operation_type {
-                    OperationType::Move => self
-                        .file_system
-                        .move_file(source, &dest)
-                        .await
-                        .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
-                    OperationType::Copy => self
-                        .file_system
-                        .copy_file(source, &dest)
-                        .await
-                        .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                    OperationType::Move => self.file_system.move_file(source, &dest).await,
+                    OperationType::Copy => self.file_system.copy_file(source, &dest).await,
                     _ => unreachable!(),
                 }
             }
@@ -232,7 +224,6 @@ impl ExecuteOperationUseCase {
                 .file_system
                 .delete_file(source)
                 .await
-                .map_err(|e| UseCaseError::FileSystemError(e.to_string()))
                 .map(|_| 0u64),
             OperationType::Rename => {
                 let new_path = command
@@ -245,7 +236,6 @@ impl ExecuteOperationUseCase {
                 self.file_system
                     .rename_file(source, new_path)
                     .await
-                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))
                     .map(|_| 0u64)
             }
         }
