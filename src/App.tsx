@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
 import { invoke } from './lib/invoke';
 import { logger } from './lib/logger';
 import { ConfigProvider, theme, App as AntApp } from 'antd';
 import { LanguageProvider, useTranslation } from './i18n/LanguageContext';
-import type { Locale } from './i18n/translations';
+import { LOCALE_LABELS, type Locale } from './i18n/translations';
 import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
 import LogPage from './pages/LogPage';
@@ -16,24 +16,24 @@ import CommandPalette from './components/CommandPalette';
 import './styles/App.css';
 
 interface Settings {
-    theme_mode: 'System' | 'Light' | 'Dark';
+    theme_mode: 'system' | 'light' | 'dark';
     locale: Locale;
     [key: string]: unknown;
 }
 
 function deriveIsDark(themeMode: string, systemDark: boolean): boolean {
     switch (themeMode) {
-        case 'Light': return false;
-        case 'Dark': return true;
+        case 'light': return false;
+        case 'dark': return true;
         default: return systemDark;
     }
 }
 
 function AppContent() {
-    const { t } = useTranslation();
+    const { t, locale } = useTranslation();
     const [mode, setMode] = useState<'editor' | 'selector'>('editor');
     const [selectFiles, setSelectFiles] = useState<string[]>([]);
-    const [themeMode, setThemeMode] = useState<string>('System');
+    const [themeMode, setThemeMode] = useState<string>('system');
     const [isDark, setIsDark] = useState(() => {
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
             return false;
@@ -80,7 +80,7 @@ function AppContent() {
     useEffect(() => {
         const mq = window.matchMedia('(prefers-color-scheme: dark)');
         const handler = (e: MediaQueryListEvent) => {
-            if (themeMode === 'System') {
+            if (themeMode === 'system') {
                 setIsDark(e.matches);
                 logger.info('App', `system theme changed → ${e.matches ? 'dark' : 'light'}`);
             }
@@ -127,6 +127,30 @@ function AppContent() {
         { key: 'about', label: t('tab.about'), content: <AboutPage /> },
     ];
 
+    const persistSettings = async (patch: Partial<Settings>) => {
+        const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
+        const next: Settings = {
+            theme_mode: 'system',
+            locale: locale,
+            ...patch,
+        };
+        try {
+            await invoke('save_settings', { settings: next });
+            await emit('settings-changed', next);
+            if (patch.theme_mode) {
+                setThemeMode(patch.theme_mode);
+                setIsDark(deriveIsDark(patch.theme_mode, systemDark));
+            }
+        } catch (err) {
+            logger.error('App', 'Failed to save settings from header', err);
+        }
+    };
+
+    const toggleTheme = () => {
+        const next = isDark ? 'light' : 'dark';
+        persistSettings({ theme_mode: next });
+    };
+
     return (
         <ConfigProvider
             theme={{
@@ -151,6 +175,20 @@ function AppContent() {
                                 <div className="app-logo-icon">Q</div>
                                 <span className="app-logo-text">QuickSort</span>
                                 <span className="app-logo-version">v{version}</span>
+                            </div>
+                            <div className="header-right">
+                                <button className="theme-toggle" onClick={toggleTheme}>
+                                    <span className="theme-toggle-icon">{isDark ? '☀️' : '🌙'}</span>
+                                </button>
+                                <select
+                                    value={locale}
+                                    onChange={(e) => persistSettings({ locale: e.target.value as Locale })}
+                                    className="locale-select"
+                                >
+                                    {Object.entries(LOCALE_LABELS).map(([code, label]) => (
+                                        <option key={code} value={code}>{label}</option>
+                                    ))}
+                                </select>
                             </div>
                         </header>
                         <main className="app-main">

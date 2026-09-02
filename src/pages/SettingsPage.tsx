@@ -15,7 +15,7 @@ interface Settings {
         enabled: boolean;
         mode: 'name' | 'size' | 'content';
     };
-    theme_mode: 'System' | 'Light' | 'Dark';
+    theme_mode: 'system' | 'light' | 'dark';
     locale: Locale;
 }
 
@@ -30,7 +30,7 @@ const SettingsPage: React.FC = () => {
             enabled: true,
             mode: 'name',
         },
-        theme_mode: 'System',
+        theme_mode: 'system',
         locale: 'en',
     });
     const [loading, setLoading] = useState(true);
@@ -162,15 +162,15 @@ const SettingsPage: React.FC = () => {
                             onChange={(e) => {
                                 const newSettings = {
                                     ...settings,
-                                    theme_mode: e.target.value as 'System' | 'Light' | 'Dark',
+                                    theme_mode: e.target.value as 'system' | 'light' | 'dark',
                                 };
                                 saveSettings(newSettings);
                             }}
                             style={selectStyle}
                         >
-                            <option value="System">{t('settings.appearance.theme.system')}</option>
-                            <option value="Light">{t('settings.appearance.theme.light')}</option>
-                            <option value="Dark">{t('settings.appearance.theme.dark')}</option>
+                            <option value="system">{t('settings.appearance.theme.system')}</option>
+                            <option value="light">{t('settings.appearance.theme.light')}</option>
+                            <option value="dark">{t('settings.appearance.theme.dark')}</option>
                         </select>
                     </div>
                     <div>
