@@ -44,6 +44,22 @@ use crate::pipe_client::{move_to_folder, select_folder};
 /// Loaded once on first use.
 static APP_ICON_BITMAP: OnceLock<Option<usize>> = OnceLock::new();
 
+/// Tracks the most recent all-.lnk selection so we can suppress the
+/// target-instance QCM call that Explorer fires immediately after.
+///
+/// Explorer calls QueryContextMenu twice for a shortcut: once for the .lnk
+/// file itself (lnk-instance) and once for the resolved target (target-instance).
+/// We render on the lnk-instance (so item_paths are the .lnk files) and bail on
+/// the target-instance (so the menu does not appear for the resolved target).
+///
+/// Detection heuristic: the two calls arrive within milliseconds of each other
+/// and the target-instance path count always matches the lnk-instance count.
+struct LnkSelectionState {
+    path_count: usize,
+    at: std::time::Instant,
+}
+static LNK_SELECTION_STATE: Mutex<Option<LnkSelectionState>> = Mutex::new(None);
+
 fn get_app_icon_bitmap() -> Option<windows::Win32::Graphics::Gdi::HBITMAP> {
     let opt = APP_ICON_BITMAP
         .get_or_init(|| icon::load_app_icon_bitmap().map(|bmp| bmp.0.expose_provenance()));
@@ -342,19 +358,35 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 return S_OK;
             }
 
-            // Explorer calls QueryContextMenu twice for a shortcut: once for the
-            // .lnk file itself and once for the target object. Rendering on both
-            // instances produced a duplicate "QuickSort" entry (QA report). We
-            // render only on the target instance — when every selected path is a
-            // shortcut file we bail out here.
             let all_shortcuts = paths.iter().all(|p| {
                 p.is_file()
                     && p.extension()
                         .is_some_and(|ext| ext.eq_ignore_ascii_case("lnk"))
             });
+
             if all_shortcuts {
-                log::info!("QueryContextMenu: all items are .lnk shortcuts, skipping (target instance renders the menu)");
-                return S_OK;
+                // lnk-instance: render menu here (item_paths = .lnk files → move
+                // the shortcuts themselves, not their targets). Record state so
+                // we can suppress the target-instance that follows immediately.
+                *LNK_SELECTION_STATE.lock() = Some(LnkSelectionState {
+                    path_count: paths.len(),
+                    at: std::time::Instant::now(),
+                });
+                log::info!(
+                    "QueryContextMenu: {} .lnk shortcuts — rendering on lnk-instance",
+                    paths.len()
+                );
+            } else if let Some(state) = LNK_SELECTION_STATE.lock().as_ref() {
+                if state.at.elapsed() < std::time::Duration::from_secs(2)
+                    && paths.len() == state.path_count
+                {
+                    log::info!(
+                        "QueryContextMenu: suppressing target-instance ({} paths, {}ms after lnk-instance)",
+                        paths.len(),
+                        state.at.elapsed().as_millis()
+                    );
+                    return S_OK;
+                }
             }
         }
 
