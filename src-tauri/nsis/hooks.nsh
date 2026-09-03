@@ -20,7 +20,15 @@
 ; subsequent file deletion of context_menu_dll.dll succeeds (otherwise the DLL
 ; stays mapped by Explorer and is left behind as a trace).
 !macro NSIS_HOOK_PREUNINSTALL
-  ; Delete CLSID and handler keys so Explorer will not show the menu anymore.
+  ; 1) Stop the app FIRST. A running QuickSort holds locks on its own exe and on
+  ; the shell-extension DLL next to it (plus it rewrites the owner PID/registry
+  ; on exit), so the uninstaller must kill it before touching files, otherwise
+  ; the whole Program Files folder survives deletion and leaves traces behind.
+  ; Kill both possible binary names (productName casing differs across builds).
+  nsExec::Exec 'taskkill /f /im Quicksort.exe'
+  nsExec::Exec 'taskkill /f /im quicksort.exe'
+
+  ; 2) Remove COM keys so Explorer will not show the menu anymore.
   DeleteRegKey HKCU "Software\Classes\CLSID\{12345678-1234-1234-1234-1234567890AB}"
   DeleteRegKey HKCU "Software\Classes\AllFilesystemObjects\shellex\ContextMenuHandlers\QuickSort"
   ; Also clean stale handler keys from older versions that no longer ship.
@@ -29,7 +37,7 @@
   DeleteRegKey HKCU "Software\Classes\Directory\shellex\ContextMenuHandlers\QuickSort"
   DeleteRegKey HKCU "Software\Classes\Drive\shellex\ContextMenuHandlers\QuickSort"
 
-  ; Restart Explorer so it unloads the mapped shell extension DLL before the
+  ; 3) Restart Explorer so it unloads the mapped shell extension DLL before the
   ; uninstaller deletes it. nsExec::Exec waits for taskkill to finish (Explorer
   ; is gone when it returns); we then relaunch the shell.
   nsExec::Exec 'taskkill /f /im explorer.exe'
