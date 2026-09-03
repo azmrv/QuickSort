@@ -44,7 +44,8 @@ const HistoryPage = () => {
     const [sortKey, setSortKey] = useState<SortKey>('created_at');
     const [sortDir, setSortDir] = useState<SortDir>(-1);
     // Countdown state for the "clear history" confirmation. While > 0 the action
-    // is still pending and can be cancelled; when it reaches 0 the clear runs.
+    // is still pending (a warning is shown and can be cancelled); when it reaches
+    // 0 the OK/Cancel buttons appear and only OK actually clears the history.
     const [clearSeconds, setClearSeconds] = useState<number | null>(null);
     const { message, modal } = App.useApp();
 
@@ -95,18 +96,15 @@ const HistoryPage = () => {
         };
     }, []);
 
-    // Drives the countdown dialog: each tick decrements the counter, and when
-    // it hits zero the history is actually cleared and the dialog closes.
+    // Drives the countdown warning: each tick decrements the counter. When it
+    // reaches zero the countdown stops and only the explicit OK button actually
+    // clears the history — the user is never cleared out automatically.
     useEffect(() => {
         if (clearSeconds === null || clearSeconds <= 0) return;
         const timer = setTimeout(() => {
             setClearSeconds(prev => {
                 if (prev === null) return null;
-                if (prev <= 1) {
-                    performClear();
-                    return null;
-                }
-                return prev - 1;
+                return prev > 1 ? prev - 1 : 0;
             });
         }, 1000);
         return () => clearTimeout(timer);
@@ -420,8 +418,21 @@ const HistoryPage = () => {
                         color: 'var(--qs-text-primary)',
                         flex: 1,
                     }}>
-                        {t('history.clear_confirm', { n: clearSeconds })}
+                        {clearSeconds > 0
+                            ? t('history.clear_confirm', { n: clearSeconds })
+                            : t('history.clear_ready')}
                     </span>
+                    <button
+                        onClick={() => { performClear(); setClearSeconds(null); }}
+                        style={{
+                            ...actionButtonStyle,
+                            color: 'var(--qs-danger, #ef4444)',
+                            borderColor: 'var(--qs-danger, #ef4444)',
+                            marginLeft: 0,
+                        }}
+                    >
+                        {t('history.clear_ok')}
+                    </button>
                     <button
                         onClick={() => setClearSeconds(null)}
                         style={{
