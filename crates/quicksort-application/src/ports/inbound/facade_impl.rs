@@ -174,6 +174,16 @@ impl GetOperationHistory for ApplicationFacadeImpl {
     async fn get_all_operations(&self) -> Result<Vec<Operation>, UseCaseError> {
         self.get_operation_history.get_all_operations().await
     }
+
+    /// Delegates to `GetOperationHistoryUseCase::delete_operation`.
+    async fn delete_operation(&self, id: OperationId) -> Result<(), UseCaseError> {
+        self.get_operation_history.delete_operation(id).await
+    }
+
+    /// Delegates to `GetOperationHistoryUseCase::clear_history`.
+    async fn clear_history(&self) -> Result<(), UseCaseError> {
+        self.get_operation_history.clear_history().await
+    }
 }
 
 #[async_trait]

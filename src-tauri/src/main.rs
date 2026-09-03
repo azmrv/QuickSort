@@ -328,6 +328,8 @@ fn start_tauri() {
             commands::get_settings,
             commands::save_settings,
             commands::get_operations,
+            commands::delete_operation,
+            commands::clear_history,
             commands::launch_teracopy,
             commands::check_teracopy_installed,
             commands::create_new_folder,

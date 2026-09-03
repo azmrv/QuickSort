@@ -356,6 +356,45 @@ pub async fn get_operations(
     result
 }
 
+/// Delete a single operation from the history by its identifier.
+#[tauri::command]
+pub async fn delete_operation(
+    state: State<'_, AppState>,
+    operation_id: String,
+) -> Result<(), String> {
+    tracing::info!(command = "delete_operation", operation_id = %operation_id, "handling");
+    let id = OperationId::from_string(&operation_id).map_err(|e| {
+        tracing::error!(command = "delete_operation", error = %e, "invalid operation ID");
+        format!("Invalid operation ID: {}", e)
+    })?;
+    let result = state
+        .facade
+        .delete_operation(id)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "delete_operation", "OK"),
+        Err(e) => tracing::error!(command = "delete_operation", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Clear the entire operation history.
+#[tauri::command]
+pub async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
+    tracing::info!(command = "clear_history", "handling");
+    let result = state
+        .facade
+        .clear_history()
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "clear_history", "OK"),
+        Err(e) => tracing::error!(command = "clear_history", error = %e, "FAIL"),
+    }
+    result
+}
+
 /// Launch TeraCopy with the given file list.
 ///
 /// Writes file paths to a temp file and invokes TeraCopy.

@@ -58,4 +58,13 @@ pub trait OperationRepository: Send + Sync {
     /// # Errors
     /// Returns `RepositoryError` if the underlying storage cannot be read.
     async fn load_all(&self) -> Result<Vec<Operation>, UseCaseError>;
+
+    /// Removes every stored operation, leaving the history empty.
+    ///
+    /// This is used by "clear history" so the user can wipe the whole audit
+    /// trail in one action instead of deleting records one by one.
+    ///
+    /// # Errors
+    /// Returns `RepositoryError` if the underlying storage cannot be written.
+    async fn clear(&self) -> Result<(), UseCaseError>;
 }

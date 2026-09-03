@@ -68,4 +68,10 @@ impl OperationRepository for InMemoryOperationRepository {
         let storage = self.storage.lock().unwrap();
         Ok(storage.values().cloned().collect())
     }
+
+    async fn clear(&self) -> Result<(), UseCaseError> {
+        let mut storage = self.storage.lock().unwrap();
+        storage.clear();
+        Ok(())
+    }
 }

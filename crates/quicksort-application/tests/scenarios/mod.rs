@@ -174,6 +174,11 @@ impl OperationRepository for MockOperationRepository {
     async fn load_all(&self) -> Result<Vec<Operation>, UseCaseError> {
         Ok(self.operations.lock().unwrap().values().cloned().collect())
     }
+
+    async fn clear(&self) -> Result<(), UseCaseError> {
+        self.operations.lock().unwrap().clear();
+        Ok(())
+    }
 }
 
 // ============================================================================
