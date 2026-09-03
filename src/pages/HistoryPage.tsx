@@ -14,10 +14,23 @@ interface Operation {
     updated_at: string;
 }
 
-type SortMode = 'date' | 'status';
+type SortKey = 'operation_type' | 'state' | 'path' | 'target' | 'size' | 'created_at';
 type SortDir = 1 | -1;
 
 const CLEAR_COUNTDOWN = 5;
+
+// Human-readable byte size, Explorer-style (e.g. "1.2 MB").
+const formatBytes = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let value = bytes;
+    let unitIndex = -1;
+    do {
+        value /= 1024;
+        unitIndex += 1;
+    } while (value >= 1024 && unitIndex < units.length - 1);
+    return `${value.toFixed(1)} ${units[unitIndex]}`;
+};
 
 const HistoryPage = () => {
     const { t } = useTranslation();
@@ -28,7 +41,7 @@ const HistoryPage = () => {
     // with "Operation not undoable", the id is added here so the buttons stay
     // disabled instead of re-raising the error on every click.
     const [unavailable, setUnavailable] = useState<Set<string>>(new Set());
-    const [sortBy, setSortBy] = useState<SortMode>('date');
+    const [sortKey, setSortKey] = useState<SortKey>('created_at');
     const [sortDir, setSortDir] = useState<SortDir>(-1);
     // Countdown state for the "clear history" confirmation. While > 0 the action
     // is still pending and can be cancelled; when it reaches 0 the clear runs.
@@ -223,6 +236,26 @@ const HistoryPage = () => {
         }
     };
 
+    const getBytesProcessed = (state: unknown): number => {
+        if (typeof state !== 'object' || state === null) return 0;
+        const s = state as Record<string, unknown>;
+        if ('Completed' in s) {
+            const completed = s.Completed as { processed_files: number; bytes_processed: number };
+            return completed.bytes_processed ?? 0;
+        }
+        return 0;
+    };
+
+    const getFilesCount = (state: unknown): number => {
+        if (typeof state !== 'object' || state === null) return 0;
+        const s = state as Record<string, unknown>;
+        if ('Completed' in s) {
+            const completed = s.Completed as { processed_files: number; bytes_processed: number };
+            return completed.processed_files ?? 0;
+        }
+        return 0;
+    };
+
     const canUndo = (op: Operation): boolean => {
         if (unavailable.has(op.id)) return false;
         if (typeof op.state === 'string') return false;
@@ -239,28 +272,59 @@ const HistoryPage = () => {
         return 'Completed' in op.state || 'Undone' in op.state;
     };
 
-    const sortedOperations = [...operations].sort((a, b) => {
-        if (sortBy === 'status') {
-            const diff = getStateRank(a.state) - getStateRank(b.state);
-            if (diff !== 0) return diff * sortDir;
+    const getSortValue = (op: Operation, key: SortKey): string | number => {
+        switch (key) {
+            case 'operation_type': return getOperationLabel(op.operation_type);
+            case 'state': return getStateRank(op.state);
+            case 'path': return op.source_paths[0] ?? '';
+            case 'target': return op.target_folder_path ?? '';
+            case 'size': return getBytesProcessed(op.state);
+            case 'created_at': return new Date(op.created_at).getTime();
         }
-        const timeA = new Date(a.created_at).getTime();
-        const timeB = new Date(b.created_at).getTime();
-        const timeDiff = timeA - timeB;
-        if (timeDiff !== 0) return timeDiff * sortDir;
+    };
+
+    const sortedOperations = [...operations].sort((a, b) => {
+        const va = getSortValue(a, sortKey);
+        const vb = getSortValue(b, sortKey);
+        if (va < vb) return -1 * sortDir;
+        if (va > vb) return 1 * sortDir;
         return 0;
     });
 
-    const toggleSort = (mode: SortMode) => {
-        if (sortBy === mode) {
+    const handleSort = (key: SortKey) => {
+        if (sortKey === key) {
             setSortDir(prev => (prev === 1 ? -1 : 1));
         } else {
-            setSortBy(mode);
+            setSortKey(key);
             setSortDir(-1);
         }
     };
 
-    const sortControlStyle: React.CSSProperties = {
+    const headerStyle: React.CSSProperties = {
+        padding: '8px 12px',
+        background: 'var(--qs-bg-tertiary)',
+        color: 'var(--qs-text-secondary)',
+        fontFamily: 'var(--qs-font-mono)',
+        fontSize: '11px',
+        fontWeight: 600,
+        textAlign: 'left',
+        borderBottom: '1px solid var(--qs-border)',
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+        userSelect: 'none',
+    };
+
+    const cellStyle: React.CSSProperties = {
+        padding: '8px 12px',
+        borderBottom: '1px solid var(--qs-border)',
+        fontFamily: 'var(--qs-font-mono)',
+        fontSize: '11px',
+        color: 'var(--qs-text-primary)',
+        verticalAlign: 'middle',
+        whiteSpace: 'nowrap',
+    };
+
+    const toolbarButtonStyle: React.CSSProperties = {
         padding: '6px 12px',
         background: 'var(--qs-bg-tertiary)',
         border: '1px solid var(--qs-border)',
@@ -272,7 +336,7 @@ const HistoryPage = () => {
         flexShrink: 0,
     };
 
-    const buttonBaseStyle: React.CSSProperties = {
+    const actionButtonStyle: React.CSSProperties = {
         padding: '4px 8px',
         background: 'transparent',
         border: '1px solid var(--qs-border)',
@@ -282,7 +346,17 @@ const HistoryPage = () => {
         fontSize: '11px',
         cursor: 'pointer',
         flexShrink: 0,
+        marginLeft: '4px',
     };
+
+    const columns: { key: SortKey; label: string }[] = [
+        { key: 'state', label: t('history.col.status') },
+        { key: 'operation_type', label: t('history.col.type') },
+        { key: 'path', label: t('history.col.path') },
+        { key: 'target', label: t('history.col.target') },
+        { key: 'size', label: t('history.col.size') },
+        { key: 'created_at', label: t('history.col.date') },
+    ];
 
     return (
         <div style={{ padding: 'var(--qs-space-lg)' }}>
@@ -304,36 +378,11 @@ const HistoryPage = () => {
                     {t('history.title')}
                 </h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{
-                        fontFamily: 'var(--qs-font-mono)',
-                        fontSize: '11px',
-                        color: 'var(--qs-text-muted)',
-                    }}>
-                        {t('history.sort_by')}
-                    </span>
-                    <button
-                        onClick={() => toggleSort('date')}
-                        style={{
-                            ...sortControlStyle,
-                            color: sortBy === 'date' ? 'var(--qs-accent)' : 'var(--qs-text-secondary)',
-                        }}
-                    >
-                        {t('history.sort_date')} {sortBy === 'date' ? (sortDir === -1 ? '\u2193' : '\u2191') : ''}
-                    </button>
-                    <button
-                        onClick={() => toggleSort('status')}
-                        style={{
-                            ...sortControlStyle,
-                            color: sortBy === 'status' ? 'var(--qs-accent)' : 'var(--qs-text-secondary)',
-                        }}
-                    >
-                        {t('history.sort_status')} {sortBy === 'status' ? (sortDir === -1 ? '\u2193' : '\u2191') : ''}
-                    </button>
                     <button
                         onClick={loadOperations}
                         disabled={loading}
                         style={{
-                            ...sortControlStyle,
+                            ...toolbarButtonStyle,
                             cursor: loading ? 'not-allowed' : 'pointer',
                             opacity: loading ? 0.7 : 1,
                         }}
@@ -344,9 +393,8 @@ const HistoryPage = () => {
                         <button
                             onClick={startClear}
                             style={{
-                                ...sortControlStyle,
+                                ...toolbarButtonStyle,
                                 color: 'var(--qs-danger, #ef4444)',
-                                borderColor: 'var(--qs-border)',
                             }}
                         >
                             {t('history.clear')}
@@ -377,8 +425,9 @@ const HistoryPage = () => {
                     <button
                         onClick={() => setClearSeconds(null)}
                         style={{
-                            ...buttonBaseStyle,
+                            ...actionButtonStyle,
                             color: 'var(--qs-accent)',
+                            marginLeft: 0,
                         }}
                     >
                         {t('history.clear_cancel')}
@@ -396,123 +445,118 @@ const HistoryPage = () => {
                     <div>{t('history.empty')}</div>
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {sortedOperations.map((op) => {
-                        const state = getStateLabel(op.state);
-                        return (
-                            <div
-                                key={op.id}
-                                style={{
-                                    padding: '12px 16px',
-                                    background: 'var(--qs-bg-secondary)',
-                                    border: '1px solid var(--qs-border)',
-                                    borderRadius: 'var(--qs-radius-md)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '12px',
-                                }}
-                            >
-                                <div style={{
-                                    width: '8px',
-                                    height: '8px',
-                                    borderRadius: '50%',
-                                    background: state.color,
-                                    flexShrink: 0,
-                                }} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{
-                                        fontFamily: 'var(--qs-font-body)',
-                                        fontSize: '13px',
-                                        fontWeight: 500,
-                                        color: 'var(--qs-text-primary)',
-                                        marginBottom: '2px',
-                                    }}>
-                                        {getOperationLabel(op.operation_type)}
-                                    </div>
-                                    <div style={{
-                                        fontFamily: 'var(--qs-font-mono)',
-                                        fontSize: '11px',
-                                        color: 'var(--qs-text-muted)',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                    }}>
-                                        {op.source_paths[0]}
-                                        {op.source_paths.length > 1 && ` +${op.source_paths.length - 1}`}
-                                    </div>
-                                </div>
-                                <div style={{
-                                    fontFamily: 'var(--qs-font-mono)',
-                                    fontSize: '11px',
-                                    color: state.color,
-                                    flexShrink: 0,
-                                }}>
-                                    {state.text}
-                                </div>
-                                <div style={{
-                                    fontFamily: 'var(--qs-font-mono)',
-                                    fontSize: '11px',
-                                    color: 'var(--qs-text-muted)',
-                                    flexShrink: 0,
-                                }}>
-                                    {new Date(op.created_at).toLocaleTimeString('ru-RU')}
-                                </div>
-                                <button
-                                    onClick={() => handleUndo(op.id)}
-                                    disabled={!canUndo(op)}
-                                    style={{
-                                        ...buttonBaseStyle,
-                                        color: canUndo(op) ? 'var(--qs-accent)' : 'var(--qs-text-muted)',
-                                        cursor: canUndo(op) ? 'pointer' : 'not-allowed',
-                                        opacity: canUndo(op) ? 1 : 0.7,
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        if (canUndo(op)) e.currentTarget.style.background = 'var(--qs-accent-muted)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.background = 'transparent';
-                                    }}
-                                >
-                                    {t('history.undo')}
-                                </button>
-                                <button
-                                    onClick={() => handleRepeat(op.id)}
-                                    disabled={!canRepeat(op)}
-                                    style={{
-                                        ...buttonBaseStyle,
-                                        color: canRepeat(op) ? 'var(--qs-accent)' : 'var(--qs-text-muted)',
-                                        cursor: canRepeat(op) ? 'pointer' : 'not-allowed',
-                                        opacity: canRepeat(op) ? 1 : 0.7,
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        if (canRepeat(op)) e.currentTarget.style.background = 'var(--qs-accent-muted)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.background = 'transparent';
-                                    }}
-                                >
-                                    {t('history.repeat')}
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(op.id)}
-                                    style={{
-                                        ...buttonBaseStyle,
-                                        color: 'var(--qs-text-muted)',
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.background = 'var(--qs-accent-muted)';
-                                        e.currentTarget.style.color = 'var(--qs-danger, #ef4444)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.background = 'transparent';
-                                        e.currentTarget.style.color = 'var(--qs-text-muted)';
-                                    }}
-                                >
-                                    {t('history.delete')}
-                                </button>
-                            </div>
-                        );
-                    })}
+                <div style={{
+                    border: '1px solid var(--qs-border)',
+                    borderRadius: 'var(--qs-radius-md)',
+                    overflow: 'hidden',
+                }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr>
+                                {columns.map((col) => (
+                                    <th
+                                        key={col.key}
+                                        onClick={() => handleSort(col.key)}
+                                        style={{
+                                            ...headerStyle,
+                                            color: sortKey === col.key ? 'var(--qs-accent)' : 'var(--qs-text-secondary)',
+                                        }}
+                                    >
+                                        {col.label}
+                                        {sortKey === col.key ? ` ${sortDir === -1 ? '\u2193' : '\u2191'}` : ''}
+                                    </th>
+                                ))}
+                                <th style={{ ...headerStyle, cursor: 'default' }}>
+                                    {t('history.col.actions')}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sortedOperations.map((op) => {
+                                const state = getStateLabel(op.state);
+                                const size = getBytesProcessed(op.state);
+                                const files = getFilesCount(op.state);
+                                return (
+                                    <tr
+                                        key={op.id}
+                                        style={{ background: 'var(--qs-bg-secondary)' }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--qs-bg-tertiary)'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--qs-bg-secondary)'; }}
+                                    >
+                                        <td style={cellStyle}>
+                                            <span style={{
+                                                display: 'inline-block',
+                                                width: '8px',
+                                                height: '8px',
+                                                borderRadius: '50%',
+                                                background: state.color,
+                                                marginRight: '8px',
+                                                verticalAlign: 'middle',
+                                            }} />
+                                            <span style={{ color: state.color }}>{state.text}</span>
+                                        </td>
+                                        <td style={cellStyle}>{getOperationLabel(op.operation_type)}</td>
+                                        <td style={{ ...cellStyle, maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {op.source_paths[0]}
+                                            {op.source_paths.length > 1 && ` +${op.source_paths.length - 1}`}
+                                        </td>
+                                        <td style={{ ...cellStyle, color: 'var(--qs-text-muted)' }}>
+                                            {op.target_folder_path ?? '\u2014'}
+                                        </td>
+                                        <td style={{ ...cellStyle, textAlign: 'right' }}>
+                                            {size > 0 ? `${formatBytes(size)} (${files})` : '\u2014'}
+                                        </td>
+                                        <td style={{ ...cellStyle, color: 'var(--qs-text-muted)' }}>
+                                            {new Date(op.created_at).toLocaleString('ru-RU')}
+                                        </td>
+                                        <td style={{ ...cellStyle, whiteSpace: 'nowrap' }}>
+                                            <button
+                                                onClick={() => handleUndo(op.id)}
+                                                disabled={!canUndo(op)}
+                                                style={{
+                                                    ...actionButtonStyle,
+                                                    color: canUndo(op) ? 'var(--qs-accent)' : 'var(--qs-text-muted)',
+                                                    cursor: canUndo(op) ? 'pointer' : 'not-allowed',
+                                                    opacity: canUndo(op) ? 1 : 0.6,
+                                                }}
+                                            >
+                                                {t('history.undo')}
+                                            </button>
+                                            <button
+                                                onClick={() => handleRepeat(op.id)}
+                                                disabled={!canRepeat(op)}
+                                                style={{
+                                                    ...actionButtonStyle,
+                                                    color: canRepeat(op) ? 'var(--qs-accent)' : 'var(--qs-text-muted)',
+                                                    cursor: canRepeat(op) ? 'pointer' : 'not-allowed',
+                                                    opacity: canRepeat(op) ? 1 : 0.6,
+                                                }}
+                                            >
+                                                {t('history.repeat')}
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(op.id)}
+                                                style={{
+                                                    ...actionButtonStyle,
+                                                    color: 'var(--qs-text-muted)',
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.background = 'var(--qs-accent-muted)';
+                                                    e.currentTarget.style.color = 'var(--qs-danger, #ef4444)';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.background = 'transparent';
+                                                    e.currentTarget.style.color = 'var(--qs-text-muted)';
+                                                }}
+                                            >
+                                                {t('history.delete')}
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
             )}
         </div>
