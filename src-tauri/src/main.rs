@@ -9,6 +9,7 @@ mod metadata;
 mod pending;
 mod platform;
 mod progress;
+mod queue;
 mod state;
 
 use clap::{Parser, Subcommand};
@@ -262,15 +263,25 @@ fn start_tauri() {
         .with_plugin_manager(Arc::new(plugin_manager_use_case)),
     );
 
+    // Shared operation queue — persists jobs to queue.json and runs them
+    // one at a time on a dedicated worker thread.
+    let queue_path = platform::paths::queue_config_path();
+    let job_queue = queue::JobQueue::new(queue_path, Arc::clone(&facade), crate::ipc::op_lock());
+    job_queue.start_worker();
+
     let facade_for_ipc = Arc::clone(&facade);
+    let queue_for_ipc = Arc::clone(&job_queue);
     std::thread::Builder::new()
         .name("ipc-pipe-server".into())
         .spawn(move || {
-            crate::ipc::server::start_pipe_server(facade_for_ipc);
+            crate::ipc::server::start_pipe_server(facade_for_ipc, queue_for_ipc);
         })
         .expect("failed to spawn IPC pipe server thread");
 
-    let app_state = AppState { facade };
+    let app_state = AppState {
+        facade,
+        queue: job_queue,
+    };
 
     tauri::Builder::default()
         // Single-instance must be first so it can intercept second launches
@@ -341,11 +352,15 @@ fn start_tauri() {
             commands::search_files,
             commands::get_app_metadata,
             commands::quit_app,
+            commands::enqueue_operation,
+            commands::get_jobs,
+            commands::cancel_job,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());
             progress::set_app_handle(app.handle().clone());
             crate::ipc::set_app_handle(app.handle().clone());
+            queue::set_app_handle(app.handle().clone());
 
             #[cfg(target_os = "windows")]
             {

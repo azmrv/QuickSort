@@ -61,6 +61,11 @@ pub fn operations_path() -> PathBuf {
     data_dir().join("operations.json")
 }
 
+/// Get the path to the queue.json file (persistent operation queue).
+pub fn queue_config_path() -> PathBuf {
+    config_dir().join("queue.json")
+}
+
 /// Get the path to the PID file (Windows only).
 #[cfg(target_os = "windows")]
 pub fn pid_file_path() -> PathBuf {

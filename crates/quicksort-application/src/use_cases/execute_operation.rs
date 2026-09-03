@@ -162,7 +162,11 @@ impl ExecuteOperationUseCase {
                     let same = if cfg!(target_os = "windows") {
                         src_parent
                             .as_str()
-                            .and_then(|s| target.as_str().map(|t| (s.to_lowercase(), t.to_lowercase())))
+                            .and_then(|s| {
+                                target
+                                    .as_str()
+                                    .map(|t| (s.to_lowercase(), t.to_lowercase()))
+                            })
                             .is_some_and(|(s, t)| s == t)
                     } else {
                         src_parent == *target

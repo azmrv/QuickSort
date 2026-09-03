@@ -621,7 +621,6 @@ pub fn get_app_metadata() -> crate::metadata::AppMetadata {
 #[tauri::command]
 pub async fn quit_app(app: AppHandle) -> Result<(), String> {
     tracing::info!("quit_app command — performing full shutdown");
-
     #[cfg(target_os = "windows")]
     {
         let pid_path = crate::platform::paths::pid_file_path();
@@ -642,4 +641,47 @@ pub async fn quit_app(app: AppHandle) -> Result<(), String> {
     tracing::info!("all cleanup done, exiting");
     app.exit(0);
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Queue commands
+// ---------------------------------------------------------------------------
+
+/// Enqueue a file operation for asynchronous execution by the persistent
+/// job worker. Returns the generated job id.
+#[tauri::command]
+pub async fn enqueue_operation(
+    state: State<'_, AppState>,
+    command: quicksort_ipc_contract::ExecuteOperationData,
+) -> Result<String, String> {
+    tracing::info!(command = "enqueue_operation", "handling");
+    let job_id = state.queue.enqueue(command).map_err(|e| {
+        tracing::error!(command = "enqueue_operation", error = %e, "FAIL");
+        e
+    })?;
+    tracing::info!(command = "enqueue_operation", job_id = %job_id.id, "OK");
+    Ok(job_id.id)
+}
+
+/// List all queue jobs (queued, running, completed, failed, canceled).
+#[tauri::command]
+pub async fn get_jobs(
+    state: State<'_, AppState>,
+) -> Result<Vec<quicksort_ipc_contract::JobDto>, String> {
+    tracing::info!(command = "get_jobs", "handling");
+    let jobs = state.queue.list();
+    tracing::info!(command = "get_jobs", count = jobs.len(), "OK");
+    Ok(jobs)
+}
+
+/// Cancel a queued (not yet started) job.
+#[tauri::command]
+pub async fn cancel_job(state: State<'_, AppState>, job_id: String) -> Result<(), String> {
+    tracing::info!(command = "cancel_job", job_id = %job_id, "handling");
+    let result = state.queue.cancel(&job_id).map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "cancel_job", "OK"),
+        Err(e) => tracing::error!(command = "cancel_job", error = %e, "FAIL"),
+    }
+    result
 }

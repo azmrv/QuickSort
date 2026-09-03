@@ -26,3 +26,6 @@ pub mod logging;
 
 // Application metadata — single source of truth for version, authors, credits, etc.
 pub mod metadata;
+
+// Persistent operation queue (planner-worker-job).
+pub mod queue;

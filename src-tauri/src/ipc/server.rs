@@ -163,6 +163,7 @@ fn process_command(
     facade: &Arc<ApplicationFacadeImpl>,
     rt: &tokio::runtime::Runtime,
     op_lock: &Arc<Mutex<()>>,
+    queue: &Arc<crate::queue::JobQueue>,
 ) -> ResponseMessage {
     match cmd {
         CommandMessage::ExecuteOperation(data) => {
@@ -285,6 +286,60 @@ fn process_command(
             tracing::info!("Received SelectFolder: {:?}", data);
             handle_select_folder(data)
         }
+        CommandMessage::EnqueueOperation(data) => {
+            tracing::info!("Received EnqueueOperation: {:?}", data);
+            match queue.enqueue(data) {
+                Ok(job_id) => ResponseMessage {
+                    status: ResponseStatus::Ok,
+                    message: "Operation queued".to_string(),
+                    operation_id: None,
+                    data: Some(serde_json::json!({ "job_id": job_id.id })),
+                },
+                Err(e) => ResponseMessage {
+                    status: ResponseStatus::Error,
+                    message: e,
+                    operation_id: None,
+                    data: None,
+                },
+            }
+        }
+        CommandMessage::QueryJobs => {
+            let jobs: Vec<quicksort_ipc_contract::JobDto> = queue.list();
+            ResponseMessage {
+                status: ResponseStatus::Ok,
+                message: "Jobs listed".to_string(),
+                operation_id: None,
+                data: Some(serde_json::to_value(jobs).unwrap_or_default()),
+            }
+        }
+        CommandMessage::GetJobStatus(job_id) => match queue.get(&job_id.id) {
+            Some(job) => ResponseMessage {
+                status: ResponseStatus::Ok,
+                message: "Job status".to_string(),
+                operation_id: None,
+                data: Some(serde_json::to_value(job).unwrap_or_default()),
+            },
+            None => ResponseMessage {
+                status: ResponseStatus::Error,
+                message: "Job not found".to_string(),
+                operation_id: None,
+                data: None,
+            },
+        },
+        CommandMessage::CancelJob(job_id) => match queue.cancel(&job_id.id) {
+            Ok(()) => ResponseMessage {
+                status: ResponseStatus::Ok,
+                message: "Job canceled".to_string(),
+                operation_id: None,
+                data: None,
+            },
+            Err(e) => ResponseMessage {
+                status: ResponseStatus::Error,
+                message: e,
+                operation_id: None,
+                data: None,
+            },
+        },
     }
 }
 
@@ -297,7 +352,11 @@ fn process_command(
 /// # Blocking
 /// This function never returns under normal operation.  It must be spawned
 /// on a dedicated OS thread.
-pub fn start_ipc_server<T: IpcTransport>(transport: T, facade: Arc<ApplicationFacadeImpl>) {
+pub fn start_ipc_server<T: IpcTransport>(
+    transport: T,
+    facade: Arc<ApplicationFacadeImpl>,
+    queue: Arc<crate::queue::JobQueue>,
+) {
     tracing::info!("IPC server starting ({})", transport.name());
 
     if let Err(e) = transport.start() {
@@ -311,7 +370,7 @@ pub fn start_ipc_server<T: IpcTransport>(transport: T, facade: Arc<ApplicationFa
         .build()
         .expect("failed to create tokio runtime for IPC server");
 
-    let op_lock = Arc::new(Mutex::new(()));
+    let op_lock = super::op_lock();
 
     loop {
         let mut stream = match transport.accept() {
@@ -357,7 +416,7 @@ pub fn start_ipc_server<T: IpcTransport>(transport: T, facade: Arc<ApplicationFa
                 }
             };
 
-            let response = process_command(cmd, &facade, &rt, &op_lock);
+            let response = process_command(cmd, &facade, &rt, &op_lock, &queue);
 
             let response_bytes = match serde_json::to_vec(&response) {
                 Ok(b) => b,
@@ -378,15 +437,15 @@ pub fn start_ipc_server<T: IpcTransport>(transport: T, facade: Arc<ApplicationFa
 ///
 /// This is the main entry point called from `main.rs`.  It selects the
 /// correct transport implementation based on the target platform.
-pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
+pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>, queue: Arc<crate::queue::JobQueue>) {
     #[cfg(target_os = "windows")]
     {
         let transport = super::named_pipe::NamedPipeTransport::new();
-        start_ipc_server(transport, facade);
+        start_ipc_server(transport, facade, queue);
     }
     #[cfg(not(target_os = "windows"))]
     {
         let transport = super::unix_socket::UnixSocketTransport::new();
-        start_ipc_server(transport, facade);
+        start_ipc_server(transport, facade, queue);
     }
 }
