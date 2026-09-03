@@ -16,8 +16,9 @@
 
 ; Runs at the very start of uninstall, before any files are removed.
 ; Remove COM registry keys directly from NSIS (no elevation issues), then
-; restart Explorer so the shell extension DLL is unloaded from memory and
-; subsequent file deletion succeeds.
+; restart Explorer so the shell extension DLL is unloaded from memory and the
+; subsequent file deletion of context_menu_dll.dll succeeds (otherwise the DLL
+; stays mapped by Explorer and is left behind as a trace).
 !macro NSIS_HOOK_PREUNINSTALL
   ; Delete CLSID and handler keys so Explorer will not show the menu anymore.
   DeleteRegKey HKCU "Software\Classes\CLSID\{12345678-1234-1234-1234-1234567890AB}"
@@ -27,10 +28,13 @@
   DeleteRegKey HKCU "Software\Classes\Directory\Background\shellex\ContextMenuHandlers\QuickSort"
   DeleteRegKey HKCU "Software\Classes\Directory\shellex\ContextMenuHandlers\QuickSort"
   DeleteRegKey HKCU "Software\Classes\Drive\shellex\ContextMenuHandlers\QuickSort"
-  ; Note: Explorer is intentionally not restarted — per product requirement the
-  ; installer/uninstaller must never interfere with Explorer. If the DLL is
-  ; still mapped by Explorer, its deletion only completes after Explorer is
-  ; restarted by the OS/user; that is preferred over killing the shell here.
+
+  ; Restart Explorer so it unloads the mapped shell extension DLL before the
+  ; uninstaller deletes it. nsExec::Exec waits for taskkill to finish (Explorer
+  ; is gone when it returns); we then relaunch the shell.
+  nsExec::Exec 'taskkill /f /im explorer.exe'
+  Sleep 500
+  Exec 'explorer.exe'
 !macroend
 
 ; Runs after files, registry keys, and shortcuts have been removed.
