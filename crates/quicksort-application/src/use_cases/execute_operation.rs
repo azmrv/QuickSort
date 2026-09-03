@@ -153,10 +153,25 @@ impl ExecuteOperationUseCase {
                     )));
                 }
 
-                // Skip files already in the target folder (same-folder protection)
+                // Reject moving/copying into the same folder the entity already
+                // lives in. The comparison is case-insensitive on Windows
+                // (PathBuf equality is byte/case-sensitive even on Windows, so
+                // a source and target differing only in case would otherwise
+                // be treated as different).
                 if let (Some(src_parent), Some(ref target)) = (source.parent(), target_folder) {
-                    if src_parent == *target {
-                        return Ok(0u64);
+                    let same = if cfg!(target_os = "windows") {
+                        src_parent
+                            .as_str()
+                            .and_then(|s| target.as_str().map(|t| (s.to_lowercase(), t.to_lowercase())))
+                            .is_some_and(|(s, t)| s == t)
+                    } else {
+                        src_parent == *target
+                    };
+                    if same {
+                        return Err(UseCaseError::Conflict(format!(
+                            "Source is already in the target folder: {}",
+                            source
+                        )));
                     }
                 }
 
