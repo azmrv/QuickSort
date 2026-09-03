@@ -16,7 +16,7 @@ use state::AppState;
 use std::sync::Arc;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
-    tray::TrayIconBuilder,
+    tray::{TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
 
@@ -288,12 +288,6 @@ fn start_tauri() {
 
                     crate::pending::set_pending_file(file.to_string());
 
-                    // Show and focus the existing main window
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
-
                     // Emit event so the frontend switches to selector mode
                     let _ = app.emit(
                         "pending-file",
@@ -302,6 +296,14 @@ fn start_tauri() {
                         },
                     );
                 }
+            }
+
+            // A second launch (shortcut click or repeat run) restores the
+            // hidden-to-tray main window and brings it to the front.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
             }
         }))
         .plugin(tauri_plugin_dialog::init())
@@ -418,6 +420,16 @@ fn start_tauri() {
                         app.exit(0);
                     }
                     _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::DoubleClick { .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
                 })
                 .build(app)?;
             Ok(())
