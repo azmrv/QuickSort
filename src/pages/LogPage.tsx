@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { DataGrid, type Column, type SortColumn } from 'react-data-grid';
+import 'react-data-grid/lib/styles.css';
 import { logger } from '../lib/logger';
 import { App } from 'antd';
 import { listen } from '@tauri-apps/api/event';
@@ -13,7 +15,6 @@ interface BackendLog {
 
 type LogLevel = 'ALL' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 type LogSortKey = 'time' | 'level' | 'source' | 'target' | 'message';
-type LogSortDir = 1 | -1;
 
 const LEVEL_ORDER: Record<string, number> = { TRACE: 0, DEBUG: 1, INFO: 2, WARN: 3, ERROR: 4 };
 
@@ -42,8 +43,8 @@ const LogPage = () => {
     const [filter, setFilter] = useState<LogLevel>('ALL');
     const [showBackend, setShowBackend] = useState(true);
     const [showFrontend, setShowFrontend] = useState(true);
-    const [sortKey, setSortKey] = useState<LogSortKey>('time');
-    const [sortDir, setSortDir] = useState<LogSortDir>(-1);
+    const [sortColumns, setSortColumns] = useState<SortColumn[]>([{ columnKey: 'time', direction: 'DESC' }]);
+    const [columnOrder, setColumnOrder] = useState<string[]>(['time', 'level', 'source', 'target', 'message']);
     const { message } = App.useApp();
     const endRef = useRef<HTMLDivElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
@@ -85,22 +86,19 @@ const LogPage = () => {
         }
     };
 
-    const sortedLogs = [...allLogs].sort((a, b) => {
-        const va = getSortValue(a, sortKey);
-        const vb = getSortValue(b, sortKey);
-        if (va < vb) return -1 * sortDir;
-        if (va > vb) return 1 * sortDir;
-        return 0;
-    });
-
-    const handleSort = (key: LogSortKey) => {
-        if (sortKey === key) {
-            setSortDir(prev => (prev === 1 ? -1 : 1));
-        } else {
-            setSortKey(key);
-            setSortDir(-1);
-        }
-    };
+    const sortedLogs = useMemo(() => {
+        const combined = [...allLogs];
+        if (sortColumns.length === 0) return combined;
+        return combined.sort((a, b) => {
+            for (const { columnKey, direction } of sortColumns) {
+                const va = getSortValue(a, columnKey as LogSortKey);
+                const vb = getSortValue(b, columnKey as LogSortKey);
+                if (va < vb) return direction === 'ASC' ? -1 : 1;
+                if (va > vb) return direction === 'ASC' ? 1 : -1;
+            }
+            return 0;
+        });
+    }, [allLogs, sortColumns]);
 
     const handleCopyAll = async () => {
         const text = sortedLogs.map(l =>
@@ -110,37 +108,85 @@ const LogPage = () => {
         message.success(t('log.copy_success', { count: sortedLogs.length }));
     };
 
-    const columns: { key: LogSortKey; label: string }[] = [
-        { key: 'time', label: t('log.col.time') },
-        { key: 'level', label: t('log.col.level') },
-        { key: 'source', label: t('log.col.source') },
-        { key: 'target', label: t('log.col.target') },
-        { key: 'message', label: t('log.col.message') },
+    const allColumns: Column<MergedLog>[] = [
+        {
+            key: 'time',
+            name: t('log.col.time'),
+            width: 110,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => (
+                <span style={{ color: 'var(--qs-text-muted)' }}>{row.timestamp.slice(11, 23)}</span>
+            ),
+        },
+        {
+            key: 'level',
+            name: t('log.col.level'),
+            width: 90,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => (
+                <span style={{ color: LEVEL_COLORS[row.level] ?? 'var(--qs-text-secondary)' }}>{row.level}</span>
+            ),
+        },
+        {
+            key: 'source',
+            name: t('log.col.source'),
+            width: 90,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => (
+                <span style={{ color: 'var(--qs-text-muted)' }}>[{row.source}]</span>
+            ),
+        },
+        {
+            key: 'target',
+            name: t('log.col.target'),
+            width: 160,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => (
+                <span style={{ color: '#8b5cf6' }}>{row.target || '\u2014'}</span>
+            ),
+        },
+        {
+            key: 'message',
+            name: t('log.col.message'),
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => (
+                <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{row.message}</span>
+            ),
+        },
     ];
 
-    const headerStyle: React.CSSProperties = {
-        padding: '8px 10px',
-        background: 'var(--qs-bg-tertiary)',
-        color: 'var(--qs-text-secondary)',
-        fontFamily: 'var(--qs-font-mono)',
-        fontSize: '11px',
-        fontWeight: 600,
-        textAlign: 'left',
-        borderBottom: '1px solid var(--qs-border)',
-        whiteSpace: 'nowrap',
-        cursor: 'pointer',
-        userSelect: 'none',
+    const handleColumnsReorder = (sourceKey: string, targetKey: string) => {
+        setColumnOrder((prev) => {
+            const srcIdx = prev.findIndex((k) => k === sourceKey);
+            const tgtIdx = prev.findIndex((k) => k === targetKey);
+            if (srcIdx === -1 || tgtIdx === -1) return prev;
+            const next = [...prev];
+            const [moved] = next.splice(srcIdx, 1);
+            next.splice(tgtIdx, 0, moved);
+            return next;
+        });
     };
 
-    const cellStyle: React.CSSProperties = {
-        padding: '6px 10px',
-        borderBottom: '1px solid var(--qs-border)',
-        fontFamily: 'var(--qs-font-mono)',
-        fontSize: '11px',
-        color: 'var(--qs-text-primary)',
-        verticalAlign: 'top',
-        whiteSpace: 'nowrap',
-    };
+    const orderedColumns = useMemo(
+        () => {
+            const byKey = new Map(allColumns.map((c) => [c.key, c]));
+            return columnOrder
+                .map((key) => byKey.get(key))
+                .filter((c): c is Column<MergedLog> => Boolean(c));
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [columnOrder, allColumns]
+    );
 
     return (
         <div className="log-page">
@@ -173,38 +219,16 @@ const LogPage = () => {
                 {sortedLogs.length === 0 ? (
                     <div className="log-empty">{t('log.empty')}</div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr>
-                                {columns.map((col) => (
-                                    <th
-                                        key={col.key}
-                                        onClick={() => handleSort(col.key)}
-                                        style={{
-                                            ...headerStyle,
-                                            color: sortKey === col.key ? 'var(--qs-accent)' : 'var(--qs-text-secondary)',
-                                        }}
-                                    >
-                                        {col.label}
-                                        {sortKey === col.key ? ` ${sortDir === -1 ? '\u2193' : '\u2191'}` : ''}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sortedLogs.map((log, i) => (
-                                <tr key={i} style={{ background: 'var(--qs-bg-secondary)' }}>
-                                    <td style={{ ...cellStyle, color: 'var(--qs-text-muted)' }}>{log.timestamp.slice(11, 23)}</td>
-                                    <td style={{ ...cellStyle, color: LEVEL_COLORS[log.level] ?? 'var(--qs-text-secondary)' }}>{log.level}</td>
-                                    <td style={{ ...cellStyle, color: 'var(--qs-text-muted)' }}>[{log.source}]</td>
-                                    <td style={{ ...cellStyle, color: '#8b5cf6', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {log.target || '\u2014'}
-                                    </td>
-                                    <td style={{ ...cellStyle, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{log.message}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <DataGrid<MergedLog>
+                        columns={orderedColumns}
+                        rows={sortedLogs}
+                        rowKeyGetter={(row) => `${row.timestamp}-${row.level}-${row.source}-${row.message}`}
+                        sortColumns={sortColumns}
+                        onSortColumnsChange={setSortColumns}
+                        onColumnsReorder={handleColumnsReorder}
+                        onRowsChange={() => {}}
+                        direction="ltr"
+                    />
                 )}
                 <div ref={endRef} />
             </div>

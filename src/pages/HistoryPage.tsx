@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { App } from 'antd';
+import { DataGrid, type Column, type SortColumn } from 'react-data-grid';
+import 'react-data-grid/lib/styles.css';
 import { invoke } from '../lib/invoke';
 import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
@@ -15,7 +17,6 @@ interface Operation {
 }
 
 type SortKey = 'operation_type' | 'state' | 'path' | 'target' | 'size' | 'created_at';
-type SortDir = 1 | -1;
 
 const CLEAR_COUNTDOWN = 5;
 
@@ -41,8 +42,8 @@ const HistoryPage = () => {
     // with "Operation not undoable", the id is added here so the buttons stay
     // disabled instead of re-raising the error on every click.
     const [unavailable, setUnavailable] = useState<Set<string>>(new Set());
-    const [sortKey, setSortKey] = useState<SortKey>('created_at');
-    const [sortDir, setSortDir] = useState<SortDir>(-1);
+    const [sortColumns, setSortColumns] = useState<SortColumn[]>([{ columnKey: 'created_at', direction: 'DESC' }]);
+    const [columnOrder, setColumnOrder] = useState<string[]>(['state', 'operation_type', 'path', 'target', 'size', 'created_at', 'actions']);
     // Countdown state for the "clear history" confirmation. While > 0 the action
     // is still pending (a warning is shown and can be cancelled); when it reaches
     // 0 the OK/Cancel buttons appear and only OK actually clears the history.
@@ -281,46 +282,19 @@ const HistoryPage = () => {
         }
     };
 
-    const sortedOperations = [...operations].sort((a, b) => {
-        const va = getSortValue(a, sortKey);
-        const vb = getSortValue(b, sortKey);
-        if (va < vb) return -1 * sortDir;
-        if (va > vb) return 1 * sortDir;
-        return 0;
-    });
-
-    const handleSort = (key: SortKey) => {
-        if (sortKey === key) {
-            setSortDir(prev => (prev === 1 ? -1 : 1));
-        } else {
-            setSortKey(key);
-            setSortDir(-1);
-        }
-    };
-
-    const headerStyle: React.CSSProperties = {
-        padding: '8px 12px',
-        background: 'var(--qs-bg-tertiary)',
-        color: 'var(--qs-text-secondary)',
-        fontFamily: 'var(--qs-font-mono)',
-        fontSize: '11px',
-        fontWeight: 600,
-        textAlign: 'left',
-        borderBottom: '1px solid var(--qs-border)',
-        whiteSpace: 'nowrap',
-        cursor: 'pointer',
-        userSelect: 'none',
-    };
-
-    const cellStyle: React.CSSProperties = {
-        padding: '8px 12px',
-        borderBottom: '1px solid var(--qs-border)',
-        fontFamily: 'var(--qs-font-mono)',
-        fontSize: '11px',
-        color: 'var(--qs-text-primary)',
-        verticalAlign: 'middle',
-        whiteSpace: 'nowrap',
-    };
+    const sortedOperations = useMemo(() => {
+        const sorted = [...operations];
+        if (sortColumns.length === 0) return sorted;
+        return sorted.sort((a, b) => {
+            for (const { columnKey, direction } of sortColumns) {
+                const va = getSortValue(a, columnKey as SortKey);
+                const vb = getSortValue(b, columnKey as SortKey);
+                if (va < vb) return direction === 'ASC' ? -1 : 1;
+                if (va > vb) return direction === 'ASC' ? 1 : -1;
+            }
+            return 0;
+        });
+    }, [operations, sortColumns]);
 
     const toolbarButtonStyle: React.CSSProperties = {
         padding: '6px 12px',
@@ -347,14 +321,145 @@ const HistoryPage = () => {
         marginLeft: '4px',
     };
 
-    const columns: { key: SortKey; label: string }[] = [
-        { key: 'state', label: t('history.col.status') },
-        { key: 'operation_type', label: t('history.col.type') },
-        { key: 'path', label: t('history.col.path') },
-        { key: 'target', label: t('history.col.target') },
-        { key: 'size', label: t('history.col.size') },
-        { key: 'created_at', label: t('history.col.date') },
+    const allColumns: Column<Operation>[] = [
+        {
+            key: 'state',
+            name: t('history.col.status'),
+            width: 140,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => {
+                const state = getStateLabel(row.state);
+                return (
+                    <span style={{ color: state.color, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{
+                            display: 'inline-block',
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: state.color,
+                        }} />
+                        {state.text}
+                    </span>
+                );
+            },
+        },
+        {
+            key: 'operation_type',
+            name: t('history.col.type'),
+            width: 110,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => <span>{getOperationLabel(row.operation_type)}</span>,
+        },
+        {
+            key: 'path',
+            name: t('history.col.path'),
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => (
+                <span title={row.source_paths.join('\n')}>
+                    {row.source_paths[0]}
+                    {row.source_paths.length > 1 ? ` +${row.source_paths.length - 1}` : ''}
+                </span>
+            ),
+        },
+        {
+            key: 'target',
+            name: t('history.col.target'),
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => (
+                <span style={{ color: 'var(--qs-text-muted)' }}>
+                    {row.target_folder_path ?? '\u2014'}
+                </span>
+            ),
+        },
+        {
+            key: 'size',
+            name: t('history.col.size'),
+            width: 110,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => {
+                const size = getBytesProcessed(row.state);
+                const files = getFilesCount(row.state);
+                return <span>{size > 0 ? `${formatBytes(size)} (${files})` : '\u2014'}</span>;
+            },
+        },
+        {
+            key: 'created_at',
+            name: t('history.col.date'),
+            width: 160,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => (
+                <span style={{ color: 'var(--qs-text-muted)' }}>
+                    {new Date(row.created_at).toLocaleString('ru-RU')}
+                </span>
+            ),
+        },
+        {
+            key: 'actions',
+            name: t('history.col.actions'),
+            width: 200,
+            resizable: false,
+            draggable: false,
+            frozen: 'end',
+            renderCell: ({ row }) => (
+                <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                        onClick={() => handleUndo(row.id)}
+                        disabled={!canUndo(row)}
+                        style={actionButtonStyle}
+                    >
+                        {t('history.undo')}
+                    </button>
+                    <button
+                        onClick={() => handleRepeat(row.id)}
+                        disabled={!canRepeat(row)}
+                        style={actionButtonStyle}
+                    >
+                        {t('history.repeat')}
+                    </button>
+                    <button
+                        onClick={() => handleDelete(row.id)}
+                        style={actionButtonStyle}
+                    >
+                        {t('history.delete')}
+                    </button>
+                </div>
+            ),
+        },
     ];
+
+    const handleColumnsReorder = (sourceKey: string, targetKey: string) => {
+        setColumnOrder((prev) => {
+            const srcIdx = prev.findIndex((k) => k === sourceKey);
+            const tgtIdx = prev.findIndex((k) => k === targetKey);
+            if (srcIdx === -1 || tgtIdx === -1) return prev;
+            const next = [...prev];
+            const [moved] = next.splice(srcIdx, 1);
+            next.splice(tgtIdx, 0, moved);
+            return next;
+        });
+    };
+
+    const orderedColumns = useMemo(
+        () => {
+            const byKey = new Map(allColumns.map((c) => [c.key, c]));
+            return columnOrder
+                .map((key) => byKey.get(key))
+                .filter((c): c is Column<Operation> => Boolean(c));
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [columnOrder, allColumns]
+    );
 
     return (
         <div style={{ padding: 'var(--qs-space-lg)' }}>
@@ -460,114 +565,19 @@ const HistoryPage = () => {
                     border: '1px solid var(--qs-border)',
                     borderRadius: 'var(--qs-radius-md)',
                     overflow: 'hidden',
+                    height: '60vh',
                 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr>
-                                {columns.map((col) => (
-                                    <th
-                                        key={col.key}
-                                        onClick={() => handleSort(col.key)}
-                                        style={{
-                                            ...headerStyle,
-                                            color: sortKey === col.key ? 'var(--qs-accent)' : 'var(--qs-text-secondary)',
-                                        }}
-                                    >
-                                        {col.label}
-                                        {sortKey === col.key ? ` ${sortDir === -1 ? '\u2193' : '\u2191'}` : ''}
-                                    </th>
-                                ))}
-                                <th style={{ ...headerStyle, cursor: 'default' }}>
-                                    {t('history.col.actions')}
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sortedOperations.map((op) => {
-                                const state = getStateLabel(op.state);
-                                const size = getBytesProcessed(op.state);
-                                const files = getFilesCount(op.state);
-                                return (
-                                    <tr
-                                        key={op.id}
-                                        style={{ background: 'var(--qs-bg-secondary)' }}
-                                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--qs-bg-tertiary)'; }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--qs-bg-secondary)'; }}
-                                    >
-                                        <td style={cellStyle}>
-                                            <span style={{
-                                                display: 'inline-block',
-                                                width: '8px',
-                                                height: '8px',
-                                                borderRadius: '50%',
-                                                background: state.color,
-                                                marginRight: '8px',
-                                                verticalAlign: 'middle',
-                                            }} />
-                                            <span style={{ color: state.color }}>{state.text}</span>
-                                        </td>
-                                        <td style={cellStyle}>{getOperationLabel(op.operation_type)}</td>
-                                        <td style={{ ...cellStyle, maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {op.source_paths[0]}
-                                            {op.source_paths.length > 1 && ` +${op.source_paths.length - 1}`}
-                                        </td>
-                                        <td style={{ ...cellStyle, color: 'var(--qs-text-muted)' }}>
-                                            {op.target_folder_path ?? '\u2014'}
-                                        </td>
-                                        <td style={{ ...cellStyle, textAlign: 'right' }}>
-                                            {size > 0 ? `${formatBytes(size)} (${files})` : '\u2014'}
-                                        </td>
-                                        <td style={{ ...cellStyle, color: 'var(--qs-text-muted)' }}>
-                                            {new Date(op.created_at).toLocaleString('ru-RU')}
-                                        </td>
-                                        <td style={{ ...cellStyle, whiteSpace: 'nowrap' }}>
-                                            <button
-                                                onClick={() => handleUndo(op.id)}
-                                                disabled={!canUndo(op)}
-                                                style={{
-                                                    ...actionButtonStyle,
-                                                    color: canUndo(op) ? 'var(--qs-accent)' : 'var(--qs-text-muted)',
-                                                    cursor: canUndo(op) ? 'pointer' : 'not-allowed',
-                                                    opacity: canUndo(op) ? 1 : 0.6,
-                                                }}
-                                            >
-                                                {t('history.undo')}
-                                            </button>
-                                            <button
-                                                onClick={() => handleRepeat(op.id)}
-                                                disabled={!canRepeat(op)}
-                                                style={{
-                                                    ...actionButtonStyle,
-                                                    color: canRepeat(op) ? 'var(--qs-accent)' : 'var(--qs-text-muted)',
-                                                    cursor: canRepeat(op) ? 'pointer' : 'not-allowed',
-                                                    opacity: canRepeat(op) ? 1 : 0.6,
-                                                }}
-                                            >
-                                                {t('history.repeat')}
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(op.id)}
-                                                style={{
-                                                    ...actionButtonStyle,
-                                                    color: 'var(--qs-text-muted)',
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    e.currentTarget.style.background = 'var(--qs-accent-muted)';
-                                                    e.currentTarget.style.color = 'var(--qs-danger, #ef4444)';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.background = 'transparent';
-                                                    e.currentTarget.style.color = 'var(--qs-text-muted)';
-                                                }}
-                                            >
-                                                {t('history.delete')}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                    <DataGrid<Operation>
+                        columns={orderedColumns}
+                        rows={sortedOperations}
+                        rowKeyGetter={(row) => row.id}
+                        sortColumns={sortColumns}
+                        onSortColumnsChange={setSortColumns}
+                        onColumnsReorder={handleColumnsReorder}
+                        onRowsChange={() => {}}
+                        direction="ltr"
+                        className="rdg"
+                    />
                 </div>
             )}
         </div>
