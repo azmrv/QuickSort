@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import { translations, type Locale } from './translations';
 
 interface I18nContextValue {
@@ -14,6 +14,12 @@ export const LanguageProvider: React.FC<{
     children: React.ReactNode;
 }> = ({ initialLocale, children }) => {
     const [locale, setLocaleState] = useState<Locale>(initialLocale);
+
+    // Re-sync internal state when the locale is changed externally (e.g. via
+    // the settings-changed event), so live language switching takes effect.
+    useEffect(() => {
+        setLocaleState(initialLocale);
+    }, [initialLocale]);
 
     const setLocale = useCallback((l: Locale) => {
         setLocaleState(l);
