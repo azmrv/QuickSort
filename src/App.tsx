@@ -33,7 +33,7 @@ function AppContent() {
     const { t, locale } = useTranslation();
     const [mode, setMode] = useState<'editor' | 'selector'>('editor');
     const [selectFiles, setSelectFiles] = useState<string[]>([]);
-    const [themeMode, setThemeMode] = useState<string>('system');
+    const [themeMode, setThemeMode] = useState<'system' | 'light' | 'dark'>('system');
     const [isDark, setIsDark] = useState(() => {
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
             return false;
@@ -47,9 +47,9 @@ function AppContent() {
     useEffect(() => {
         logger.info('App', 'startup');
         invoke<Settings>('get_settings').then((settings) => {
-            setThemeMode(settings.theme_mode || 'System');
+            setThemeMode(settings.theme_mode || 'system');
             const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
-            setIsDark(deriveIsDark(settings.theme_mode || 'System', systemDark));
+            setIsDark(deriveIsDark(settings.theme_mode || 'system', systemDark));
             logger.info('App', `loaded settings: theme=${settings.theme_mode}, locale=${settings.locale}`);
         }).catch((err) => {
             logger.error('App', 'Failed to load settings', err);
@@ -129,7 +129,7 @@ function AppContent() {
     const persistSettings = async (patch: Partial<Settings>) => {
         const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
         const next: Settings = {
-            theme_mode: 'system',
+            theme_mode: themeMode,
             locale: locale,
             ...patch,
         };
