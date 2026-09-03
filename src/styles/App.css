@@ -110,7 +110,16 @@
     font-family: var(--qs-font-body);
     font-size: 13px;
     cursor: pointer;
+    accent-color: var(--qs-accent);
     transition: all var(--qs-transition-fast);
+}
+
+/* WebView2 renders the native <option> popup with the OS highlight colour
+   (often a default pink/magenta). Pin the options to the theme so the
+   dropdown matches the rest of the UI. */
+.locale-select option {
+    background: var(--qs-bg-tertiary);
+    color: var(--qs-text-primary);
 }
 
 .locale-select:hover {
