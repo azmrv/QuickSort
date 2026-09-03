@@ -46,9 +46,13 @@
 !macroend
 
 ; Runs after files, registry keys, and shortcuts have been removed.
-; When the "delete settings" checkbox was ticked, remove the per-user
-; application data (settings, operation history, folders config).
+; Always clean the install directory if it is now empty (leaving it behind is
+; reported as a post-uninstall trace), then remove the per-user application
+; data when the "delete settings" checkbox was ticked.
 !macro NSIS_HOOK_POSTUNINSTALL
+  ; Remove the install directory only when it contains no leftover files.
+  RMDir "$INSTDIR"
+
   ${If} $DeleteAppDataCheckboxState = 1
   ${AndIf} $UpdateMode <> 1
     SetShellVarContext current
