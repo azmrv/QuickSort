@@ -112,6 +112,7 @@ function AppContent() {
     }, []);
 
     useEffect(() => {
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
         document.body.style.backgroundColor = isDark ? '#0a0a0b' : '#f8f9fa';
         document.body.style.color = isDark ? '#e8e8ec' : '#1a1a1d';
     }, [isDark]);

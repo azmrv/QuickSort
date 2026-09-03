@@ -60,6 +60,35 @@
     --qs-transition-slow: 300ms ease-out;
 }
 
+/* Light theme overrides — applied when App.tsx sets data-theme="light" on
+   the root element, keeping the custom design tokens in sync with the
+   Ant Design theme algorithm. */
+[data-theme="light"] {
+    --qs-bg-primary: #f8f9fa;
+    --qs-bg-secondary: #ffffff;
+    --qs-bg-tertiary: #f1f3f5;
+    --qs-bg-elevated: #ffffff;
+    --qs-bg-hover: #e9ecef;
+
+    --qs-text-primary: #1a1a1d;
+    --qs-text-secondary: #6b7280;
+    --qs-text-muted: #9ca3af;
+
+    --qs-accent: #d97706;
+    --qs-accent-hover: #b45309;
+    --qs-accent-muted: rgba(245, 158, 11, 0.15);
+
+    --qs-danger: #dc2626;
+    --qs-danger-hover: #b91c1c;
+    --qs-danger-muted: rgba(220, 38, 38, 0.12);
+
+    --qs-success: #16a34a;
+    --qs-success-muted: rgba(22, 163, 74, 0.12);
+
+    --qs-border: #e5e7eb;
+    --qs-border-hover: #d1d5db;
+}
+
 /* ================================
    Base Styles
    ================================ */
