@@ -16,11 +16,17 @@ use std::fs;
 use std::path::PathBuf;
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
-use windows::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+use windows::Win32::System::Threading::{
+    GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 
 fn pid_file_path() -> Option<PathBuf> {
     let appdata = std::env::var("APPDATA").ok()?;
-    Some(PathBuf::from(appdata).join("QuickSort").join("dll_owner.pid"))
+    Some(
+        PathBuf::from(appdata)
+            .join("QuickSort")
+            .join("dll_owner.pid"),
+    )
 }
 
 fn read_owner_pid() -> Option<u32> {

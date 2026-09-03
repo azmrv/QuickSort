@@ -3,6 +3,7 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 mod icon;
+mod lifecycle;
 mod pipe_client;
 mod shellext;
 
@@ -42,6 +43,17 @@ pub extern "system" fn DllGetClassObject(
         return CLASS_E_CLASSNOTAVAILABLE;
     }
 
+    // Only hand out a class factory while the owning QuickSort app is running
+    // for the current user. When the owner is dead (app exited, another user's
+    // session, or a stale registration) the extension becomes inert so it never
+    // interferes with this user's Explorer / file dialogs (redirects, "New
+    // Folder", context menus). This is the safety boundary that keeps the
+    // in-process shell extension from touching another user's shell.
+    if !crate::lifecycle::is_owner_alive() {
+        log::info!("DllGetClassObject: owner not running, refusing class object");
+        return CLASS_E_CLASSNOTAVAILABLE;
+    }
+
     log::info!("DllGetClassObject: creating factory");
     let factory = QuickSortClassFactory;
     let unknown: IUnknown = factory.into();
@@ -49,11 +61,12 @@ pub extern "system" fn DllGetClassObject(
     unsafe { unknown.query(riid, ppv) }
 }
 
-/// DllCanUnloadNow - returns S_OK if no instances exist.
+/// DllCanUnloadNow - returns S_OK when the DLL may be unloaded by COM:
+/// no live instances, or the owning QuickSort app is no longer running.
 #[no_mangle]
 pub extern "system" fn DllCanUnloadNow() -> HRESULT {
     let count = INSTANCE_COUNT.load(Ordering::SeqCst);
-    if count == 0 {
+    if crate::lifecycle::can_unload(count) {
         S_OK
     } else {
         S_FALSE
