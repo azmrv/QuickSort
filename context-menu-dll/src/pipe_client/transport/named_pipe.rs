@@ -5,7 +5,8 @@ use std::os::windows::ffi::OsStrExt;
 use std::time::{Duration, Instant};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_PIPE_BUSY, GENERIC_READ, GENERIC_WRITE, HANDLE,
+    CloseHandle, GetLastError, ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, GENERIC_READ, GENERIC_WRITE,
+    HANDLE,
 };
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, ReadFile, WriteFile, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE,
@@ -15,7 +16,7 @@ use windows::Win32::System::Pipes::{PeekNamedPipe, WaitNamedPipeW};
 
 const PIPE_NAME: &str = r"\\.\pipe\quicksort_cmd";
 const CONNECT_TIMEOUT_MS: u32 = 500;
-const MAX_RETRIES: u32 = 5;
+const MAX_RETRIES: u32 = 10;
 const RETRY_INTERVAL_MS: u64 = 50;
 
 /// Maximum time the client waits for the server's response frame.
@@ -95,7 +96,11 @@ impl PipeTransport for NamedPipeTransport {
                 let wait_result = WaitNamedPipeW(pipe_name, CONNECT_TIMEOUT_MS);
                 if !wait_result.as_bool() {
                     let err = GetLastError();
-                    if err == ERROR_PIPE_BUSY {
+                    // The pipe may not exist yet (the Tauri IPC server is still
+                    // starting) or be momentarily busy. Both are transient, so
+                    // keep retrying until the server is ready instead of failing
+                    // the very first Explorer operation after launch.
+                    if err == ERROR_PIPE_BUSY || err == ERROR_FILE_NOT_FOUND {
                         if attempts >= self.retries {
                             return Err(PipeError::Busy);
                         }
