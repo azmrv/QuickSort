@@ -268,12 +268,9 @@ impl ExecuteOperationUseCase {
 
         for counter in 1..=1000 {
             let candidate = parent.join(format!("{} ({}){}", base_name, counter, ext));
-            if !self
-                .file_system
-                .exists(&candidate)
-                .await
-                .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
-            {
+            // `exists()` already returns a `UseCaseError`; re-wrapping it in
+            // `FileSystemError` would double the "File system error:" prefix.
+            if !self.file_system.exists(&candidate).await? {
                 return Ok(candidate);
             }
         }
