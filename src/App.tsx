@@ -9,6 +9,7 @@ import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
 import LogPage from './pages/LogPage';
 import HistoryPage from './pages/HistoryPage';
+import QueuePage from './pages/QueuePage';
 import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
 import PluginsPage from './pages/PluginsPage';
@@ -120,6 +121,7 @@ function AppContent() {
     const TABS = [
         { key: 'folders', label: t('tab.folders'), content: <EditorPage /> },
         { key: 'history', label: t('tab.history'), content: <HistoryPage /> },
+        { key: 'queue', label: t('tab.queue'), content: <QueuePage /> },
         { key: 'plugins', label: t('tab.plugins'), content: <PluginsPage /> },
         { key: 'log', label: t('tab.log'), content: <LogPage /> },
         { key: 'settings', label: t('tab.settings'), content: <SettingsPage /> },
