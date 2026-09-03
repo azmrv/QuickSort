@@ -58,6 +58,7 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
                 target_folder_id: folder.id,
                 target_paths: null,
                 overwrite_policy: 'Skip',
+                duplicate_check_mode: 'Name',
             };
             const result = await invoke('execute_operation_v2', { command });
             logger.info('SelectorPage', 'files moved successfully', result);

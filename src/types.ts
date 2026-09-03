@@ -17,6 +17,7 @@ export interface OperationCommand {
     target_folder_id: string | null;
     target_paths: string[] | null;
     overwrite_policy: 'Skip' | 'Overwrite' | 'AutoRename' | 'Ask';
+    duplicate_check_mode: 'Name' | 'Size' | 'Content';
 }
 
 export interface OperationResult {
