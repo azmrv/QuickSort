@@ -13,7 +13,7 @@
     "clean:locked": "pwsh -NoProfile -Command \"Get-ChildItem -Path 'target' -Recurse -Filter '*.locked.delete' | Remove-Item -Force -ErrorAction SilentlyContinue\""
   },
   "dependencies": {
-    "@ant-design/icons": "^6.3.2",
+    "@ant-design/icons": "^6.3.4",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.2",
     "@tauri-apps/plugin-opener": "^2",
