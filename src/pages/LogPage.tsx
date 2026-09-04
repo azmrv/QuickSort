@@ -13,6 +13,31 @@ interface BackendLog {
     message: string;
 }
 
+// Payload of the `operation-progress` Tauri event (backend emitter, src-tauri/src/progress.rs).
+interface ProgressPayload {
+    current: number;
+    total: number;
+    phase: string;
+    detail?: string | null;
+}
+
+// Job DTO from the backend operation queue (src-tauri/src/queue).
+interface JobDto {
+    id: string;
+    operation_type: string;
+    source_paths: string[];
+    status: string;
+    progress: { current: number; total: number };
+    operation_id?: string | null;
+    error?: string | null;
+    created_at: number;
+    updated_at: number;
+}
+
+interface JobStatusPayload {
+    job: JobDto;
+}
+
 type LogLevel = 'ALL' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 type LogSortKey = 'time' | 'level' | 'source' | 'target' | 'message';
 
@@ -51,10 +76,38 @@ const LogPage = () => {
 
     useEffect(() => {
         logger.action('LogPage', 'mount');
-        const unlisten = listen<BackendLog>('backend-log', (event) => {
+        const unlistenLog = listen<BackendLog>('backend-log', (event) => {
             setBackendLogs(prev => [...prev.slice(-500), event.payload]);
         });
-        return () => { unlisten.then(fn => fn()); };
+        const unlistenProgress = listen<ProgressPayload>('operation-progress', (event) => {
+            const p = event.payload;
+            const entry: BackendLog = {
+                timestamp: new Date().toISOString(),
+                level: 'INFO',
+                target: 'operation',
+                message: `${p.phase} ${p.current}/${p.total}${p.detail ? ` \u2014 ${p.detail}` : ''}`,
+            };
+            setBackendLogs(prev => [...prev.slice(-500), entry]);
+        });
+        const unlistenJob = listen<JobStatusPayload>('job-status', (event) => {
+            const job = event.payload.job;
+            const level = job.error ? 'ERROR' : 'INFO';
+            const src = job.source_paths[0] ?? '';
+            const ext = job.source_paths.length > 1 ? ` +${job.source_paths.length - 1}` : '';
+            const detail = job.error ?? `(${job.progress.current}/${job.progress.total})`;
+            const entry: BackendLog = {
+                timestamp: new Date().toISOString(),
+                level,
+                target: 'queue',
+                message: `job ${job.operation_type} ${job.status} ${src}${ext} ${detail}`,
+            };
+            setBackendLogs(prev => [...prev.slice(-500), entry]);
+        });
+        return () => {
+            unlistenLog.then(fn => fn());
+            unlistenProgress.then(fn => fn());
+            unlistenJob.then(fn => fn());
+        };
     }, []);
 
     useEffect(() => {
