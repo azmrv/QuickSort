@@ -1,9 +1,12 @@
 use std::sync::{Mutex, OnceLock};
 use tauri::Emitter;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 static APP_HANDLE: OnceLock<Mutex<Option<tauri::AppHandle>>> = OnceLock::new();
+
+static _FILE_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> = OnceLock::new();
 
 struct FrontendLayer;
 
@@ -89,9 +92,26 @@ pub fn init() {
     let env_filter = tracing_subscriber::filter::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::filter::EnvFilter::new("info"));
 
+    let log_dir = crate::platform::paths::config_dir().join("logs");
+    let _ = std::fs::create_dir_all(&log_dir);
+
+    let file_appender = RollingFileAppender::builder()
+        .rotation(Rotation::DAILY)
+        .filename_prefix("quicksort")
+        .build(&log_dir)
+        .expect("create rolling file appender");
+
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+    let _ = _FILE_GUARD.set(guard);
+
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_writer(non_blocking)
+        .with_ansi(false);
+
     tracing_subscriber::registry()
         .with(env_filter)
         .with(tracing_subscriber::fmt::layer())
+        .with(file_layer)
         .with(FrontendLayer)
         .init();
 }

@@ -43,3 +43,8 @@ tokio = { workspace = true, features = [
 # anyhow is used in tests for convenience when constructing test fixtures.
 # It is NOT used in production code (Use Cases return UseCaseError).
 anyhow = "1.0"
+
+# Structured logging test support (ADR-019 TDD Red)
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
+tempfile = "3"

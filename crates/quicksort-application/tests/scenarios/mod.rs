@@ -401,3 +401,6 @@ pub fn test_folder() -> Folder {
 pub fn test_file(path: &str) -> AbsolutePath {
     AbsolutePath::new(path).expect("Invalid test path")
 }
+
+pub mod execute_operation;
+pub mod logging;
