@@ -181,8 +181,12 @@ impl PipeTransport for NamedPipeTransport {
             });
         }
 
-        // Ensure the full payload has arrived so the reads below cannot stall.
-        wait_for_bytes(handle.as_handle(), 4 + payload_len as u32, deadline)?;
+        // The 4-byte length prefix has already been consumed by the ReadFile
+        // above, so only `payload_len` payload bytes remain buffered in the
+        // pipe. Waiting for `4 + payload_len` would never be satisfied, since
+        // the prefix bytes are no longer available, and the client would stall
+        // until the timeout fires.
+        wait_for_bytes(handle.as_handle(), payload_len as u32, deadline)?;
 
         let mut payload = vec![0u8; payload_len];
         let mut total_read = 0usize;
