@@ -361,7 +361,9 @@ pub fn start_ipc_server<T: IpcTransport>(
     transport: T,
     facade: Arc<ApplicationFacadeImpl>,
     queue: Arc<crate::queue::JobQueue>,
-) {
+) where
+    T::Stream: Send + 'static,
+{
     tracing::info!("IPC server starting ({})", transport.name());
 
     if let Err(e) = transport.start() {
@@ -369,16 +371,10 @@ pub fn start_ipc_server<T: IpcTransport>(
         return;
     }
 
-    // Create a Tokio runtime for blocking on async facade calls.
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("failed to create tokio runtime for IPC server");
-
     let op_lock = super::op_lock();
 
     loop {
-        let mut stream = match transport.accept() {
+        let stream = match transport.accept() {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!("Accept failed: {}", e);
@@ -389,51 +385,87 @@ pub fn start_ipc_server<T: IpcTransport>(
 
         tracing::info!("Client connected");
 
-        loop {
-            let data = match stream.read_frame() {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    // Broken pipe is expected when the client disconnects
-                    // after sending a single command.
-                    if e.kind() == std::io::ErrorKind::BrokenPipe
-                        || e.to_string().contains("broken pipe")
-                    {
-                        tracing::debug!("Client disconnected: {}", e);
-                    } else {
-                        tracing::error!("Read error: {}", e);
-                    }
-                    break;
-                }
-            };
+        // Serve each client on a dedicated thread so the accept loop keeps
+        // taking new connections.  With a single in-loop handler the server
+        // would stay blocked in read_frame while one client holds the pipe,
+        // and every later context-menu click would wait ~60 s for that
+        // client to disconnect.
+        let facade = Arc::clone(&facade);
+        let queue = Arc::clone(&queue);
+        let op_lock = Arc::clone(&op_lock);
+        std::thread::spawn(move || handle_client(stream, facade, op_lock, queue));
+    }
+}
 
-            let cmd: CommandMessage = match serde_json::from_slice(&data) {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("Deserialization error: {}", e);
-                    let resp = ResponseMessage {
-                        status: ResponseStatus::Error,
-                        message: format!("Invalid JSON: {}", e),
-                        operation_id: None,
-                        data: None,
-                    };
-                    let _ = stream.write_frame(&serde_json::to_vec(&resp).unwrap_or_default());
-                    continue;
-                }
-            };
+/// Serves one connected client until it disconnects.
+///
+/// Reads length-framed commands, processes them and writes responses back.
+/// The stream is dropped on disconnect or any IO/protocol error, which
+/// closes the pipe instance and frees the transport slot.
+fn handle_client<S: IpcStream>(
+    mut stream: S,
+    facade: Arc<ApplicationFacadeImpl>,
+    op_lock: Arc<Mutex<()>>,
+    queue: Arc<crate::queue::JobQueue>,
+) {
+    // Fresh runtime per connection; the current-thread runtime must not be
+    // shared across threads, and moving the server's single runtime into a
+    // per-client thread is not sound.
+    let rt = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(rt) => rt,
+        Err(e) => {
+            tracing::error!("Failed to create tokio runtime for IPC client: {}", e);
+            return;
+        }
+    };
 
-            let response = process_command(cmd, &facade, &rt, &op_lock, &queue);
-
-            let response_bytes = match serde_json::to_vec(&response) {
-                Ok(b) => b,
-                Err(e) => {
-                    tracing::error!("Response serialization failed: {}", e);
-                    break;
+    loop {
+        let data = match stream.read_frame() {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                // Broken pipe is expected when the client disconnects
+                // after sending a single command.
+                if e.kind() == std::io::ErrorKind::BrokenPipe
+                    || e.to_string().contains("broken pipe")
+                {
+                    tracing::debug!("Client disconnected: {}", e);
+                } else {
+                    tracing::error!("Read error: {}", e);
                 }
-            };
-            if let Err(e) = stream.write_frame(&response_bytes) {
-                tracing::error!("Write response failed: {}", e);
                 break;
             }
+        };
+
+        let cmd: CommandMessage = match serde_json::from_slice(&data) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("Deserialization error: {}", e);
+                let resp = ResponseMessage {
+                    status: ResponseStatus::Error,
+                    message: format!("Invalid JSON: {}", e),
+                    operation_id: None,
+                    data: None,
+                };
+                let _ = stream.write_frame(&serde_json::to_vec(&resp).unwrap_or_default());
+                continue;
+            }
+        };
+
+        let response = process_command(cmd, &facade, &rt, &op_lock, &queue);
+
+        let response_bytes = match serde_json::to_vec(&response) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::error!("Response serialization failed: {}", e);
+                break;
+            }
+        };
+        if let Err(e) = stream.write_frame(&response_bytes) {
+            tracing::error!("Write response failed: {}", e);
+            break;
         }
     }
 }
