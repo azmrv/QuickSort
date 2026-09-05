@@ -2899,7 +2899,7 @@ dependencies = [
 
 [[package]]
 name = "quicksort"
-version = "0.2.6"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "async-trait",
