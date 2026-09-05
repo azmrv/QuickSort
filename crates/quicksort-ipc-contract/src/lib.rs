@@ -191,6 +191,10 @@ pub enum OperationType {
 /// This enum mirrors `quicksort_application::OverwritePolicy`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OverwritePolicy {
+    /// Use the policy configured in the server's settings.json
+    /// (`default_overwrite_policy`). The server resolves this to a concrete
+    /// policy; falls back to `Skip` when settings are unavailable.
+    Default,
     /// Abort the operation and report a conflict error.
     Skip,
     /// Silently replace the existing file.

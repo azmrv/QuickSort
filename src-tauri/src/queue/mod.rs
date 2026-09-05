@@ -66,6 +66,9 @@ pub fn convert_execute_data(data: &ExecuteOperationData) -> Option<OperationComm
             IpcOverwritePolicy::Overwrite => AppOverwritePolicy::Overwrite,
             IpcOverwritePolicy::AutoRename => AppOverwritePolicy::AutoRename,
             IpcOverwritePolicy::Ask => AppOverwritePolicy::AutoRename,
+            // Unreachable: Default is normalized to a concrete policy in the
+            // IPC server before the queue ever sees it.
+            IpcOverwritePolicy::Default => AppOverwritePolicy::Skip,
         },
         duplicate_check_mode: match data.duplicate_check_mode {
             Some(IpcDuplicateCheckMode::Name) | None => DuplicateCheckMode::Name,

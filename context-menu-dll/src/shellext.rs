@@ -569,7 +569,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
 
             let target_id = target.id.clone();
             std::thread::spawn(move || {
-                match move_to_folder(sources, target_id, OverwritePolicy::Skip) {
+                match move_to_folder(sources, target_id, OverwritePolicy::Default) {
                     Ok(resp) => {
                         log::info!("Move OK: {:?}", resp);
                     }
@@ -678,7 +678,7 @@ impl QuickSortShellExt_Impl {
                     match crate::pipe_client::client::move_to_path(
                         sources_clone,
                         target,
-                        quicksort_ipc_contract::OverwritePolicy::AutoRename,
+                        quicksort_ipc_contract::OverwritePolicy::Default,
                     ) {
                         Ok(resp) => {
                             log::info!(

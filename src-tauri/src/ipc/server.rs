@@ -7,9 +7,9 @@
 use std::sync::{Arc, Mutex};
 
 use quicksort_application::{
-    AbsolutePath, ApplicationFacadeImpl, DuplicateCheckMode, ExecuteOperation, FolderId,
-    GetFolders, OperationCommand, OperationType as DomainOpType,
-    OverwritePolicy as AppOverwritePolicy,
+    AbsolutePath, ApplicationFacadeImpl, DefaultOverwritePolicy, DuplicateCheckMode,
+    ExecuteOperation, FolderId, GetFolders, LoadSettings, OperationCommand,
+    OperationType as DomainOpType, OverwritePolicy as AppOverwritePolicy,
 };
 use quicksort_ipc_contract::{
     CommandMessage, DuplicateCheckMode as IpcDuplicateCheckMode, ExecuteOperationData,
@@ -40,6 +40,29 @@ fn convert_overwrite_policy(p: IpcOverwritePolicy) -> AppOverwritePolicy {
         IpcOverwritePolicy::Overwrite => AppOverwritePolicy::Overwrite,
         IpcOverwritePolicy::AutoRename => AppOverwritePolicy::AutoRename,
         IpcOverwritePolicy::Ask => AppOverwritePolicy::AutoRename, // non-interactive fallback
+        // Unreachable: Default is resolved to a concrete policy at the IPC
+        // boundary before conversion (see resolve_default_overwrite_policy).
+        IpcOverwritePolicy::Default => AppOverwritePolicy::Skip,
+    }
+}
+
+/// Resolves the `Default` overwrite policy to the policy configured in
+/// settings.json (`default_overwrite_policy`), falling back to `Skip`.
+fn resolve_default_overwrite_policy(
+    facade: &Arc<ApplicationFacadeImpl>,
+    rt: &tokio::runtime::Runtime,
+) -> IpcOverwritePolicy {
+    let policy = match rt.block_on(facade.load_settings()) {
+        Ok(settings) => settings.default_overwrite_policy,
+        Err(e) => {
+            tracing::warn!(error = %e, "settings unavailable; falling back to Skip");
+            return IpcOverwritePolicy::Skip;
+        }
+    };
+    match policy {
+        DefaultOverwritePolicy::Skip => IpcOverwritePolicy::Skip,
+        DefaultOverwritePolicy::Overwrite => IpcOverwritePolicy::Overwrite,
+        DefaultOverwritePolicy::AutoRename => IpcOverwritePolicy::AutoRename,
     }
 }
 
@@ -177,6 +200,12 @@ fn process_command(
             // Resolve target_folder_path to a registered folder ID
             // when target_folder_id is not provided.
             let mut data = data;
+            // Normalize the shell extension's Default policy to the
+            // user-configured one (settings.json) before the domain layer
+            // sees it; Single source of truth for conflict resolution.
+            if matches!(data.overwrite_policy, IpcOverwritePolicy::Default) {
+                data.overwrite_policy = resolve_default_overwrite_policy(facade, rt);
+            }
             let mut early_response: Option<ResponseMessage> = None;
 
             if data.target_folder_id.is_none() {
@@ -291,8 +320,11 @@ fn process_command(
             tracing::info!("Received SelectFolder: {:?}", data);
             handle_select_folder(data)
         }
-        CommandMessage::EnqueueOperation(data) => {
+        CommandMessage::EnqueueOperation(mut data) => {
             tracing::info!("Received EnqueueOperation: {:?}", data);
+            if matches!(data.overwrite_policy, IpcOverwritePolicy::Default) {
+                data.overwrite_policy = resolve_default_overwrite_policy(facade, rt);
+            }
             match queue.enqueue(data) {
                 Ok(job_id) => ResponseMessage {
                     status: ResponseStatus::Ok,
