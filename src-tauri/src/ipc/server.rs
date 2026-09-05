@@ -12,8 +12,9 @@ use quicksort_application::{
     OverwritePolicy as AppOverwritePolicy,
 };
 use quicksort_ipc_contract::{
-    CommandMessage, ExecuteOperationData, OperationType as IpcOpType,
-    OverwritePolicy as IpcOverwritePolicy, ResponseMessage, ResponseStatus, SelectFolderData,
+    CommandMessage, DuplicateCheckMode as IpcDuplicateCheckMode, ExecuteOperationData,
+    OperationType as IpcOpType, OverwritePolicy as IpcOverwritePolicy, ResponseMessage,
+    ResponseStatus, SelectFolderData,
 };
 
 use tauri::{Emitter, Manager};
@@ -63,7 +64,11 @@ fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> 
         target_folder_id,
         target_paths: None,
         overwrite_policy: convert_overwrite_policy(data.overwrite_policy),
-        duplicate_check_mode: DuplicateCheckMode::default(),
+        duplicate_check_mode: match data.duplicate_check_mode {
+            Some(IpcDuplicateCheckMode::Name) | None => DuplicateCheckMode::Name,
+            Some(IpcDuplicateCheckMode::Size) => DuplicateCheckMode::Size,
+            Some(IpcDuplicateCheckMode::Content) => DuplicateCheckMode::Content,
+        },
     })
 }
 

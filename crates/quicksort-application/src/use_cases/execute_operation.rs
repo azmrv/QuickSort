@@ -106,6 +106,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
 
         if let Some(error) = last_error {
             let reason = error.to_string();
+            operation.record_progress(total_files, total_bytes);
             operation
                 .fail(reason.clone())
                 .map_err(|e| UseCaseError::Domain(e.to_string()))?;

@@ -263,8 +263,7 @@ pub fn check_menu_status() -> bool {
 
 #[tauri::command]
 pub fn get_logs() -> Vec<serde_json::Value> {
-    tracing::debug!(command = "get_logs", "handling — returning empty (stub)");
-    Vec::new()
+    crate::logging::get_recent_logs()
 }
 
 #[tauri::command]
@@ -660,6 +659,23 @@ pub async fn enqueue_operation(
         e
     })?;
     tracing::info!(command = "enqueue_operation", job_id = %job_id.id, "OK");
+    Ok(job_id.id)
+}
+
+/// Enqueue a file operation (application DTO, as used by the frontend) for
+/// asynchronous execution by the persistent job worker. Returns the job id.
+#[tauri::command]
+pub async fn enqueue_operation_v2(
+    state: State<'_, AppState>,
+    command: quicksort_application::OperationCommand,
+) -> Result<String, String> {
+    tracing::info!(command = "enqueue_operation_v2", op_type = ?command.operation_type, sources = ?command.source_paths, "handling");
+    let data = crate::queue::command_to_execute_data(&command);
+    let job_id = state.queue.enqueue(data).map_err(|e| {
+        tracing::error!(command = "enqueue_operation_v2", error = %e, "FAIL");
+        e
+    })?;
+    tracing::info!(command = "enqueue_operation_v2", job_id = %job_id.id, "OK");
     Ok(job_id.id)
 }
 

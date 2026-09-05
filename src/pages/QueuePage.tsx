@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DataGrid, type Column } from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
 import { listen } from '@tauri-apps/api/event';
@@ -171,11 +171,6 @@ const QueuePage = () => {
         });
     }, []);
 
-    const visibleJobs = useMemo(
-        () => jobs.filter((j) => j.status === 'Queued' || j.status === 'Running'),
-        [jobs]
-    );
-
     return (
         <div style={{ padding: 'var(--qs-space-lg)' }}>
             <div style={toolbarRowStyle}>
@@ -198,7 +193,7 @@ const QueuePage = () => {
                 <div style={gridContainerStyle}>
                     <DataGrid<Job>
                         columns={columns}
-                        rows={visibleJobs}
+                        rows={jobs}
                         rowKeyGetter={(row) => row.id}
                         defaultColumnOptions={{ resizable: true, draggable: true }}
                         onColumnsReorder={handleColumnsReorder}

@@ -17,8 +17,8 @@ use quicksort_application::{
     OverwritePolicy as AppOverwritePolicy,
 };
 use quicksort_ipc_contract::{
-    ExecuteOperationData, JobDto, JobId, OperationType as IpcOpType,
-    OverwritePolicy as IpcOverwritePolicy,
+    DuplicateCheckMode as IpcDuplicateCheckMode, ExecuteOperationData, JobDto, JobId,
+    OperationType as IpcOpType, OverwritePolicy as IpcOverwritePolicy,
 };
 
 pub mod job;
@@ -67,8 +67,47 @@ pub fn convert_execute_data(data: &ExecuteOperationData) -> Option<OperationComm
             IpcOverwritePolicy::AutoRename => AppOverwritePolicy::AutoRename,
             IpcOverwritePolicy::Ask => AppOverwritePolicy::AutoRename,
         },
-        duplicate_check_mode: DuplicateCheckMode::default(),
+        duplicate_check_mode: match data.duplicate_check_mode {
+            Some(IpcDuplicateCheckMode::Name) | None => DuplicateCheckMode::Name,
+            Some(IpcDuplicateCheckMode::Size) => DuplicateCheckMode::Size,
+            Some(IpcDuplicateCheckMode::Content) => DuplicateCheckMode::Content,
+        },
     })
+}
+
+/// Converts an application `OperationCommand` into IPC `ExecuteOperationData`
+/// so the queue can persist and replay it. Mirrors `convert_execute_data`
+/// in reverse; `target_paths` is intentionally dropped — the queue worker
+/// only consumes Move/Copy/Delete jobs addressed by `target_folder_id`.
+pub fn command_to_execute_data(command: &OperationCommand) -> ExecuteOperationData {
+    let source_paths: Vec<String> = command
+        .source_paths
+        .iter()
+        .filter_map(|p| p.as_str().map(ToString::to_string))
+        .collect();
+    let target_folder_id = command.target_folder_id.map(|id| id.to_string());
+    ExecuteOperationData {
+        operation_type: match command.operation_type {
+            DomainOpType::Move => IpcOpType::Move,
+            DomainOpType::Copy => IpcOpType::Copy,
+            DomainOpType::Delete => IpcOpType::Delete,
+            DomainOpType::Rename => IpcOpType::Rename,
+        },
+        source_paths,
+        target_folder_id,
+        target_folder_path: None,
+        overwrite_policy: match command.overwrite_policy {
+            AppOverwritePolicy::Skip => IpcOverwritePolicy::Skip,
+            AppOverwritePolicy::Overwrite => IpcOverwritePolicy::Overwrite,
+            AppOverwritePolicy::AutoRename => IpcOverwritePolicy::AutoRename,
+            AppOverwritePolicy::Ask => IpcOverwritePolicy::Ask,
+        },
+        duplicate_check_mode: Some(match command.duplicate_check_mode {
+            DuplicateCheckMode::Name => IpcDuplicateCheckMode::Name,
+            DuplicateCheckMode::Size => IpcDuplicateCheckMode::Size,
+            DuplicateCheckMode::Content => IpcDuplicateCheckMode::Content,
+        }),
+    }
 }
 
 /// Shared queue state plus the running worker flag.
@@ -282,7 +321,12 @@ impl JobQueue {
             }
         }
 
-        tracing::info!(job_id = %job.id, "job started");
+        tracing::info!(
+            job_id = %job.id,
+            op_type = ?command.operation_type,
+            files = command.source_paths.len(),
+            "job started"
+        );
         match worker_rt.block_on(registry_facade.execute(command)) {
             Ok(result) => {
                 job.status = JobStatus::Completed;

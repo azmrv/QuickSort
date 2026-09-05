@@ -5,7 +5,6 @@ import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
 import FolderList from '../components/FolderList';
 import AddFolderButton from '../components/AddFolderButton';
-import StatusIndicator from '../components/StatusIndicator';
 import { Folder } from '../types';
 
 const AUTO_COLORS = [
@@ -133,7 +132,6 @@ const EditorPage: React.FC = () => {
 
     return (
         <div>
-            <StatusIndicator />
             <AddFolderButton onFolderAdded={handleAddFolder} />
             <FolderList
                 folders={folders}

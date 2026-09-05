@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::{Mutex, OnceLock};
 use tauri::Emitter;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
@@ -5,6 +6,13 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 static APP_HANDLE: OnceLock<Mutex<Option<tauri::AppHandle>>> = OnceLock::new();
+
+// Rolling buffer of recent backend log entries served to the frontend via the
+// `get_logs` command, so the LOG tab shows history from app start — not only
+// events emitted after the page mounted.
+static LOG_BUFFER: Mutex<VecDeque<serde_json::Value>> = Mutex::new(VecDeque::new());
+
+const MAX_BUFFERED_LOGS: usize = 500;
 
 static _FILE_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> = OnceLock::new();
 
@@ -39,6 +47,13 @@ where
             "message": visitor.0,
         });
 
+        if let Ok(mut buffer) = LOG_BUFFER.lock() {
+            buffer.push_back(log_entry.clone());
+            while buffer.len() > MAX_BUFFERED_LOGS {
+                buffer.pop_front();
+            }
+        }
+
         if let Some(handle) = APP_HANDLE.get() {
             if let Ok(guard) = handle.lock() {
                 if let Some(ref h) = *guard {
@@ -46,6 +61,16 @@ where
                 }
             }
         }
+    }
+}
+
+/// Returns recent buffered backend log entries (oldest first), used by the
+/// `get_logs` Tauri command so the LOG tab can show history from app start.
+pub fn get_recent_logs() -> Vec<serde_json::Value> {
+    if let Ok(buffer) = LOG_BUFFER.lock() {
+        buffer.iter().cloned().collect()
+    } else {
+        Vec::new()
     }
 }
 

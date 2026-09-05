@@ -12,6 +12,8 @@ interface Operation {
     state: unknown;
     source_paths: string[];
     target_folder_path: string | null;
+    processed_files?: number;
+    bytes_processed?: number;
     created_at: string;
     updated_at: string;
 }
@@ -235,24 +237,22 @@ const HistoryPage = () => {
         }
     };
 
-    const getBytesProcessed = (state: unknown): number => {
-        if (typeof state !== 'object' || state === null) return 0;
-        const s = state as Record<string, unknown>;
-        if ('Completed' in s) {
+    const getBytesProcessed = (op: Operation): number => {
+        const s = op.state as Record<string, unknown> | null;
+        if (typeof s === 'object' && s !== null && 'Completed' in s) {
             const completed = s.Completed as { processed_files: number; bytes_processed: number };
-            return completed.bytes_processed ?? 0;
+            return completed.bytes_processed ?? op.bytes_processed ?? 0;
         }
-        return 0;
+        return op.bytes_processed ?? 0;
     };
 
-    const getFilesCount = (state: unknown): number => {
-        if (typeof state !== 'object' || state === null) return 0;
-        const s = state as Record<string, unknown>;
-        if ('Completed' in s) {
+    const getFilesCount = (op: Operation): number => {
+        const s = op.state as Record<string, unknown> | null;
+        if (typeof s === 'object' && s !== null && 'Completed' in s) {
             const completed = s.Completed as { processed_files: number; bytes_processed: number };
-            return completed.processed_files ?? 0;
+            return completed.processed_files ?? op.processed_files ?? 0;
         }
-        return 0;
+        return op.processed_files ?? 0;
     };
 
     const canUndo = (op: Operation): boolean => {
@@ -277,7 +277,7 @@ const HistoryPage = () => {
             case 'state': return getStateRank(op.state);
             case 'path': return op.source_paths[0] ?? '';
             case 'target': return op.target_folder_path ?? '';
-            case 'size': return getBytesProcessed(op.state);
+            case 'size': return getBytesProcessed(op);
             case 'created_at': return new Date(op.created_at).getTime();
         }
     };
@@ -386,8 +386,8 @@ const HistoryPage = () => {
             resizable: true,
             draggable: true,
             renderCell: ({ row }) => {
-                const size = getBytesProcessed(row.state);
-                const files = getFilesCount(row.state);
+                const size = getBytesProcessed(row);
+                const files = getFilesCount(row);
                 return <span>{size > 0 ? `${formatBytes(size)} (${files})` : '\u2014'}</span>;
             },
         },
@@ -527,27 +527,31 @@ const HistoryPage = () => {
                             ? t('history.clear_confirm', { n: clearSeconds })
                             : t('history.clear_ready')}
                     </span>
-                    <button
-                        onClick={() => { performClear(); setClearSeconds(null); }}
-                        style={{
-                            ...actionButtonStyle,
-                            color: 'var(--qs-danger, #ef4444)',
-                            borderColor: 'var(--qs-danger, #ef4444)',
-                            marginLeft: 0,
-                        }}
-                    >
-                        {t('history.clear_ok')}
-                    </button>
-                    <button
-                        onClick={() => setClearSeconds(null)}
-                        style={{
-                            ...actionButtonStyle,
-                            color: 'var(--qs-accent)',
-                            marginLeft: 0,
-                        }}
-                    >
-                        {t('history.clear_cancel')}
-                    </button>
+                    {clearSeconds === 0 && (
+                        <>
+                            <button
+                                onClick={() => { performClear(); setClearSeconds(null); }}
+                                style={{
+                                    ...actionButtonStyle,
+                                    color: 'var(--qs-danger, #ef4444)',
+                                    borderColor: 'var(--qs-danger, #ef4444)',
+                                    marginLeft: 0,
+                                }}
+                            >
+                                {t('history.clear_ok')}
+                            </button>
+                            <button
+                                onClick={() => setClearSeconds(null)}
+                                style={{
+                                    ...actionButtonStyle,
+                                    color: 'var(--qs-accent)',
+                                    marginLeft: 0,
+                                }}
+                            >
+                                {t('history.clear_cancel')}
+                            </button>
+                        </>
+                    )}
                 </div>
             )}
 

@@ -10,6 +10,9 @@
 //! - The `start` method no longer accepts `now` parameter – it internally uses
 //!   `Utc::now()` to reduce unnecessary boilerplate; external time injection
 //!   can be added later if needed.
+//! - `processed_files`/`bytes_processed` live on the aggregate (not only inside
+//!   `OperationState::Completed`) so the last known progress survives the
+//!   `Completed -> Undone` (and `Failed`) transitions and remains reportable.
 
 use crate::{
     errors::DomainError,
@@ -60,6 +63,10 @@ pub struct Operation {
     pub source_paths: Vec<AbsolutePath>,
     pub target_folder_path: Option<AbsolutePath>,
     pub target_paths: Option<Vec<AbsolutePath>>,
+    #[serde(default)]
+    pub processed_files: u32,
+    #[serde(default)]
+    pub bytes_processed: u64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(skip)]
@@ -83,6 +90,8 @@ impl Operation {
             source_paths,
             target_folder_path: target,
             target_paths,
+            processed_files: 0,
+            bytes_processed: 0,
             created_at: now,
             updated_at: now,
             events: Vec::new(),
@@ -163,6 +172,8 @@ impl Operation {
         if !matches!(self.state, OperationState::Executing) {
             return Err(DomainError::InvalidStateTransition);
         }
+        self.processed_files = files;
+        self.bytes_processed = bytes;
         self.state = OperationState::Completed {
             processed_files: files,
             bytes_processed: bytes,
@@ -174,6 +185,12 @@ impl Operation {
             bytes,
         });
         Ok(())
+    }
+
+    /// Persist the latest progress so it survives a subsequent `fail()`.
+    pub fn record_progress(&mut self, files: u32, bytes: u64) {
+        self.processed_files = files;
+        self.bytes_processed = bytes;
     }
 
     /// Record a failure.

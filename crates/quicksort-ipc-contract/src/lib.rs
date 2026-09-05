@@ -160,6 +160,13 @@ pub struct ExecuteOperationData {
 
     /// Conflict resolution strategy when a destination file already exists.
     pub overwrite_policy: OverwritePolicy,
+
+    /// Duplicate detection mode requested by the client.
+    ///
+    /// Absent (`None`) means the server default applies. Kept optional so
+    /// clients that predate this field remain wire-compatible.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub duplicate_check_mode: Option<DuplicateCheckMode>,
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +202,21 @@ pub enum OverwritePolicy {
     /// (e.g., when the command comes from the shell extension DLL),
     /// this policy falls back to `AutoRename`.
     Ask,
+}
+
+/// Duplicate detection mode.
+///
+/// This enum mirrors `quicksort_application::DuplicateCheckMode`.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DuplicateCheckMode {
+    /// Quick check: file with same name exists at destination.
+    #[default]
+    Name,
+    /// Medium check: same name AND same file size.
+    Size,
+    /// Deep check: SHA-256 hash comparison (slowest, most accurate).
+    Content,
 }
 
 // ---------------------------------------------------------------------------

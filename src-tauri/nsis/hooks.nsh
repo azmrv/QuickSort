@@ -38,11 +38,13 @@
   DeleteRegKey HKCU "Software\Classes\Drive\shellex\ContextMenuHandlers\QuickSort"
 
   ; 3) Restart Explorer so it unloads the mapped shell extension DLL before the
-  ; uninstaller deletes it. nsExec::Exec waits for taskkill to finish (Explorer
-  ; is gone when it returns); we then relaunch the shell.
+  ; uninstaller deletes it. The uninstaller is a 32-bit NSIS process, so the new
+  ; shell must be launched through the Sysnative alias: a bare `explorer.exe`
+  ; resolves to the WOW64 stub, which opens a folder window and never restores
+  ; the shell (Start button and taskbar stay missing after uninstall).
   nsExec::Exec 'taskkill /f /im explorer.exe'
-  Sleep 500
-  Exec 'explorer.exe'
+  Sleep 800
+  nsExec::Exec '"$WINDIR\Sysnative\explorer.exe"'
 !macroend
 
 ; Runs after files, registry keys, and shortcuts have been removed.
@@ -50,8 +52,10 @@
 ; reported as a post-uninstall trace), then remove the per-user application
 ; data when the "delete settings" checkbox was ticked.
 !macro NSIS_HOOK_POSTUNINSTALL
-  ; Remove the install directory only when it contains no leftover files.
-  RMDir "$INSTDIR"
+  ; Force-remove the install directory and every leftover in it. A bare RMDir
+  ; only removes an empty folder, so a single surviving file (e.g. a shell DLL
+  ; mapped by Explorer) keeps the whole directory on disk as an uninstall trace.
+  RMDir /r "$INSTDIR"
 
   ${If} $DeleteAppDataCheckboxState = 1
   ${AndIf} $UpdateMode <> 1

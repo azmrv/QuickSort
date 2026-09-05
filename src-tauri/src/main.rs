@@ -353,6 +353,7 @@ fn start_tauri() {
             commands::get_app_metadata,
             commands::quit_app,
             commands::enqueue_operation,
+            commands::enqueue_operation_v2,
             commands::get_jobs,
             commands::cancel_job,
         ])

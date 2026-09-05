@@ -14,6 +14,7 @@ import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
 import PluginsPage from './pages/PluginsPage';
 import CommandPalette from './components/CommandPalette';
+import HeaderStatus from './components/HeaderStatus';
 import './styles/App.css';
 
 interface Settings {
@@ -177,6 +178,7 @@ function AppContent() {
                                 <span className="app-logo-text">QuickSort</span>
                             </div>
                             <div className="header-right">
+                                <HeaderStatus />
                                 <button className="theme-toggle" onClick={toggleTheme}>
                                     <span className="theme-toggle-icon">{isDark ? '☀️' : '🌙'}</span>
                                 </button>

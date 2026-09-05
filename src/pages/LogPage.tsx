@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { DataGrid, type Column, type SortColumn } from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
 import { logger } from '../lib/logger';
+import { invoke } from '../lib/invoke';
 import { App } from 'antd';
 import { listen } from '@tauri-apps/api/event';
 import { useTranslation } from '../i18n/useTranslation';
@@ -76,6 +77,11 @@ const LogPage = () => {
 
     useEffect(() => {
         logger.action('LogPage', 'mount');
+        invoke<BackendLog[]>('get_logs')
+            .then((history) => {
+                setBackendLogs(history.slice(-500));
+            })
+            .catch((err) => logger.error('LogPage', 'get_logs failed', err));
         const unlistenLog = listen<BackendLog>('backend-log', (event) => {
             setBackendLogs(prev => [...prev.slice(-500), event.payload]);
         });
