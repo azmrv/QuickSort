@@ -118,8 +118,7 @@ async fn get_folders_emits_tracing_span() {
     let _guard = subscriber.set_default();
 
     let mock_repo = MockConfigurationRepository::new();
-    let use_case =
-        quicksort_application::use_cases::GetFoldersUseCase::new(Arc::new(mock_repo));
+    let use_case = quicksort_application::use_cases::GetFoldersUseCase::new(Arc::new(mock_repo));
 
     // Bring the GetFolders trait into scope so `get_all()` is callable.
     use quicksort_application::GetFolders;
