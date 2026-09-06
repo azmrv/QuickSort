@@ -77,6 +77,52 @@ pub trait FileSystem: Send + Sync {
     /// Returns `PermissionDenied` if the file cannot be removed.
     async fn delete_file(&self, path: &AbsolutePath) -> Result<(), UseCaseError>;
 
+    /// Checks whether the path refers to a directory.
+    ///
+    /// The check does **not** follow symbolic links (`symlink_metadata`
+    /// semantics): a symlink pointing at a directory is reported as `false`
+    /// so that operations treat the link itself as a single item.
+    ///
+    /// # Returns
+    /// `true` if the path is a directory, `false` for files, symlinks and
+    /// paths that do not exist.
+    ///
+    /// # Errors
+    /// Returns `FileSystemError` if metadata retrieval fails for a reason
+    /// other than the path not existing (e.g. permission denied).
+    async fn is_dir(&self, path: &AbsolutePath) -> Result<bool, UseCaseError>;
+
+    /// Recursively copies a directory tree from `from` to `to`, preserving
+    /// the structure including empty subdirectories.
+    ///
+    /// If `from` is a regular file, behaves like [`FileSystem::copy_file`].
+    /// Symbolic links and junctions inside the tree are **not** followed and
+    /// are skipped to avoid recursion cycles and unexpected target copies.
+    ///
+    /// # Returns
+    /// The total size in bytes of all copied files.
+    ///
+    /// # Errors
+    /// Returns `FileNotFound` if the source does not exist.
+    /// Returns `FileSystemError` on I/O failure (access denied, disk full).
+    async fn copy_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
+
+    /// Moves a directory tree from `from` to `to`.
+    ///
+    /// Tries a fast same-volume rename first; on failure (e.g. cross-drive
+    /// `EXDEV`, or an existing non-empty destination) falls back to
+    /// recursively copying the tree and deleting the source. If `from` is a
+    /// regular file, behaves like [`FileSystem::move_file`].
+    ///
+    /// # Returns
+    /// The total size in bytes of the moved contents (measured before the
+    /// move, for history accounting).
+    ///
+    /// # Errors
+    /// Returns `FileNotFound` if the source does not exist.
+    /// Returns `FileSystemError` on I/O failure.
+    async fn move_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
+
     /// Renames a file or directory from `from` to `to`.
     ///
     /// For regular files, this is equivalent to a move within the same

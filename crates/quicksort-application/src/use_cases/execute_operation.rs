@@ -96,8 +96,11 @@ impl ExecuteOperation for ExecuteOperationUseCase {
                     total_bytes += bytes;
                 }
                 Err(e) => {
+                    // Keep processing the remaining items so a single
+                    // failure (e.g. a locked file or an unsupported path)
+                    // does not abort the whole bundle. The last error is
+                    // reported once the loop finishes.
                     last_error = Some(e);
-                    break;
                 }
             }
         }
@@ -209,12 +212,8 @@ impl ExecuteOperationUseCase {
                         OverwritePolicy::AutoRename => {
                             let resolved = self.unique_name(&dest).await?;
                             return match command.operation_type {
-                                OperationType::Move => {
-                                    self.file_system.move_file(source, &resolved).await
-                                }
-                                OperationType::Copy => {
-                                    self.file_system.copy_file(source, &resolved).await
-                                }
+                                OperationType::Move => self.perform_move(source, &resolved).await,
+                                OperationType::Copy => self.perform_copy(source, &resolved).await,
                                 _ => unreachable!(),
                             };
                         }
@@ -222,12 +221,8 @@ impl ExecuteOperationUseCase {
                             // In non-interactive mode (IPC from DLL), fall back to AutoRename
                             let resolved = self.unique_name(&dest).await?;
                             return match command.operation_type {
-                                OperationType::Move => {
-                                    self.file_system.move_file(source, &resolved).await
-                                }
-                                OperationType::Copy => {
-                                    self.file_system.copy_file(source, &resolved).await
-                                }
+                                OperationType::Move => self.perform_move(source, &resolved).await,
+                                OperationType::Copy => self.perform_copy(source, &resolved).await,
                                 _ => unreachable!(),
                             };
                         }
@@ -236,8 +231,8 @@ impl ExecuteOperationUseCase {
 
                 // No duplicate or Overwrite policy — proceed
                 match command.operation_type {
-                    OperationType::Move => self.file_system.move_file(source, &dest).await,
-                    OperationType::Copy => self.file_system.copy_file(source, &dest).await,
+                    OperationType::Move => self.perform_move(source, &dest).await,
+                    OperationType::Copy => self.perform_copy(source, &dest).await,
                     _ => unreachable!(),
                 }
             }
@@ -270,6 +265,30 @@ impl ExecuteOperationUseCase {
             .file_name()
             .ok_or_else(|| UseCaseError::InvalidCommand("Cannot extract file name".to_string()))?;
         Ok(folder.join(file_name))
+    }
+
+    async fn perform_move(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+    ) -> Result<u64, UseCaseError> {
+        if self.file_system.is_dir(from).await? {
+            self.file_system.move_tree(from, to).await
+        } else {
+            self.file_system.move_file(from, to).await
+        }
+    }
+
+    async fn perform_copy(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+    ) -> Result<u64, UseCaseError> {
+        if self.file_system.is_dir(from).await? {
+            self.file_system.copy_tree(from, to).await
+        } else {
+            self.file_system.copy_file(from, to).await
+        }
     }
 
     async fn unique_name(&self, path: &AbsolutePath) -> Result<AbsolutePath, UseCaseError> {

@@ -280,6 +280,20 @@ impl FileSystem for MockFileSystem {
         Ok(size)
     }
 
+    async fn is_dir(&self, _path: &AbsolutePath) -> Result<bool, UseCaseError> {
+        // The in-memory mock tracks only files; every registered entry is
+        // treated as a regular file.
+        Ok(false)
+    }
+
+    async fn copy_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
+        self.copy_file(from, to).await
+    }
+
+    async fn move_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
+        self.move_file(from, to).await
+    }
+
     async fn delete_file(&self, path: &AbsolutePath) -> Result<(), UseCaseError> {
         let path = Self::to_pathbuf(path);
         let mut files = self.files.lock().unwrap();
