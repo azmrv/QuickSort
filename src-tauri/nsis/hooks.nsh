@@ -4,10 +4,13 @@
 ; POSTINSTALL  - intentionally empty: the installer must not register anything.
 ;                The COM handler is registered by the application itself on
 ;                first launch (see src-tauri main.rs), never by the installer.
-; PREUNINSTALL - remove COM registry keys before the uninstaller deletes files.
-;                Explorer is intentionally NOT restarted (product requirement:
-;                the installer/uninstaller never interferes with Explorer).
-; POSTUNINSTALL - delete per-user application settings when the checkbox is ticked.
+; PREUNINSTALL - remove COM registry keys before the uninstaller deletes files,
+;                then restart Explorer so the shell-extension DLL is unloaded
+;                from memory and can be deleted. The relaunch waits until the
+;                old shell has fully exited (polling, not a blind sleep).
+; POSTUNINSTALL - delete per-user application settings when the checkbox is
+;                ticked, plus the publisher-named parent folder and legacy
+;                per-user install leftovers.
 
 ; Runs after files are copied, registry keys written, and shortcuts created.
 ; Nothing to do here: registration belongs to the application (first launch).
@@ -42,8 +45,29 @@
   ; shell must be launched through the Sysnative alias: a bare `explorer.exe`
   ; resolves to the WOW64 stub, which opens a folder window and never restores
   ; the shell (Start button and taskbar stay missing after uninstall).
+  ;
+  ; The relaunch must wait until the old shell has fully exited: spawning the
+  ; new explorer.exe while the old one is still shutting down is what leaves the
+  ; taskbar/Start button missing after uninstall (QA report 06.09.2026, line 84).
+  ; Poll for the taskbar window (Shell_TrayWnd) to disappear for up to 5 s in
+  ; 250 ms steps, mirroring restart_explorer() in src-tauri src/com.rs.
   nsExec::Exec 'taskkill /f /im explorer.exe'
-  Sleep 800
+
+  ; Wait for the old shell to die (locale-independent: check for the taskbar
+  ; window, not a localized "no tasks running" tasklist message). FindWindow
+  ; takes (class name, window name); the taskbar window class is Shell_TrayWnd.
+  StrCpy $0 0
+qs_explorer_poll:
+  IntOp $0 $0 + 1
+  ${If} $0 > 20
+    Goto qs_explorer_relaunch
+  ${EndIf}
+  Sleep 250
+  System::Call 'user32::FindWindow(t"Shell_TrayWnd",p0)p.r1'
+  ${If} $1 != 0
+    Goto qs_explorer_poll
+  ${EndIf}
+qs_explorer_relaunch:
   nsExec::Exec '"$WINDIR\Sysnative\explorer.exe"'
 !macroend
 
@@ -56,6 +80,18 @@
   ; only removes an empty folder, so a single surviving file (e.g. a shell DLL
   ; mapped by Explorer) keeps the whole directory on disk as an uninstall trace.
   RMDir /r "$INSTDIR"
+
+  ; Per-user installs from 0.2.6 land in a publisher-named parent
+  ; ("$LOCALAPPDATA\pr0math3us\Quicksort", see RestorePreviousInstallLocation).
+  ; Remove the now-empty parent and the legacy per-user location
+  ; ("$LOCALAPPDATA\Programs\Quicksort") used by builds before 0.2.6
+  ; (QA report 06.09.2026, p. 90-91). RMDir without /r removes only empty
+  ; folders, so active leftover installs are never deleted. Per-machine
+  ; installs never use these per-user paths, so skip them.
+  ${If} $MultiUser.InstallMode == "CurrentUser"
+    RMDir "$LOCALAPPDATA\pr0math3us"
+    RMDir "$LOCALAPPDATA\Programs\${PRODUCTNAME}"
+  ${EndIf}
 
   ${If} $DeleteAppDataCheckboxState = 1
   ${AndIf} $UpdateMode <> 1

@@ -907,10 +907,28 @@ Section Uninstall
   ${EndIf}
 SectionEnd
 
+; QuickSort: restore the previously chosen install location on upgrade/reinstall,
+; or redirect a FRESH per-user install to a publisher-named parent directory
+; ("%LOCALAPPDATA%\pr0math3us\Quicksort" instead of the MultiUser default
+; "%LOCALAPPDATA%\Programs\Quicksort" - QA report 06.09.2026, p. 90-91).
+; Per-machine installs keep "$PROGRAMFILES64\Quicksort" (not redirected).
 Function RestorePreviousInstallLocation
   ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
-  StrCmp $4 "" +2 0
+  ${If} $4 != ""
+    ; Upgrade/reinstall: keep the existing location so the update stays in place.
     StrCpy $INSTDIR $4
+  ${Else}
+    ; Fresh install (no previous location recorded). Redirect the per-user path
+    ; into a publisher-named parent ("%LOCALAPPDATA%\pr0math3us\Quicksort")
+    ; instead of the MultiUser default "%LOCALAPPDATA%\Programs\Quicksort"
+    ; (QA report 06.09.2026, p. 90-91). Guarded by INSTALLMODE because
+    ; $MultiUser.InstallMode only exists when MultiUser.nsh is included ("both").
+    !if "${INSTALLMODE}" == "both"
+      ${If} $MultiUser.InstallMode == "CurrentUser"
+        StrCpy $INSTDIR "$LOCALAPPDATA\pr0math3us\${PRODUCTNAME}"
+      ${EndIf}
+    !endif
+  ${EndIf}
 FunctionEnd
 
 ; QuickSort: ensure the install directory always ends in "\${PRODUCTNAME}".
