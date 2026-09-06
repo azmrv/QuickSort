@@ -75,16 +75,16 @@ impl UndoOperationUseCase {
 
             let target_path = target_folder.join(file_name);
 
+            // If the file was moved out of the target folder by hand since the
+            // original operation, there is nothing to restore. Skip it instead
+            // of failing the whole undo; the operation is still marked Undone.
             if !self
                 .file_system
                 .exists(&target_path)
                 .await
                 .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
             {
-                return Err(UseCaseError::UndoNotPossible(format!(
-                    "File no longer exists at target location: {}",
-                    target_path.display()
-                )));
+                continue;
             }
 
             self.file_system
@@ -155,5 +155,193 @@ impl UndoOperationUseCase {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use quicksort_domain::{AbsolutePath, OperationId};
+    use std::collections::HashSet;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+
+    struct MockOperationRepository {
+        operation: Mutex<Option<Operation>>,
+        saved: Mutex<Vec<Operation>>,
+    }
+
+    impl MockOperationRepository {
+        fn new(operation: Operation) -> Self {
+            Self {
+                operation: Mutex::new(Some(operation)),
+                saved: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl OperationRepository for MockOperationRepository {
+        async fn find_by_id(&self, id: &OperationId) -> Result<Option<Operation>, UseCaseError> {
+            Ok(self
+                .operation
+                .lock()
+                .unwrap()
+                .clone()
+                .filter(|op| &op.id == id))
+        }
+
+        async fn save(&self, operation: &Operation) -> Result<(), UseCaseError> {
+            self.saved.lock().unwrap().push(operation.clone());
+            Ok(())
+        }
+
+        async fn delete(&self, _id: &OperationId) -> Result<(), UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+
+        async fn load_all(&self) -> Result<Vec<Operation>, UseCaseError> {
+            Ok(self.saved.lock().unwrap().clone())
+        }
+
+        async fn clear(&self) -> Result<(), UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+    }
+
+    #[derive(Clone)]
+    struct MockFileSystem {
+        existing: Arc<Mutex<HashSet<PathBuf>>>,
+        renamed: Arc<Mutex<Vec<(PathBuf, PathBuf)>>>,
+    }
+
+    impl MockFileSystem {
+        fn new(existing: Vec<PathBuf>) -> Self {
+            Self {
+                existing: Arc::new(Mutex::new(existing.into_iter().collect())),
+                renamed: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn renamed_count(&self) -> usize {
+            self.renamed.lock().unwrap().len()
+        }
+
+        fn to_pathbuf(path: &AbsolutePath) -> PathBuf {
+            PathBuf::from(path.to_string_lossy().as_ref())
+        }
+    }
+
+    #[async_trait]
+    impl FileSystem for MockFileSystem {
+        async fn exists(&self, path: &AbsolutePath) -> Result<bool, UseCaseError> {
+            Ok(self
+                .existing
+                .lock()
+                .unwrap()
+                .contains(&Self::to_pathbuf(path)))
+        }
+
+        async fn rename_file(
+            &self,
+            from: &AbsolutePath,
+            to: &AbsolutePath,
+        ) -> Result<(), UseCaseError> {
+            self.renamed
+                .lock()
+                .unwrap()
+                .push((Self::to_pathbuf(from), Self::to_pathbuf(to)));
+            Ok(())
+        }
+
+        async fn get_file_size(&self, _path: &AbsolutePath) -> Result<u64, UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+
+        async fn move_file(
+            &self,
+            _from: &AbsolutePath,
+            _to: &AbsolutePath,
+        ) -> Result<u64, UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+
+        async fn copy_file(
+            &self,
+            _from: &AbsolutePath,
+            _to: &AbsolutePath,
+        ) -> Result<u64, UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+
+        async fn delete_file(&self, _path: &AbsolutePath) -> Result<(), UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+
+        async fn is_dir(&self, _path: &AbsolutePath) -> Result<bool, UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+
+        async fn copy_tree(
+            &self,
+            _from: &AbsolutePath,
+            _to: &AbsolutePath,
+        ) -> Result<u64, UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+
+        async fn move_tree(
+            &self,
+            _from: &AbsolutePath,
+            _to: &AbsolutePath,
+        ) -> Result<u64, UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+    }
+
+    fn completed_move_op(source: &[&str], target: &str) -> Operation {
+        let src: Vec<AbsolutePath> = source
+            .iter()
+            .map(|s| AbsolutePath::new(s).unwrap())
+            .collect();
+        let tgt = AbsolutePath::new(target).unwrap();
+        let mut op = Operation::new_move(src, tgt, Utc::now());
+        op.start().unwrap();
+        op.complete(source.len() as u32, 0).unwrap();
+        op
+    }
+
+    #[tokio::test]
+    async fn undo_move_restores_existing_file() {
+        let op = completed_move_op(&["C:\\src\\a.txt"], "C:\\dst");
+        let target = op.target_folder_path.clone().unwrap();
+        let file_name = op.source_paths[0].file_name().unwrap();
+        let existing = target.join(file_name);
+
+        let repo = MockOperationRepository::new(op.clone());
+        let fs = MockFileSystem::new(vec![PathBuf::from(existing.to_string_lossy().as_ref())]);
+        let fs_check = fs.clone();
+        let use_case = UndoOperationUseCase::new(Box::new(repo), Box::new(fs));
+
+        let result = use_case.undo(op.id.clone()).await.unwrap();
+
+        assert_eq!(result.state, OperationState::Undone);
+        assert_eq!(fs_check.renamed_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn undo_move_skips_missing_target_file() {
+        let op = completed_move_op(&["C:\\src\\a.txt"], "C:\\dst");
+
+        let repo = MockOperationRepository::new(op.clone());
+        let fs = MockFileSystem::new(vec![]);
+        let fs_check = fs.clone();
+        let use_case = UndoOperationUseCase::new(Box::new(repo), Box::new(fs));
+
+        let result = use_case.undo(op.id.clone()).await.unwrap();
+
+        assert_eq!(result.state, OperationState::Undone);
+        assert_eq!(fs_check.renamed_count(), 0);
     }
 }
