@@ -13,7 +13,7 @@ use tauri::{AppHandle, Emitter};
 
 use quicksort_application::{
     AbsolutePath, ApplicationFacadeImpl, DuplicateCheckMode, ExecuteOperation, FolderId,
-    GetFolders, OperationCommand, OperationType as DomainOpType,
+    GetFolders, LoadSettings, OperationCommand, OperationType as DomainOpType,
     OverwritePolicy as AppOverwritePolicy,
 };
 use quicksort_ipc_contract::{
@@ -33,6 +33,25 @@ static APP_HANDLE: OnceLock<Mutex<Option<AppHandle>>> = OnceLock::new();
 /// Stores the AppHandle so the queue can emit events. Called during setup.
 pub fn set_app_handle(handle: AppHandle) {
     let _ = APP_HANDLE.set(Mutex::new(Some(handle)));
+}
+
+/// Resolves a `None` duplicate check mode to the mode configured in
+/// settings.json (`duplicate_check.mode`), falling back to `Name`.
+fn resolve_default_duplicate_check_mode(
+    facade: &Arc<ApplicationFacadeImpl>,
+    rt: &tokio::runtime::Runtime,
+) -> IpcDuplicateCheckMode {
+    let mode = match rt.block_on(facade.load_settings()) {
+        Ok(settings) => settings.duplicate_check.mode,
+        Err(e) => {
+            tracing::warn!(error = %e, "settings unavailable; falling back to Name");
+            return IpcDuplicateCheckMode::Name;
+        }
+    };
+    // The settings DTO's DuplicateCheckMode is a distinct type from the
+    // application's; both serialize to the same lowercase strings, so
+    // convert through JSON to avoid a direct domain dependency.
+    serde_json::from_value(serde_json::to_value(mode).unwrap_or_default()).unwrap_or_default()
 }
 
 /// Converts an IPC `ExecuteOperationData` into a domain `OperationCommand`,
@@ -71,6 +90,8 @@ pub fn convert_execute_data(data: &ExecuteOperationData) -> Option<OperationComm
             IpcOverwritePolicy::Default => AppOverwritePolicy::Skip,
         },
         duplicate_check_mode: match data.duplicate_check_mode {
+            // Unreachable: None is normalized to the configured mode in the
+            // IPC server (and in run_job for replayed jobs) before conversion.
             Some(IpcDuplicateCheckMode::Name) | None => DuplicateCheckMode::Name,
             Some(IpcDuplicateCheckMode::Size) => DuplicateCheckMode::Size,
             Some(IpcDuplicateCheckMode::Content) => DuplicateCheckMode::Content,
@@ -269,18 +290,6 @@ impl JobQueue {
         // shared JSON history repository is never written concurrently.
         let _guard = self.op_lock.lock().unwrap_or_else(|e| e.into_inner());
 
-        let command = match convert_execute_data(&job.data) {
-            Some(cmd) => cmd,
-            None => {
-                tracing::error!(job_id = %job.id, "job has no valid command");
-                job.status = JobStatus::Failed;
-                job.error = Some("Invalid command: no valid source paths".to_string());
-                job.touch();
-                self.update_job(job);
-                return;
-            }
-        };
-
         let registry_facade = self
             .state
             .lock()
@@ -297,6 +306,27 @@ impl JobQueue {
                 tracing::error!(job_id = %job.id, error = %e, "failed to create worker runtime");
                 job.status = JobStatus::Failed;
                 job.error = Some(format!("Runtime error: {}", e));
+                job.touch();
+                self.update_job(job);
+                return;
+            }
+        };
+
+        // Resolve a None duplicate check mode to the user-configured default
+        // (settings.json) so replayed jobs honor the configured mode.
+        if job.data.duplicate_check_mode.is_none() {
+            job.data.duplicate_check_mode = Some(resolve_default_duplicate_check_mode(
+                &registry_facade,
+                &worker_rt,
+            ));
+        }
+
+        let command = match convert_execute_data(&job.data) {
+            Some(cmd) => cmd,
+            None => {
+                tracing::error!(job_id = %job.id, "job has no valid command");
+                job.status = JobStatus::Failed;
+                job.error = Some("Invalid command: no valid source paths".to_string());
                 job.touch();
                 self.update_job(job);
                 return;

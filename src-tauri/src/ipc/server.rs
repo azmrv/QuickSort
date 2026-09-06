@@ -66,6 +66,25 @@ fn resolve_default_overwrite_policy(
     }
 }
 
+/// Resolves a `None` duplicate check mode to the mode configured in
+/// settings.json (`duplicate_check.mode`), falling back to `Name`.
+pub(crate) fn resolve_default_duplicate_check_mode(
+    facade: &Arc<ApplicationFacadeImpl>,
+    rt: &tokio::runtime::Runtime,
+) -> IpcDuplicateCheckMode {
+    let mode = match rt.block_on(facade.load_settings()) {
+        Ok(settings) => settings.duplicate_check.mode,
+        Err(e) => {
+            tracing::warn!(error = %e, "settings unavailable; falling back to Name");
+            return IpcDuplicateCheckMode::Name;
+        }
+    };
+    // The settings DTO's DuplicateCheckMode is a distinct type from the
+    // application's; both serialize to the same lowercase strings, so
+    // convert through JSON to avoid a direct domain dependency.
+    serde_json::from_value(serde_json::to_value(mode).unwrap_or_default()).unwrap_or_default()
+}
+
 fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> {
     let source_paths: Vec<AbsolutePath> = data
         .source_paths
@@ -88,6 +107,8 @@ fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> 
         target_paths: None,
         overwrite_policy: convert_overwrite_policy(data.overwrite_policy),
         duplicate_check_mode: match data.duplicate_check_mode {
+            // Unreachable: None is normalized to the configured mode at the
+            // IPC boundary before conversion (see resolve_default_duplicate_check_mode).
             Some(IpcDuplicateCheckMode::Name) | None => DuplicateCheckMode::Name,
             Some(IpcDuplicateCheckMode::Size) => DuplicateCheckMode::Size,
             Some(IpcDuplicateCheckMode::Content) => DuplicateCheckMode::Content,
@@ -140,13 +161,13 @@ fn handle_select_folder(data: SelectFolderData) -> ResponseMessage {
 
     match crate::ipc::get_app_handle() {
         Some(app) => {
-            // Show and focus the main window.
-            if let Some(window) = app.get_webview_window("main") {
+            // Show and focus the dedicated selector window.
+            if let Some(window) = app.get_webview_window("selector") {
                 let _ = window.show();
                 let _ = window.set_focus();
             }
 
-            // Emit event so the frontend switches to selector mode.
+            // Emit event so the frontend displays the pending files.
             let _ = app.emit(
                 "pending-file",
                 PendingFilePayload {
@@ -205,6 +226,9 @@ fn process_command(
             // sees it; Single source of truth for conflict resolution.
             if matches!(data.overwrite_policy, IpcOverwritePolicy::Default) {
                 data.overwrite_policy = resolve_default_overwrite_policy(facade, rt);
+            }
+            if data.duplicate_check_mode.is_none() {
+                data.duplicate_check_mode = Some(resolve_default_duplicate_check_mode(facade, rt));
             }
             let mut early_response: Option<ResponseMessage> = None;
 
@@ -324,6 +348,9 @@ fn process_command(
             tracing::info!("Received EnqueueOperation: {:?}", data);
             if matches!(data.overwrite_policy, IpcOverwritePolicy::Default) {
                 data.overwrite_policy = resolve_default_overwrite_policy(facade, rt);
+            }
+            if data.duplicate_check_mode.is_none() {
+                data.duplicate_check_mode = Some(resolve_default_duplicate_check_mode(facade, rt));
             }
             match queue.enqueue(data) {
                 Ok(job_id) => ResponseMessage {
