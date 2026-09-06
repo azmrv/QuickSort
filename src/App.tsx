@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { listen, emit } from '@tauri-apps/api/event';
+import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { invoke } from './lib/invoke';
 import { logger } from './lib/logger';
 import { ConfigProvider, theme, App as AntApp } from 'antd';
@@ -23,6 +24,8 @@ interface Settings {
     [key: string]: unknown;
 }
 
+const SELECTOR_WINDOW_LABEL = 'selector';
+
 function deriveIsDark(themeMode: string, systemDark: boolean): boolean {
     switch (themeMode) {
         case 'light': return false;
@@ -31,9 +34,17 @@ function deriveIsDark(themeMode: string, systemDark: boolean): boolean {
     }
 }
 
+async function showSelectorWindow(): Promise<void> {
+    const win = await WebviewWindow.getByLabel(SELECTOR_WINDOW_LABEL);
+    if (win) {
+        await win.show();
+        await win.setFocus();
+    }
+}
+
 function AppContent() {
     const { t, locale } = useTranslation();
-    const [mode, setMode] = useState<'editor' | 'selector'>('editor');
+    const isSelectorWindow = getCurrentWebviewWindow().label === SELECTOR_WINDOW_LABEL;
     const [selectFiles, setSelectFiles] = useState<string[]>([]);
     const [themeMode, setThemeMode] = useState<'system' | 'light' | 'dark'>('system');
     const [isDark, setIsDark] = useState(() => {
@@ -56,25 +67,46 @@ function AppContent() {
         }).catch((err) => {
             logger.error('App', 'Failed to load settings', err);
         });
+    }, []);
+
+    // Selector window: read pending files on startup and reveal itself when files are present
+    useEffect(() => {
+        if (!isSelectorWindow) return;
         invoke<string[]>('get_pending_files').then((files) => {
             if (files && files.length > 0) {
-                logger.info('App', `pending files: ${files.length}`);
+                logger.info('App', `selector window: pending files: ${files.length}`);
                 setSelectFiles(files);
-                setMode('selector');
+                getCurrentWebviewWindow().show();
             }
+        }).catch((err) => {
+            logger.error('App', 'Failed to load pending files', err);
         });
-    }, []);
+    }, [isSelectorWindow]);
 
     // Listen for single-instance forwarded files (second launch while already running)
     useEffect(() => {
-        const unlisten = listen<{ files: string[] }>('pending-file', (event) => {
-            const files = event.payload.files;
-            logger.info('App', `single-instance pending files: ${files.length}`);
-            setSelectFiles(files);
-            setMode('selector');
+        // Two emitters exist: the single-instance plugin sends `{ file }`,
+        // the IPC SelectFolder handler sends `{ files }`. Both store the
+        // paths in pending storage before emitting, so the payload type is
+        // only informational here.
+        const unlisten = listen<{ file?: string; files?: string[] }>('pending-file', () => {
+            if (isSelectorWindow) {
+                // The paths are already in pending storage; read them and reveal the window.
+                invoke<string[]>('get_pending_files').then((files) => {
+                    if (files && files.length > 0) {
+                        setSelectFiles(files);
+                        getCurrentWebviewWindow().show();
+                    }
+                }).catch((err) => {
+                    logger.error('App', 'Failed to load pending files', err);
+                });
+            } else {
+                // Main window: bring the selector window to the front.
+                showSelectorWindow();
+            }
         });
         return () => { unlisten.then((fn) => fn()); };
-    }, []);
+    }, [isSelectorWindow]);
 
     // Listen for Windows system theme changes — only apply when theme_mode === 'system'
     useEffect(() => {
@@ -101,8 +133,9 @@ function AppContent() {
         return () => { unlisten.then((fn) => fn()); };
     }, []);
 
-    // Global keyboard shortcut: Ctrl+Shift+Space opens Command Palette
+    // Global keyboard shortcut: Ctrl+Shift+Space opens Command Palette (main window only)
     useEffect(() => {
+        if (isSelectorWindow) return;
         const handler = (e: KeyboardEvent) => {
             if (e.ctrlKey && e.shiftKey && e.code === 'Space') {
                 e.preventDefault();
@@ -111,7 +144,7 @@ function AppContent() {
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, []);
+    }, [isSelectorWindow]);
 
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
@@ -153,6 +186,12 @@ function AppContent() {
         persistSettings({ theme_mode: next });
     };
 
+    const handleSelectorClose = () => {
+        if (isSelectorWindow) {
+            getCurrentWebviewWindow().hide();
+        }
+    };
+
     return (
         <ConfigProvider
             theme={{
@@ -170,7 +209,9 @@ function AppContent() {
             }}
         >
             <AntApp>
-                {mode === 'editor' ? (
+                {isSelectorWindow ? (
+                    <SelectorPage files={selectFiles} onClose={handleSelectorClose} />
+                ) : (
                     <div className="app-layout">
                         <header className="app-header">
                             <div className="app-logo">
@@ -217,10 +258,10 @@ function AppContent() {
                             </div>
                         </main>
                     </div>
-                ) : (
-                    <SelectorPage files={selectFiles} onClose={() => setMode('editor')} />
                 )}
-                <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+                {!isSelectorWindow && (
+                    <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+                )}
             </AntApp>
         </ConfigProvider>
     );

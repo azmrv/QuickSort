@@ -458,8 +458,9 @@ fn start_tauri() {
                 // Hide to tray instead — the app keeps running in background.
                 // Full shutdown is via Settings page "Exit" button.
                 api.prevent_close();
-                if let Some(window) = window.app_handle().get_webview_window("main") {
-                    let _ = window.hide();
+                let label = window.label().to_string();
+                if let Some(win) = window.app_handle().get_webview_window(&label) {
+                    let _ = win.hide();
                 }
             }
         })

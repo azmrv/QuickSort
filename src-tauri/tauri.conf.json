@@ -12,9 +12,19 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Quicksort",
         "width": 800,
         "height": 600
+      },
+      {
+        "label": "selector",
+        "title": "Select folder",
+        "width": 460,
+        "height": 640,
+        "resizable": true,
+        "visible": false,
+        "center": true
       }
     ],
     "security": {
