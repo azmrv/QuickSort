@@ -67,6 +67,15 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
+      # Node deps are reinstalled per-run otherwise; cache node_modules so a
+      # rebuild of the same lockfile skips the npm ci re-download entirely.
+      - name: Cache node_modules
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       # dtolnay/rust-toolchain replaces the abandoned actions-rs/toolchain@v1
       # (broken on Node 20+, unmaintained since 2020).
       - name: Setup Rust toolchain
@@ -97,6 +106,8 @@ jobs:
             patchelf
 
       - name: Install frontend dependencies
+        # npm ci wipes node_modules, so it only runs when the lockfile cache missed.
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
         run: npm ci
 
       # The context-menu COM DLL is an independent workspace member (AGENTS.md).

@@ -43,8 +43,7 @@
       "../resources/quicksort.ico"
     ],
     "resources": {
-      "../resources/quicksort.ico": "resources/quicksort.ico",
-      "../target/release/context_menu_dll.dll": "context_menu_dll.dll"
+      "../resources/quicksort.ico": "resources/quicksort.ico"
     },
     "windows": {
       "nsis": {
