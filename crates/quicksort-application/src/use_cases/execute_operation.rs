@@ -6,9 +6,7 @@ use crate::ports::outbound::{
     OperationRepository, ProgressInfo, ProgressReporter,
 };
 use async_trait::async_trait;
-use quicksort_domain::{
-    AbsolutePath, DuplicateCheckMode, Operation, OperationState, OperationType,
-};
+use quicksort_domain::{AbsolutePath, Operation, OperationState, OperationType};
 
 pub struct ExecuteOperationUseCase {
     operation_repository: Box<dyn OperationRepository>,
@@ -185,29 +183,31 @@ impl ExecuteOperationUseCase {
 
                 let dest = self.build_destination(source, target_folder)?;
 
-                // Duplicate detection phase
-                let dup_result = self
+                // Destination-existence phase. The overwrite policy must apply
+                // to ANY name collision at the destination, not only to what the
+                // duplicate checker reports: in Size mode a same-named file with
+                // a DIFFERENT size yields exists=false, which previously let the
+                // operation silently overwrite the destination (QA report
+                // 07.09.2026, lines 84-89).
+                let dest_exists = self.file_system.exists(&dest).await?;
+
+                // Still run the duplicate check for parity with prior logs.
+                let _ = self
                     .duplicate_detector
                     .check_duplicate(source, &dest, &command.duplicate_check_mode)
                     .await
                     .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
 
-                // If duplicate found, apply overwrite policy
-                if dup_result.exists {
+                if dest_exists {
                     match command.overwrite_policy {
                         OverwritePolicy::Skip => {
                             return Err(UseCaseError::Conflict(format!(
-                                "Duplicate found ({} mode): {}",
-                                match command.duplicate_check_mode {
-                                    DuplicateCheckMode::Name => "name",
-                                    DuplicateCheckMode::Size => "size",
-                                    DuplicateCheckMode::Content => "content",
-                                },
+                                "Destination already exists: {}",
                                 dest
                             )));
                         }
                         OverwritePolicy::Overwrite => {
-                            // Proceed with the operation
+                            // Proceed with the operation (replaces the destination)
                         }
                         OverwritePolicy::AutoRename => {
                             let resolved = self.unique_name(&dest).await?;
@@ -229,7 +229,7 @@ impl ExecuteOperationUseCase {
                     }
                 }
 
-                // No duplicate or Overwrite policy — proceed
+                // No destination conflict (or Overwrite policy) — proceed
                 match command.operation_type {
                     OperationType::Move => self.perform_move(source, &dest).await,
                     OperationType::Copy => self.perform_copy(source, &dest).await,
