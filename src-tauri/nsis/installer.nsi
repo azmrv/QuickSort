@@ -907,27 +907,21 @@ Section Uninstall
   ${EndIf}
 SectionEnd
 
-; QuickSort: restore the previously chosen install location on upgrade/reinstall,
-; or redirect a FRESH per-user install to a publisher-named parent directory
-; ("%LOCALAPPDATA%\pr0math3us\Quicksort" instead of the MultiUser default
-; "%LOCALAPPDATA%\Programs\Quicksort" - QA report 06.09.2026, p. 90-91).
-; Per-machine installs keep "$PROGRAMFILES64\Quicksort" (not redirected).
+; QuickSort: restore the previously chosen install location on upgrade/reinstall
+; so an update lands in the same place (per-user or per-machine). Per-machine
+; installs keep "$PROGRAMFILES64\Quicksort".
+;
+; NOTE: this function is called from .onInit BEFORE MULTIUSER_INIT, so
+; "$MultiUser.InstallMode" is not set yet. The FRESH-install redirect to a
+; publisher-named parent ("%LOCALAPPDATA%\pr0math3us\Quicksort" instead of the
+; MultiUser default "%LOCALAPPDATA%\Programs\Quicksort") therefore CANNOT work
+; here and now lives in DirectoryPre, which runs after the install-mode page
+; (QA reports 06.09.2026, p. 90-91 and 07.09.2026, lines 84-86).
 Function RestorePreviousInstallLocation
   ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
   ${If} $4 != ""
     ; Upgrade/reinstall: keep the existing location so the update stays in place.
     StrCpy $INSTDIR $4
-  ${Else}
-    ; Fresh install (no previous location recorded). Redirect the per-user path
-    ; into a publisher-named parent ("%LOCALAPPDATA%\pr0math3us\Quicksort")
-    ; instead of the MultiUser default "%LOCALAPPDATA%\Programs\Quicksort"
-    ; (QA report 06.09.2026, p. 90-91). Guarded by INSTALLMODE because
-    ; $MultiUser.InstallMode only exists when MultiUser.nsh is included ("both").
-    !if "${INSTALLMODE}" == "both"
-      ${If} $MultiUser.InstallMode == "CurrentUser"
-        StrCpy $INSTDIR "$LOCALAPPDATA\pr0math3us\${PRODUCTNAME}"
-      ${EndIf}
-    !endif
   ${EndIf}
 FunctionEnd
 
@@ -951,8 +945,30 @@ FunctionEnd
 ; installs and strips a trailing "\${PRODUCTNAME}" from the shown path so the
 ; selector displays the PARENT directory. The files themselves always go into a
 ; "<picked folder>\quicksort" subfolder (restored by EnsureProductNameSubfolder).
+;
+; Also redirects a FRESH per-user install into a publisher-named parent
+; ("%LOCALAPPDATA%\pr0math3us\Quicksort" instead of the MultiUser default
+; "%LOCALAPPDATA%\Programs\Quicksort" - QA reports 06.09.2026, p. 90-91 and
+; 07.09.2026, lines 84-86). This MUST run here, after MULTIUSER_INIT (.onInit)
+; and the install-mode page, so "$MultiUser.InstallMode" is final: the earlier
+; attempt inside RestorePreviousInstallLocation (a .onInit-time call made
+; before the mode was known) never fired. Upgrades keep the recorded location
+; and are never redirected. The redirect only applies while INSTDIR is still
+; the MultiUser default, so a /D= command-line or manually typed path is never
+; overridden. Guarded by INSTALLMODE because $MultiUser.InstallMode only exists
+; when MultiUser.nsh is included ("both").
 Function DirectoryPre
   ${IfThen} $PassiveMode = 1  ${|} Abort ${|}
+
+  !if "${INSTALLMODE}" == "both"
+    ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
+    ${If} $4 == ""
+    ${AndIf} $MultiUser.InstallMode == "CurrentUser"
+    ${AndIf} $INSTDIR == "$LOCALAPPDATA\Programs\${PRODUCTNAME}"
+      StrCpy $INSTDIR "$LOCALAPPDATA\pr0math3us\${PRODUCTNAME}"
+    ${EndIf}
+  !endif
+
   StrLen $R2 "${PRODUCTNAME}"
   IntOp $R2 $R2 + 1 ; length of "\${PRODUCTNAME}"
   StrCpy $R1 "$INSTDIR" "" -$R2
