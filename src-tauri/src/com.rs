@@ -1,7 +1,12 @@
+use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 use winreg::enums::*;
 use winreg::RegKey;
+
+// CREATE_NO_WINDOW: a GUI process spawning taskkill/tasklist opens a visible
+// console window per call unless this flag is set (the flashing-terminal bug).
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 const CLSID: &str = "{12345678-1234-1234-1234-1234567890AB}";
 // Only AllFilesystemObjects — covers files, folders, AND shortcuts (.lnk).
@@ -241,6 +246,7 @@ pub fn unregister(restart: bool) -> Result<(), String> {
 fn restart_explorer() {
     tracing::info!("Restarting Explorer to apply COM registration change");
     let _ = Command::new("taskkill")
+        .creation_flags(CREATE_NO_WINDOW)
         .args(["/f", "/im", "explorer.exe"])
         .output();
 
@@ -248,6 +254,7 @@ fn restart_explorer() {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     loop {
         let running = Command::new("tasklist")
+            .creation_flags(CREATE_NO_WINDOW)
             .args(["/fi", "imagename eq explorer.exe", "/fo", "csv", "/nh"])
             .output()
             .map(|o| String::from_utf8_lossy(&o.stdout).contains("explorer.exe"))
@@ -258,5 +265,7 @@ fn restart_explorer() {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
-    let _ = Command::new("explorer.exe").spawn();
+    let _ = Command::new("explorer.exe")
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn();
 }
