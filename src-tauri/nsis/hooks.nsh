@@ -41,34 +41,47 @@
   DeleteRegKey HKCU "Software\Classes\Drive\shellex\ContextMenuHandlers\QuickSort"
 
   ; 3) Restart Explorer so it unloads the mapped shell extension DLL before the
-  ; uninstaller deletes it. The uninstaller is a 32-bit NSIS process, so the new
-  ; shell must be launched through the Sysnative alias: a bare `explorer.exe`
-  ; resolves to the WOW64 stub, which opens a folder window and never restores
-  ; the shell (Start button and taskbar stay missing after uninstall).
+  ; uninstaller deletes it. The uninstaller is a 32-bit NSIS process running
+  ; under WOW64, so any "explorer.exe" path under System32 is redirected to
+  ; SysWOW64 (the WOW64 stub, which opens a folder window and never restores the
+  ; shell). The real 64-bit shell lives in the Windows root and is NOT subject
+  ; to WOW64 redirection, so it must be launched via "$WINDIR\explorer.exe".
+  ; The previous "$WINDIR\Sysnative\explorer.exe" silently failed on Windows
+  ; 10/11: Sysnative maps to System32, and System32 contains NO explorer.exe
+  ; (it only lives in the Windows root), leaving the taskbar/Start button
+  ; missing after uninstall (QA reports 06.09.2026, line 84 and 07.09.2026,
+  ; lines 70-72).
   ;
   ; The relaunch must wait until the old shell has fully exited: spawning the
   ; new explorer.exe while the old one is still shutting down is what leaves the
   ; taskbar/Start button missing after uninstall (QA report 06.09.2026, line 84).
-  ; Poll for the taskbar window (Shell_TrayWnd) to disappear for up to 5 s in
-  ; 250 ms steps, mirroring restart_explorer() in src-tauri src/com.rs.
+  ; Poll the PROCESS list with tasklist CSV (locale-independent: CSV mode with
+  ; no header prints an EMPTY line when no task matches), not the taskbar
+  ; window - Shell_TrayWnd can disappear before the process has fully exited.
+  ; Mirrors restart_explorer() in src-tauri src/com.rs.
   nsExec::Exec 'taskkill /f /im explorer.exe'
 
-  ; Wait for the old shell to die (locale-independent: check for the taskbar
-  ; window, not a localized "no tasks running" tasklist message). FindWindow
-  ; takes (class name, window name); the taskbar window class is Shell_TrayWnd.
+  ; Wait for the old shell process to fully exit (up to 5 s, 200 ms steps).
   StrCpy $0 0
 qs_explorer_poll:
   IntOp $0 $0 + 1
-  ${If} $0 > 20
+  ${If} $0 > 25
     Goto qs_explorer_relaunch
   ${EndIf}
-  Sleep 250
-  System::Call 'user32::FindWindow(t"Shell_TrayWnd",p0)p.r1'
-  ${If} $1 != 0
-    Goto qs_explorer_poll
+  Sleep 200
+  nsExec::ExecToStack 'tasklist /fi "imagename eq explorer.exe" /fo csv /nh'
+  Pop $1 ; exit code
+  Pop $2 ; output
+  ${If} $2 == ""
+    Goto qs_explorer_relaunch
   ${EndIf}
+  Goto qs_explorer_poll
 qs_explorer_relaunch:
-  nsExec::Exec '"$WINDIR\Sysnative\explorer.exe"'
+  ; Real 64-bit shell, not the WOW64 stub. "Exec" (unlike nsExec::Exec) does
+  ; not wait for the launched program, so the installer is not blocked by the
+  ; never-exiting shell process.
+  Exec '"$WINDIR\explorer.exe"'
+  DetailPrint "QuickSort uninstall: Explorer relaunched"
 !macroend
 
 ; Runs after files, registry keys, and shortcuts have been removed.
@@ -99,6 +112,10 @@ qs_explorer_relaunch:
     ; Per-user application data (current bundle ID)
     RMDir /r "$APPDATA\QuickSort"
     RMDir /r "$LOCALAPPDATA\QuickSort"
+    ; WebView2 user-data folder (bundle-id named) left behind by the embedded
+    ; webview (QA report 07.09.2026, EBWebView leftover trace). May still be
+    ; locked by a running msedgewebview2 process - best effort.
+    RMDir /r "$LOCALAPPDATA\com.azmrv.quicksort"
     ; Legacy identifiers from before the bundle-ID rename
     RMDir /r "$APPDATA\promatheus"
     RMDir /r "$LOCALAPPDATA\promatheus"
