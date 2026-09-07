@@ -62,8 +62,13 @@ pub fn operations_path() -> PathBuf {
 }
 
 /// Get the path to the queue.json file (persistent operation queue).
+///
+/// Stored in the DATA directory (not the config one): queue.json holds runtime
+/// job state, not user configuration. On Windows the directories crate maps
+/// both to %APPDATA%\QuickSort, so this is a no-op there; on Linux/macOS data
+/// and config differ, and main.rs migrates an existing config-dir queue.json.
 pub fn queue_config_path() -> PathBuf {
-    config_dir().join("queue.json")
+    data_dir().join("queue.json")
 }
 
 /// Get the path to the PID file (Windows only).

@@ -266,6 +266,20 @@ fn start_tauri() {
     // Shared operation queue — persists jobs to queue.json and runs them
     // one at a time on a dedicated worker thread.
     let queue_path = platform::paths::queue_config_path();
+
+    // Migration: queue.json now lives in the data directory. Carry pending jobs
+    // over (best-effort) so a partially processed queue is not silently dropped
+    // on upgrade. A failed migration just starts with an empty queue.
+    let legacy_queue_path = platform::paths::config_dir().join("queue.json");
+    if !queue_path.exists() && legacy_queue_path.exists() {
+        if let Some(parent) = queue_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Err(e) = std::fs::rename(&legacy_queue_path, &queue_path) {
+            tracing::warn!("failed to migrate queue.json from config dir: {e}");
+        }
+    }
+
     let job_queue = queue::JobQueue::new(queue_path, Arc::clone(&facade), crate::ipc::op_lock());
     job_queue.start_worker();
 
