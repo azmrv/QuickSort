@@ -3,4 +3,5 @@ use std::sync::Arc;
 
 pub struct AppState {
     pub facade: Arc<ApplicationFacadeImpl>,
+    pub queue: Arc<crate::queue::JobQueue>,
 }

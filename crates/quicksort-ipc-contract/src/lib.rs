@@ -61,6 +61,60 @@ pub enum CommandMessage {
     /// The server shows/focuses the main window and emits a `pending-file`
     /// event so the frontend displays the SelectorPage.
     SelectFolder(SelectFolderData),
+
+    /// Enqueue a file operation for asynchronous execution by the
+    /// persistent job worker.  The server acknowledges immediately with a
+    /// job handle; execution happens in queue order.
+    EnqueueOperation(ExecuteOperationData),
+
+    /// Query the current state of all queued/running/completed jobs.
+    /// The server responds with a JSON array of [`JobDto`] in `data`.
+    QueryJobs,
+
+    /// Query the state of a single job by its identifier.
+    GetJobStatus(JobId),
+
+    /// Request cancellation of a queued (not yet running) job.
+    CancelJob(JobId),
+}
+
+/// Identifier of a queue job (server-generated UUID).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobId {
+    pub id: String,
+}
+
+/// Lifecycle state of a queue job.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum JobStatusDto {
+    Queued,
+    Running,
+    Completed,
+    Failed,
+    Canceled,
+}
+
+/// Progress counters reported for a running or completed job.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobProgressDto {
+    pub current: u32,
+    pub total: u32,
+}
+
+/// Serialized view of a queue job, shared over the IPC boundary.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobDto {
+    pub id: String,
+    pub operation_type: OperationType,
+    pub source_paths: Vec<String>,
+    pub status: JobStatusDto,
+    pub progress: JobProgressDto,
+    /// Operation id produced by a completed job (for undo).
+    pub operation_id: Option<String>,
+    /// Human-readable error for failed jobs.
+    pub error: Option<String>,
+    pub created_at: u64,
+    pub updated_at: u64,
 }
 
 /// Payload for the `SelectFolder` command.
@@ -106,6 +160,13 @@ pub struct ExecuteOperationData {
 
     /// Conflict resolution strategy when a destination file already exists.
     pub overwrite_policy: OverwritePolicy,
+
+    /// Duplicate detection mode requested by the client.
+    ///
+    /// Absent (`None`) means the server default applies. Kept optional so
+    /// clients that predate this field remain wire-compatible.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub duplicate_check_mode: Option<DuplicateCheckMode>,
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +191,10 @@ pub enum OperationType {
 /// This enum mirrors `quicksort_application::OverwritePolicy`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OverwritePolicy {
+    /// Use the policy configured in the server's settings.json
+    /// (`default_overwrite_policy`). The server resolves this to a concrete
+    /// policy; falls back to `Skip` when settings are unavailable.
+    Default,
     /// Abort the operation and report a conflict error.
     Skip,
     /// Silently replace the existing file.
@@ -141,6 +206,21 @@ pub enum OverwritePolicy {
     /// (e.g., when the command comes from the shell extension DLL),
     /// this policy falls back to `AutoRename`.
     Ask,
+}
+
+/// Duplicate detection mode.
+///
+/// This enum mirrors `quicksort_application::DuplicateCheckMode`.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DuplicateCheckMode {
+    /// Quick check: file with same name exists at destination.
+    #[default]
+    Name,
+    /// Medium check: same name AND same file size.
+    Size,
+    /// Deep check: SHA-256 hash comparison (slowest, most accurate).
+    Content,
 }
 
 // ---------------------------------------------------------------------------

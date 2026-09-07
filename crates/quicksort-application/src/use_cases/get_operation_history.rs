@@ -1,10 +1,10 @@
-//! Use case for retrieving operation history.
+//! Use case for retrieving and pruning operation history.
 
 use crate::errors::UseCaseError;
 use crate::ports::inbound::GetOperationHistory;
 use crate::ports::outbound::OperationRepository;
 use async_trait::async_trait;
-use quicksort_domain::Operation;
+use quicksort_domain::{Operation, OperationId};
 
 pub struct GetOperationHistoryUseCase {
     operation_repository: Box<dyn OperationRepository>,
@@ -29,5 +29,19 @@ impl GetOperationHistory for GetOperationHistoryUseCase {
 
         operations.sort_by_key(|op| std::cmp::Reverse(op.created_at));
         Ok(operations)
+    }
+
+    async fn delete_operation(&self, id: OperationId) -> Result<(), UseCaseError> {
+        self.operation_repository
+            .delete(&id)
+            .await
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))
+    }
+
+    async fn clear_history(&self) -> Result<(), UseCaseError> {
+        self.operation_repository
+            .clear()
+            .await
+            .map_err(|e| UseCaseError::RepositoryError(e.to_string()))
     }
 }

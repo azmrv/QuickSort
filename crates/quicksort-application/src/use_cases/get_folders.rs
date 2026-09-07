@@ -14,6 +14,7 @@ use crate::ports::outbound::ConfigurationRepository;
 use async_trait::async_trait;
 use quicksort_domain::Folder;
 use std::sync::Arc;
+use tracing::instrument;
 
 /// A straightforward use case that retrieves all configured folders.
 ///
@@ -37,6 +38,7 @@ impl GetFolders for GetFoldersUseCase {
     /// # Errors
     /// Returns `UseCaseError::RepositoryError` if the underlying storage
     /// fails (e.g., file not found, malformed JSON, I/O error).
+    #[instrument(name = "get_folders", skip_all, fields(folder_count))]
     async fn get_all(&self) -> Result<Vec<Folder>, UseCaseError> {
         // Delegate to the repository, mapping any infrastructure error
         // into our application-level error type.

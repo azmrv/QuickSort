@@ -24,5 +24,13 @@ pub mod pending;
 // Keep – logging initialisation (called by main.rs)
 pub mod logging;
 
+// Cross-platform config path resolution. Shared with main.rs: `logging.rs`
+// resolves the log directory via `crate::platform::paths::config_dir()`, so the
+// module must be visible from the lib target too.
+pub mod platform;
+
 // Application metadata — single source of truth for version, authors, credits, etc.
 pub mod metadata;
+
+// Persistent operation queue (planner-worker-job).
+pub mod queue;

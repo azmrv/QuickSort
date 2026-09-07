@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { App } from 'antd';
+import { DataGrid, type Column, type SortColumn } from 'react-data-grid';
+import 'react-data-grid/lib/styles.css';
 import { invoke } from '../lib/invoke';
 import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
@@ -10,15 +12,51 @@ interface Operation {
     state: unknown;
     source_paths: string[];
     target_folder_path: string | null;
+    processed_files?: number;
+    bytes_processed?: number;
     created_at: string;
     updated_at: string;
 }
+
+type SortKey = 'operation_type' | 'state' | 'path' | 'target' | 'size' | 'created_at';
+
+const CLEAR_COUNTDOWN = 5;
+
+// Human-readable byte size, Explorer-style (e.g. "1.2 MB").
+const formatBytes = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let value = bytes;
+    let unitIndex = -1;
+    do {
+        value /= 1024;
+        unitIndex += 1;
+    } while (value >= 1024 && unitIndex < units.length - 1);
+    return `${value.toFixed(1)} ${units[unitIndex]}`;
+};
 
 const HistoryPage = () => {
     const { t } = useTranslation();
     const [operations, setOperations] = useState<Operation[]>([]);
     const [loading, setLoading] = useState(true);
-    const { message } = App.useApp();
+    // Tracks operations whose Undo/Repeat cannot be performed anymore (e.g. the
+    // target/source files no longer exist). Once the backend rejects the action
+    // with "Operation not undoable", the id is added here so the buttons stay
+    // disabled instead of re-raising the error on every click.
+    const [unavailable, setUnavailable] = useState<Set<string>>(new Set());
+    const [sortColumns, setSortColumns] = useState<SortColumn[]>([{ columnKey: 'created_at', direction: 'DESC' }]);
+    const [columnOrder, setColumnOrder] = useState<string[]>(['state', 'operation_type', 'path', 'target', 'size', 'created_at', 'actions']);
+    // Countdown state for the "clear history" confirmation. While > 0 the action
+    // is still pending (a warning is shown and can be cancelled); when it reaches
+    // 0 the OK/Cancel buttons appear and only OK actually clears the history.
+    const [clearSeconds, setClearSeconds] = useState<number | null>(null);
+    const { message, modal } = App.useApp();
+
+    // The backend reports an impossible action as `UndoNotPossible`, whose
+    // Display message starts with this prefix. Match on it to treat the failure
+    // as "action not available" rather than a transient error.
+    const isUnavailableError = (err: unknown): boolean =>
+        String(err).includes('Operation not undoable');
 
     const loadOperations = () => {
         setLoading(true);
@@ -61,13 +99,32 @@ const HistoryPage = () => {
         };
     }, []);
 
+    // Drives the countdown warning: each tick decrements the counter. When it
+    // reaches zero the countdown stops and only the explicit OK button actually
+    // clears the history — the user is never cleared out automatically.
+    useEffect(() => {
+        if (clearSeconds === null || clearSeconds <= 0) return;
+        const timer = setTimeout(() => {
+            setClearSeconds(prev => {
+                if (prev === null) return null;
+                return prev > 1 ? prev - 1 : 0;
+            });
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [clearSeconds]);
+
     const handleUndo = async (operationId: string) => {
         try {
             await invoke('undo_operation_v2', { operationId });
             message.success(t('history.undo_success'));
             loadOperations();
         } catch (err) {
-            message.error(`${t('history.undo_error')} ${err}`);
+            if (isUnavailableError(err)) {
+                setUnavailable(prev => new Set(prev).add(operationId));
+                message.info(t('history.action_unavailable'));
+            } else {
+                message.error(`${t('history.undo_error')} ${err}`);
+            }
         }
     };
 
@@ -77,7 +134,45 @@ const HistoryPage = () => {
             message.success(t('history.repeat_success'));
             loadOperations();
         } catch (err) {
-            message.error(`${t('history.repeat_error')} ${err}`);
+            if (isUnavailableError(err)) {
+                setUnavailable(prev => new Set(prev).add(operationId));
+                message.info(t('history.action_unavailable'));
+            } else {
+                message.error(`${t('history.repeat_error')} ${err}`);
+            }
+        }
+    };
+
+    const handleDelete = async (operationId: string) => {
+        modal.confirm({
+            title: t('history.delete_confirm'),
+            okText: t('history.delete'),
+            cancelText: t('history.clear_cancel'),
+            onOk: async () => {
+                try {
+                    await invoke('delete_operation', { operationId });
+                    message.success(t('history.delete_success'));
+                    loadOperations();
+                } catch (err) {
+                    logger.error('HistoryPage', 'failed to delete operation', err);
+                    message.error(`${t('history.delete_error')} ${err}`);
+                }
+            },
+        });
+    };
+
+    const startClear = () => {
+        setClearSeconds(CLEAR_COUNTDOWN);
+    };
+
+    const performClear = async () => {
+        try {
+            await invoke('clear_history');
+            message.success(t('history.clear_success'));
+            loadOperations();
+        } catch (err) {
+            logger.error('HistoryPage', 'failed to clear history', err);
+            message.error(`${t('history.clear_error')} ${err}`);
         }
     };
 
@@ -113,6 +208,25 @@ const HistoryPage = () => {
         return { text: t('history.state.unknown'), color: '#6b7280' };
     };
 
+    // Numeric rank per state used for sorting by status. Keeping ranks stable
+    // across locales lets "Status" sorting behave the same in every language.
+    const getStateRank = (state: unknown): number => {
+        if (typeof state === 'string') {
+            if (state === 'Pending') return 0;
+            if (state === 'Executing') return 1;
+            if (state === 'Undone') return 4;
+            return 5;
+        }
+        if (typeof state !== 'object' || state === null) return 5;
+        const s = state as Record<string, unknown>;
+        if ('Pending' in s) return 0;
+        if ('Executing' in s) return 1;
+        if ('Completed' in s) return 2;
+        if ('Failed' in s) return 3;
+        if ('Undone' in s) return 4;
+        return 5;
+    };
+
     const getOperationLabel = (type: string): string => {
         switch (type) {
             case 'Move': return t('history.operation.move');
@@ -123,7 +237,26 @@ const HistoryPage = () => {
         }
     };
 
+    const getBytesProcessed = (op: Operation): number => {
+        const s = op.state as Record<string, unknown> | null;
+        if (typeof s === 'object' && s !== null && 'Completed' in s) {
+            const completed = s.Completed as { processed_files: number; bytes_processed: number };
+            return completed.bytes_processed ?? op.bytes_processed ?? 0;
+        }
+        return op.bytes_processed ?? 0;
+    };
+
+    const getFilesCount = (op: Operation): number => {
+        const s = op.state as Record<string, unknown> | null;
+        if (typeof s === 'object' && s !== null && 'Completed' in s) {
+            const completed = s.Completed as { processed_files: number; bytes_processed: number };
+            return completed.processed_files ?? op.processed_files ?? 0;
+        }
+        return op.processed_files ?? 0;
+    };
+
     const canUndo = (op: Operation): boolean => {
+        if (unavailable.has(op.id)) return false;
         if (typeof op.state === 'string') return false;
         if (typeof op.state !== 'object' || op.state === null) return false;
         return 'Completed' in op.state && op.operation_type !== 'Delete';
@@ -132,10 +265,201 @@ const HistoryPage = () => {
     // Repeat is offered for operations that finished (Completed) and for
     // undone ones (redo). Unit variants arrive as plain strings via serde.
     const canRepeat = (op: Operation): boolean => {
+        if (unavailable.has(op.id)) return false;
         if (typeof op.state === 'string') return op.state === 'Undone';
         if (typeof op.state !== 'object' || op.state === null) return false;
         return 'Completed' in op.state || 'Undone' in op.state;
     };
+
+    const getSortValue = (op: Operation, key: SortKey): string | number => {
+        switch (key) {
+            case 'operation_type': return getOperationLabel(op.operation_type);
+            case 'state': return getStateRank(op.state);
+            case 'path': return op.source_paths[0] ?? '';
+            case 'target': return op.target_folder_path ?? '';
+            case 'size': return getBytesProcessed(op);
+            case 'created_at': return new Date(op.created_at).getTime();
+        }
+    };
+
+    const sortedOperations = useMemo(() => {
+        const sorted = [...operations];
+        if (sortColumns.length === 0) return sorted;
+        return sorted.sort((a, b) => {
+            for (const { columnKey, direction } of sortColumns) {
+                const va = getSortValue(a, columnKey as SortKey);
+                const vb = getSortValue(b, columnKey as SortKey);
+                if (va < vb) return direction === 'ASC' ? -1 : 1;
+                if (va > vb) return direction === 'ASC' ? 1 : -1;
+            }
+            return 0;
+        });
+    }, [operations, sortColumns]);
+
+    const toolbarButtonStyle: React.CSSProperties = {
+        padding: '6px 12px',
+        background: 'var(--qs-bg-tertiary)',
+        border: '1px solid var(--qs-border)',
+        borderRadius: 'var(--qs-radius-sm)',
+        color: 'var(--qs-text-secondary)',
+        fontFamily: 'var(--qs-font-mono)',
+        fontSize: '12px',
+        cursor: 'pointer',
+        flexShrink: 0,
+    };
+
+    const actionButtonStyle: React.CSSProperties = {
+        padding: '4px 8px',
+        background: 'transparent',
+        border: '1px solid var(--qs-border)',
+        borderRadius: 'var(--qs-radius-sm)',
+        color: 'var(--qs-accent)',
+        fontFamily: 'var(--qs-font-mono)',
+        fontSize: '11px',
+        cursor: 'pointer',
+        flexShrink: 0,
+        marginLeft: '4px',
+    };
+
+    const allColumns: Column<Operation>[] = [
+        {
+            key: 'state',
+            name: t('history.col.status'),
+            width: 140,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => {
+                const state = getStateLabel(row.state);
+                return (
+                    <span style={{ color: state.color, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{
+                            display: 'inline-block',
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: state.color,
+                        }} />
+                        {state.text}
+                    </span>
+                );
+            },
+        },
+        {
+            key: 'operation_type',
+            name: t('history.col.type'),
+            width: 110,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => <span>{getOperationLabel(row.operation_type)}</span>,
+        },
+        {
+            key: 'path',
+            name: t('history.col.path'),
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => (
+                <span title={row.source_paths.join('\n')}>
+                    {row.source_paths[0]}
+                    {row.source_paths.length > 1 ? ` +${row.source_paths.length - 1}` : ''}
+                </span>
+            ),
+        },
+        {
+            key: 'target',
+            name: t('history.col.target'),
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => (
+                <span style={{ color: 'var(--qs-text-muted)' }}>
+                    {row.target_folder_path ?? '\u2014'}
+                </span>
+            ),
+        },
+        {
+            key: 'size',
+            name: t('history.col.size'),
+            width: 110,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => {
+                const size = getBytesProcessed(row);
+                const files = getFilesCount(row);
+                return <span>{size > 0 ? `${formatBytes(size)} (${files})` : '\u2014'}</span>;
+            },
+        },
+        {
+            key: 'created_at',
+            name: t('history.col.date'),
+            width: 160,
+            sortable: true,
+            resizable: true,
+            draggable: true,
+            renderCell: ({ row }) => (
+                <span style={{ color: 'var(--qs-text-muted)' }}>
+                    {new Date(row.created_at).toLocaleString('ru-RU')}
+                </span>
+            ),
+        },
+        {
+            key: 'actions',
+            name: t('history.col.actions'),
+            width: 200,
+            resizable: false,
+            draggable: false,
+            frozen: 'end',
+            renderCell: ({ row }) => (
+                <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                        onClick={() => handleUndo(row.id)}
+                        disabled={!canUndo(row)}
+                        style={actionButtonStyle}
+                    >
+                        {t('history.undo')}
+                    </button>
+                    <button
+                        onClick={() => handleRepeat(row.id)}
+                        disabled={!canRepeat(row)}
+                        style={actionButtonStyle}
+                    >
+                        {t('history.repeat')}
+                    </button>
+                    <button
+                        onClick={() => handleDelete(row.id)}
+                        style={actionButtonStyle}
+                    >
+                        {t('history.delete')}
+                    </button>
+                </div>
+            ),
+        },
+    ];
+
+    const handleColumnsReorder = (sourceKey: string, targetKey: string) => {
+        setColumnOrder((prev) => {
+            const srcIdx = prev.findIndex((k) => k === sourceKey);
+            const tgtIdx = prev.findIndex((k) => k === targetKey);
+            if (srcIdx === -1 || tgtIdx === -1) return prev;
+            const next = [...prev];
+            const [moved] = next.splice(srcIdx, 1);
+            next.splice(tgtIdx, 0, moved);
+            return next;
+        });
+    };
+
+    const orderedColumns = useMemo(
+        () => {
+            const byKey = new Map(allColumns.map((c) => [c.key, c]));
+            return columnOrder
+                .map((key) => byKey.get(key))
+                .filter((c): c is Column<Operation> => Boolean(c));
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [columnOrder, allColumns]
+    );
 
     return (
         <div style={{ padding: 'var(--qs-space-lg)' }}>
@@ -144,6 +468,8 @@ const HistoryPage = () => {
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 marginBottom: 'var(--qs-space-lg)',
+                gap: '8px',
+                flexWrap: 'wrap',
             }}>
                 <h3 style={{
                     fontFamily: 'var(--qs-font-display)',
@@ -154,23 +480,80 @@ const HistoryPage = () => {
                 }}>
                     {t('history.title')}
                 </h3>
-                <button
-                    onClick={loadOperations}
-                    disabled={loading}
-                    style={{
-                        padding: '6px 12px',
-                        background: 'var(--qs-bg-tertiary)',
-                        border: '1px solid var(--qs-border)',
-                        borderRadius: 'var(--qs-radius-sm)',
-                        color: 'var(--qs-text-secondary)',
-                        fontFamily: 'var(--qs-font-mono)',
-                        fontSize: '12px',
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                    }}
-                >
-                    {loading ? t('history.loading') : t('history.refresh')}
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                        onClick={loadOperations}
+                        disabled={loading}
+                        style={{
+                            ...toolbarButtonStyle,
+                            cursor: loading ? 'not-allowed' : 'pointer',
+                            opacity: loading ? 0.7 : 1,
+                        }}
+                    >
+                        {loading ? t('history.loading') : t('history.refresh')}
+                    </button>
+                    {operations.length > 0 && (
+                        <button
+                            onClick={startClear}
+                            style={{
+                                ...toolbarButtonStyle,
+                                color: 'var(--qs-danger, #ef4444)',
+                            }}
+                        >
+                            {t('history.clear')}
+                        </button>
+                    )}
+                </div>
             </div>
+
+            {clearSeconds !== null && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px 16px',
+                    background: 'var(--qs-bg-tertiary)',
+                    border: '1px solid var(--qs-danger, #ef4444)',
+                    borderRadius: 'var(--qs-radius-md)',
+                    marginBottom: 'var(--qs-space-lg)',
+                }}>
+                    <span style={{
+                        fontFamily: 'var(--qs-font-body)',
+                        fontSize: '13px',
+                        color: 'var(--qs-text-primary)',
+                        flex: 1,
+                    }}>
+                        {clearSeconds > 0
+                            ? t('history.clear_confirm', { n: clearSeconds })
+                            : t('history.clear_ready')}
+                    </span>
+                    {clearSeconds === 0 && (
+                        <>
+                            <button
+                                onClick={() => { performClear(); setClearSeconds(null); }}
+                                style={{
+                                    ...actionButtonStyle,
+                                    color: 'var(--qs-danger, #ef4444)',
+                                    borderColor: 'var(--qs-danger, #ef4444)',
+                                    marginLeft: 0,
+                                }}
+                            >
+                                {t('history.clear_ok')}
+                            </button>
+                            <button
+                                onClick={() => setClearSeconds(null)}
+                                style={{
+                                    ...actionButtonStyle,
+                                    color: 'var(--qs-accent)',
+                                    marginLeft: 0,
+                                }}
+                            >
+                                {t('history.clear_cancel')}
+                            </button>
+                        </>
+                    )}
+                </div>
+            )}
 
             {operations.length === 0 ? (
                 <div style={{
@@ -182,118 +565,23 @@ const HistoryPage = () => {
                     <div>{t('history.empty')}</div>
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {operations.map((op) => {
-                        const state = getStateLabel(op.state);
-                        return (
-                            <div
-                                key={op.id}
-                                style={{
-                                    padding: '12px 16px',
-                                    background: 'var(--qs-bg-secondary)',
-                                    border: '1px solid var(--qs-border)',
-                                    borderRadius: 'var(--qs-radius-md)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '12px',
-                                }}
-                            >
-                                <div style={{
-                                    width: '8px',
-                                    height: '8px',
-                                    borderRadius: '50%',
-                                    background: state.color,
-                                    flexShrink: 0,
-                                }} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{
-                                        fontFamily: 'var(--qs-font-body)',
-                                        fontSize: '13px',
-                                        fontWeight: 500,
-                                        color: 'var(--qs-text-primary)',
-                                        marginBottom: '2px',
-                                    }}>
-                                        {getOperationLabel(op.operation_type)}
-                                    </div>
-                                    <div style={{
-                                        fontFamily: 'var(--qs-font-mono)',
-                                        fontSize: '11px',
-                                        color: 'var(--qs-text-muted)',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                    }}>
-                                        {op.source_paths[0]}
-                                        {op.source_paths.length > 1 && ` +${op.source_paths.length - 1}`}
-                                    </div>
-                                </div>
-                                <div style={{
-                                    fontFamily: 'var(--qs-font-mono)',
-                                    fontSize: '11px',
-                                    color: state.color,
-                                    flexShrink: 0,
-                                }}>
-                                    {state.text}
-                                </div>
-                                <div style={{
-                                    fontFamily: 'var(--qs-font-mono)',
-                                    fontSize: '11px',
-                                    color: 'var(--qs-text-muted)',
-                                    flexShrink: 0,
-                                }}>
-                                    {new Date(op.created_at).toLocaleTimeString('ru-RU')}
-                                </div>
-                                <button
-                                    onClick={() => handleUndo(op.id)}
-                                    disabled={!canUndo(op)}
-                                    style={{
-                                        padding: '4px 8px',
-                                        background: 'transparent',
-                                        border: '1px solid var(--qs-border)',
-                                        borderRadius: 'var(--qs-radius-sm)',
-                                        color: canUndo(op) ? 'var(--qs-accent)' : 'var(--qs-text-muted)',
-                                        fontFamily: 'var(--qs-font-mono)',
-                                        fontSize: '11px',
-                                        cursor: canUndo(op) ? 'pointer' : 'not-allowed',
-                                        flexShrink: 0,
-                                        opacity: canUndo(op) ? 1 : 0.7,
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        if (canUndo(op)) e.currentTarget.style.background = 'var(--qs-accent-muted)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.background = 'transparent';
-                                    }}
-                                >
-                                    {t('history.undo')}
-                                </button>
-                                <button
-                                    onClick={() => handleRepeat(op.id)}
-                                    disabled={!canRepeat(op)}
-                                    style={{
-                                        padding: '4px 8px',
-                                        background: 'transparent',
-                                        border: '1px solid var(--qs-border)',
-                                        borderRadius: 'var(--qs-radius-sm)',
-                                        color: canRepeat(op) ? 'var(--qs-accent)' : 'var(--qs-text-muted)',
-                                        fontFamily: 'var(--qs-font-mono)',
-                                        fontSize: '11px',
-                                        cursor: canRepeat(op) ? 'pointer' : 'not-allowed',
-                                        flexShrink: 0,
-                                        opacity: canRepeat(op) ? 1 : 0.7,
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        if (canRepeat(op)) e.currentTarget.style.background = 'var(--qs-accent-muted)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.background = 'transparent';
-                                    }}
-                                >
-                                    {t('history.repeat')}
-                                </button>
-                            </div>
-                        );
-                    })}
+                <div style={{
+                    border: '1px solid var(--qs-border)',
+                    borderRadius: 'var(--qs-radius-md)',
+                    overflow: 'hidden',
+                    height: '60vh',
+                }}>
+                    <DataGrid<Operation>
+                        columns={orderedColumns}
+                        rows={sortedOperations}
+                        rowKeyGetter={(row) => row.id}
+                        sortColumns={sortColumns}
+                        onSortColumnsChange={setSortColumns}
+                        onColumnsReorder={handleColumnsReorder}
+                        onRowsChange={() => {}}
+                        direction="ltr"
+                        className="rdg"
+                    />
                 </div>
             )}
         </div>

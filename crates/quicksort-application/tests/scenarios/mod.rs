@@ -174,6 +174,11 @@ impl OperationRepository for MockOperationRepository {
     async fn load_all(&self) -> Result<Vec<Operation>, UseCaseError> {
         Ok(self.operations.lock().unwrap().values().cloned().collect())
     }
+
+    async fn clear(&self) -> Result<(), UseCaseError> {
+        self.operations.lock().unwrap().clear();
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -252,6 +257,20 @@ impl FileSystem for MockFileSystem {
 
         self.files.lock().unwrap().insert(to_path, size_clone);
         Ok(size_clone)
+    }
+
+    async fn is_dir(&self, _path: &AbsolutePath) -> Result<bool, UseCaseError> {
+        // The in-memory mock tracks only files; every registered entry is
+        // treated as a regular file.
+        Ok(false)
+    }
+
+    async fn copy_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
+        self.copy_file(from, to).await
+    }
+
+    async fn move_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
+        self.move_file(from, to).await
     }
 
     async fn delete_file(&self, path: &AbsolutePath) -> Result<(), UseCaseError> {
@@ -396,3 +415,6 @@ pub fn test_folder() -> Folder {
 pub fn test_file(path: &str) -> AbsolutePath {
     AbsolutePath::new(path).expect("Invalid test path")
 }
+
+pub mod execute_operation;
+pub mod logging;

@@ -1,39 +1,52 @@
 import { useState, useEffect } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
+import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { invoke } from './lib/invoke';
 import { logger } from './lib/logger';
 import { ConfigProvider, theme, App as AntApp } from 'antd';
 import { LanguageProvider, useTranslation } from './i18n/LanguageContext';
-import type { Locale } from './i18n/translations';
+import { LOCALE_LABELS, type Locale } from './i18n/translations';
 import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
 import LogPage from './pages/LogPage';
 import HistoryPage from './pages/HistoryPage';
+import QueuePage from './pages/QueuePage';
 import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
 import PluginsPage from './pages/PluginsPage';
 import CommandPalette from './components/CommandPalette';
+import HeaderStatus from './components/HeaderStatus';
 import './styles/App.css';
 
 interface Settings {
-    theme_mode: 'System' | 'Light' | 'Dark';
+    theme_mode: 'system' | 'light' | 'dark';
     locale: Locale;
     [key: string]: unknown;
 }
 
+const SELECTOR_WINDOW_LABEL = 'selector';
+
 function deriveIsDark(themeMode: string, systemDark: boolean): boolean {
     switch (themeMode) {
-        case 'Light': return false;
-        case 'Dark': return true;
+        case 'light': return false;
+        case 'dark': return true;
         default: return systemDark;
     }
 }
 
+async function showSelectorWindow(): Promise<void> {
+    const win = await WebviewWindow.getByLabel(SELECTOR_WINDOW_LABEL);
+    if (win) {
+        await win.show();
+        await win.setFocus();
+    }
+}
+
 function AppContent() {
-    const { t } = useTranslation();
-    const [mode, setMode] = useState<'editor' | 'selector'>('editor');
+    const { t, locale } = useTranslation();
+    const isSelectorWindow = getCurrentWebviewWindow().label === SELECTOR_WINDOW_LABEL;
     const [selectFiles, setSelectFiles] = useState<string[]>([]);
-    const [themeMode, setThemeMode] = useState<string>('System');
+    const [themeMode, setThemeMode] = useState<'system' | 'light' | 'dark'>('system');
     const [isDark, setIsDark] = useState(() => {
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
             return false;
@@ -41,46 +54,65 @@ function AppContent() {
         return true;
     });
     const [activeTab, setActiveTab] = useState('folders');
-    const [version, setVersion] = useState('0.0.0');
     const [paletteOpen, setPaletteOpen] = useState(false);
 
     // Load settings and apply theme on startup
     useEffect(() => {
         logger.info('App', 'startup');
-        invoke<string>('get_app_version').then(setVersion);
         invoke<Settings>('get_settings').then((settings) => {
-            setThemeMode(settings.theme_mode || 'System');
+            setThemeMode(settings.theme_mode || 'system');
             const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
-            setIsDark(deriveIsDark(settings.theme_mode || 'System', systemDark));
+            setIsDark(deriveIsDark(settings.theme_mode || 'system', systemDark));
             logger.info('App', `loaded settings: theme=${settings.theme_mode}, locale=${settings.locale}`);
         }).catch((err) => {
             logger.error('App', 'Failed to load settings', err);
         });
+    }, []);
+
+    // Selector window: read pending files on startup and reveal itself when files are present
+    useEffect(() => {
+        if (!isSelectorWindow) return;
         invoke<string[]>('get_pending_files').then((files) => {
             if (files && files.length > 0) {
-                logger.info('App', `pending files: ${files.length}`);
+                logger.info('App', `selector window: pending files: ${files.length}`);
                 setSelectFiles(files);
-                setMode('selector');
+                getCurrentWebviewWindow().show();
             }
+        }).catch((err) => {
+            logger.error('App', 'Failed to load pending files', err);
         });
-    }, []);
+    }, [isSelectorWindow]);
 
     // Listen for single-instance forwarded files (second launch while already running)
     useEffect(() => {
-        const unlisten = listen<{ files: string[] }>('pending-file', (event) => {
-            const files = event.payload.files;
-            logger.info('App', `single-instance pending files: ${files.length}`);
-            setSelectFiles(files);
-            setMode('selector');
+        // Two emitters exist: the single-instance plugin sends `{ file }`,
+        // the IPC SelectFolder handler sends `{ files }`. Both store the
+        // paths in pending storage before emitting, so the payload type is
+        // only informational here.
+        const unlisten = listen<{ file?: string; files?: string[] }>('pending-file', () => {
+            if (isSelectorWindow) {
+                // The paths are already in pending storage; read them and reveal the window.
+                invoke<string[]>('get_pending_files').then((files) => {
+                    if (files && files.length > 0) {
+                        setSelectFiles(files);
+                        getCurrentWebviewWindow().show();
+                    }
+                }).catch((err) => {
+                    logger.error('App', 'Failed to load pending files', err);
+                });
+            } else {
+                // Main window: bring the selector window to the front.
+                showSelectorWindow();
+            }
         });
         return () => { unlisten.then((fn) => fn()); };
-    }, []);
+    }, [isSelectorWindow]);
 
     // Listen for Windows system theme changes — only apply when theme_mode === 'system'
     useEffect(() => {
         const mq = window.matchMedia('(prefers-color-scheme: dark)');
         const handler = (e: MediaQueryListEvent) => {
-            if (themeMode === 'System') {
+            if (themeMode === 'system') {
                 setIsDark(e.matches);
                 logger.info('App', `system theme changed → ${e.matches ? 'dark' : 'light'}`);
             }
@@ -101,8 +133,9 @@ function AppContent() {
         return () => { unlisten.then((fn) => fn()); };
     }, []);
 
-    // Global keyboard shortcut: Ctrl+Shift+Space opens Command Palette
+    // Global keyboard shortcut: Ctrl+Shift+Space opens Command Palette (main window only)
     useEffect(() => {
+        if (isSelectorWindow) return;
         const handler = (e: KeyboardEvent) => {
             if (e.ctrlKey && e.shiftKey && e.code === 'Space') {
                 e.preventDefault();
@@ -111,9 +144,10 @@ function AppContent() {
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, []);
+    }, [isSelectorWindow]);
 
     useEffect(() => {
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
         document.body.style.backgroundColor = isDark ? '#0a0a0b' : '#f8f9fa';
         document.body.style.color = isDark ? '#e8e8ec' : '#1a1a1d';
     }, [isDark]);
@@ -121,11 +155,42 @@ function AppContent() {
     const TABS = [
         { key: 'folders', label: t('tab.folders'), content: <EditorPage /> },
         { key: 'history', label: t('tab.history'), content: <HistoryPage /> },
+        { key: 'queue', label: t('tab.queue'), content: <QueuePage /> },
         { key: 'plugins', label: t('tab.plugins'), content: <PluginsPage /> },
         { key: 'log', label: t('tab.log'), content: <LogPage /> },
         { key: 'settings', label: t('tab.settings'), content: <SettingsPage /> },
         { key: 'about', label: t('tab.about'), content: <AboutPage /> },
     ];
+
+    const persistSettings = async (patch: Partial<Settings>) => {
+        const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
+        const next: Settings = {
+            theme_mode: themeMode,
+            locale: locale,
+            ...patch,
+        };
+        try {
+            await invoke('save_settings', { settings: next });
+            await emit('settings-changed', next);
+            if (patch.theme_mode) {
+                setThemeMode(patch.theme_mode);
+                setIsDark(deriveIsDark(patch.theme_mode, systemDark));
+            }
+        } catch (err) {
+            logger.error('App', 'Failed to save settings from header', err);
+        }
+    };
+
+    const toggleTheme = () => {
+        const next = isDark ? 'light' : 'dark';
+        persistSettings({ theme_mode: next });
+    };
+
+    const handleSelectorClose = () => {
+        if (isSelectorWindow) {
+            getCurrentWebviewWindow().hide();
+        }
+    };
 
     return (
         <ConfigProvider
@@ -144,13 +209,29 @@ function AppContent() {
             }}
         >
             <AntApp>
-                {mode === 'editor' ? (
+                {isSelectorWindow ? (
+                    <SelectorPage files={selectFiles} onClose={handleSelectorClose} />
+                ) : (
                     <div className="app-layout">
                         <header className="app-header">
                             <div className="app-logo">
                                 <div className="app-logo-icon">Q</div>
                                 <span className="app-logo-text">QuickSort</span>
-                                <span className="app-logo-version">v{version}</span>
+                            </div>
+                            <div className="header-right">
+                                <HeaderStatus />
+                                <button className="theme-toggle" onClick={toggleTheme}>
+                                    <span className="theme-toggle-icon">{isDark ? '☀️' : '🌙'}</span>
+                                </button>
+                                <select
+                                    value={locale}
+                                    onChange={(e) => persistSettings({ locale: e.target.value as Locale })}
+                                    className="locale-select"
+                                >
+                                    {Object.entries(LOCALE_LABELS).map(([code, label]) => (
+                                        <option key={code} value={code}>{label}</option>
+                                    ))}
+                                </select>
                             </div>
                         </header>
                         <main className="app-main">
@@ -177,10 +258,10 @@ function AppContent() {
                             </div>
                         </main>
                     </div>
-                ) : (
-                    <SelectorPage files={selectFiles} onClose={() => setMode('editor')} />
                 )}
-                <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+                {!isSelectorWindow && (
+                    <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+                )}
             </AntApp>
         </ConfigProvider>
     );

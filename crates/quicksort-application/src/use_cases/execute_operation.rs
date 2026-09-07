@@ -6,9 +6,7 @@ use crate::ports::outbound::{
     OperationRepository, ProgressInfo, ProgressReporter,
 };
 use async_trait::async_trait;
-use quicksort_domain::{
-    AbsolutePath, DuplicateCheckMode, Operation, OperationState, OperationType,
-};
+use quicksort_domain::{AbsolutePath, Operation, OperationState, OperationType};
 
 pub struct ExecuteOperationUseCase {
     operation_repository: Box<dyn OperationRepository>,
@@ -84,7 +82,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
         let total = command.source_paths.len() as u32;
         let mut total_files: u32 = 0;
         let mut total_bytes: u64 = 0;
-        let mut last_error: Option<String> = None;
+        let mut last_error: Option<UseCaseError> = None;
 
         for (idx, source) in command.source_paths.iter().enumerate() {
             self.report_progress(idx as u32, total, "processing", Some(source.to_string()))
@@ -96,15 +94,20 @@ impl ExecuteOperation for ExecuteOperationUseCase {
                     total_bytes += bytes;
                 }
                 Err(e) => {
-                    last_error = Some(e.to_string());
-                    break;
+                    // Keep processing the remaining items so a single
+                    // failure (e.g. a locked file or an unsupported path)
+                    // does not abort the whole bundle. The last error is
+                    // reported once the loop finishes.
+                    last_error = Some(e);
                 }
             }
         }
 
         self.report_progress(total, total, "complete", None).await;
 
-        if let Some(reason) = last_error {
+        if let Some(error) = last_error {
+            let reason = error.to_string();
+            operation.record_progress(total_files, total_bytes);
             operation
                 .fail(reason.clone())
                 .map_err(|e| UseCaseError::Domain(e.to_string()))?;
@@ -112,7 +115,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
                 .save(&operation)
                 .await
                 .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
-            return Err(UseCaseError::FileSystemError(reason));
+            return Err(error);
         }
 
         operation
@@ -145,64 +148,72 @@ impl ExecuteOperationUseCase {
         match command.operation_type {
             OperationType::Move | OperationType::Copy => {
                 // Check if source file still exists (re-move protection)
-                if !self
-                    .file_system
-                    .exists(source)
-                    .await
-                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
-                {
+                if !self.file_system.exists(source).await? {
                     return Err(UseCaseError::FileSystemError(format!(
                         "Source file not found (may have been moved already): {}",
                         source
                     )));
                 }
 
-                // Skip files already in the target folder (same-folder protection)
+                // Reject moving/copying into the same folder the entity already
+                // lives in. The comparison is case-insensitive on Windows
+                // (PathBuf equality is byte/case-sensitive even on Windows, so
+                // a source and target differing only in case would otherwise
+                // be treated as different).
                 if let (Some(src_parent), Some(ref target)) = (source.parent(), target_folder) {
-                    if src_parent == *target {
-                        return Ok(0u64);
+                    let same = if cfg!(target_os = "windows") {
+                        src_parent
+                            .as_str()
+                            .and_then(|s| {
+                                target
+                                    .as_str()
+                                    .map(|t| (s.to_lowercase(), t.to_lowercase()))
+                            })
+                            .is_some_and(|(s, t)| s == t)
+                    } else {
+                        src_parent == *target
+                    };
+                    if same {
+                        return Err(UseCaseError::Conflict(format!(
+                            "Source is already in the target folder: {}",
+                            source
+                        )));
                     }
                 }
 
                 let dest = self.build_destination(source, target_folder)?;
 
-                // Duplicate detection phase
-                let dup_result = self
+                // Destination-existence phase. The overwrite policy must apply
+                // to ANY name collision at the destination, not only to what the
+                // duplicate checker reports: in Size mode a same-named file with
+                // a DIFFERENT size yields exists=false, which previously let the
+                // operation silently overwrite the destination (QA report
+                // 07.09.2026, lines 84-89).
+                let dest_exists = self.file_system.exists(&dest).await?;
+
+                // Still run the duplicate check for parity with prior logs.
+                let _ = self
                     .duplicate_detector
                     .check_duplicate(source, &dest, &command.duplicate_check_mode)
                     .await
                     .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
 
-                // If duplicate found, apply overwrite policy
-                if dup_result.exists {
+                if dest_exists {
                     match command.overwrite_policy {
                         OverwritePolicy::Skip => {
                             return Err(UseCaseError::Conflict(format!(
-                                "Duplicate found ({} mode): {}",
-                                match command.duplicate_check_mode {
-                                    DuplicateCheckMode::Name => "name",
-                                    DuplicateCheckMode::Size => "size",
-                                    DuplicateCheckMode::Content => "content",
-                                },
+                                "Destination already exists: {}",
                                 dest
                             )));
                         }
                         OverwritePolicy::Overwrite => {
-                            // Proceed with the operation
+                            // Proceed with the operation (replaces the destination)
                         }
                         OverwritePolicy::AutoRename => {
                             let resolved = self.unique_name(&dest).await?;
                             return match command.operation_type {
-                                OperationType::Move => self
-                                    .file_system
-                                    .move_file(source, &resolved)
-                                    .await
-                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
-                                OperationType::Copy => self
-                                    .file_system
-                                    .copy_file(source, &resolved)
-                                    .await
-                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                                OperationType::Move => self.perform_move(source, &resolved).await,
+                                OperationType::Copy => self.perform_copy(source, &resolved).await,
                                 _ => unreachable!(),
                             };
                         }
@@ -210,43 +221,22 @@ impl ExecuteOperationUseCase {
                             // In non-interactive mode (IPC from DLL), fall back to AutoRename
                             let resolved = self.unique_name(&dest).await?;
                             return match command.operation_type {
-                                OperationType::Move => self
-                                    .file_system
-                                    .move_file(source, &resolved)
-                                    .await
-                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
-                                OperationType::Copy => self
-                                    .file_system
-                                    .copy_file(source, &resolved)
-                                    .await
-                                    .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                                OperationType::Move => self.perform_move(source, &resolved).await,
+                                OperationType::Copy => self.perform_copy(source, &resolved).await,
                                 _ => unreachable!(),
                             };
                         }
                     }
                 }
 
-                // No duplicate or Overwrite policy — proceed
+                // No destination conflict (or Overwrite policy) — proceed
                 match command.operation_type {
-                    OperationType::Move => self
-                        .file_system
-                        .move_file(source, &dest)
-                        .await
-                        .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
-                    OperationType::Copy => self
-                        .file_system
-                        .copy_file(source, &dest)
-                        .await
-                        .map_err(|e| UseCaseError::FileSystemError(e.to_string())),
+                    OperationType::Move => self.perform_move(source, &dest).await,
+                    OperationType::Copy => self.perform_copy(source, &dest).await,
                     _ => unreachable!(),
                 }
             }
-            OperationType::Delete => self
-                .file_system
-                .delete_file(source)
-                .await
-                .map_err(|e| UseCaseError::FileSystemError(e.to_string()))
-                .map(|_| 0u64),
+            OperationType::Delete => self.file_system.delete_file(source).await.map(|_| 0u64),
             OperationType::Rename => {
                 let new_path = command
                     .target_paths
@@ -258,7 +248,6 @@ impl ExecuteOperationUseCase {
                 self.file_system
                     .rename_file(source, new_path)
                     .await
-                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))
                     .map(|_| 0u64)
             }
         }
@@ -278,6 +267,30 @@ impl ExecuteOperationUseCase {
         Ok(folder.join(file_name))
     }
 
+    async fn perform_move(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+    ) -> Result<u64, UseCaseError> {
+        if self.file_system.is_dir(from).await? {
+            self.file_system.move_tree(from, to).await
+        } else {
+            self.file_system.move_file(from, to).await
+        }
+    }
+
+    async fn perform_copy(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+    ) -> Result<u64, UseCaseError> {
+        if self.file_system.is_dir(from).await? {
+            self.file_system.copy_tree(from, to).await
+        } else {
+            self.file_system.copy_file(from, to).await
+        }
+    }
+
     async fn unique_name(&self, path: &AbsolutePath) -> Result<AbsolutePath, UseCaseError> {
         let file_name = path.file_name().map(|s| s.to_string()).unwrap_or_default();
         let ext = path
@@ -294,12 +307,9 @@ impl ExecuteOperationUseCase {
 
         for counter in 1..=1000 {
             let candidate = parent.join(format!("{} ({}){}", base_name, counter, ext));
-            if !self
-                .file_system
-                .exists(&candidate)
-                .await
-                .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?
-            {
+            // `exists()` already returns a `UseCaseError`; re-wrapping it in
+            // `FileSystemError` would double the "File system error:" prefix.
+            if !self.file_system.exists(&candidate).await? {
                 return Ok(candidate);
             }
         }

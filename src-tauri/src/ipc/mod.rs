@@ -6,7 +6,7 @@
 //! The framing protocol is defined in `quicksort-ipc-contract` and forwarded
 //! decoded commands to the Application Facade.
 
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::AppHandle;
 
 pub mod server;
@@ -34,4 +34,16 @@ pub fn set_app_handle(handle: AppHandle) {
 /// Returns the stored AppHandle, if available.
 pub(crate) fn get_app_handle() -> Option<&'static AppHandle> {
     APP_HANDLE.get()
+}
+
+/// Global lock serializing all background file operations (both the IPC
+/// server's fire-and-forget operations and the persistent queue worker).
+///
+/// The JSON history repository is file-backed and not safe for concurrent
+/// read-modify-write, so every execute path must hold this lock.
+static OP_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
+
+/// Returns the shared operation serialization lock, creating it on first use.
+pub(crate) fn op_lock() -> Arc<Mutex<()>> {
+    OP_LOCK.get_or_init(|| Arc::new(Mutex::new(()))).clone()
 }

@@ -263,8 +263,7 @@ pub fn check_menu_status() -> bool {
 
 #[tauri::command]
 pub fn get_logs() -> Vec<serde_json::Value> {
-    tracing::debug!(command = "get_logs", "handling — returning empty (stub)");
-    Vec::new()
+    crate::logging::get_recent_logs()
 }
 
 #[tauri::command]
@@ -272,7 +271,11 @@ pub fn register_com_server() -> Result<String, String> {
     tracing::info!(command = "register_com_server", "handling");
     #[cfg(target_os = "windows")]
     {
-        crate::com::register()?;
+        let was_active = matches!(
+            crate::com::check_registration(),
+            crate::com::RegistrationStatus::PathMismatch { .. }
+        );
+        crate::com::register(was_active)?;
         tracing::info!(
             command = "register_com_server",
             "OK — registry keys written"
@@ -290,7 +293,7 @@ pub fn unregister_com_server() -> Result<String, String> {
     tracing::info!(command = "unregister_com_server", "handling");
     #[cfg(target_os = "windows")]
     {
-        crate::com::unregister()?;
+        crate::com::unregister(true)?;
         tracing::info!(command = "unregister_com_server", "OK");
         Ok("COM server unregistered successfully.".to_string())
     }
@@ -348,6 +351,45 @@ pub async fn get_operations(
     match &result {
         Ok(ops) => tracing::info!(command = "get_operations", count = ops.len(), "OK"),
         Err(e) => tracing::error!(command = "get_operations", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Delete a single operation from the history by its identifier.
+#[tauri::command]
+pub async fn delete_operation(
+    state: State<'_, AppState>,
+    operation_id: String,
+) -> Result<(), String> {
+    tracing::info!(command = "delete_operation", operation_id = %operation_id, "handling");
+    let id = OperationId::from_string(&operation_id).map_err(|e| {
+        tracing::error!(command = "delete_operation", error = %e, "invalid operation ID");
+        format!("Invalid operation ID: {}", e)
+    })?;
+    let result = state
+        .facade
+        .delete_operation(id)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "delete_operation", "OK"),
+        Err(e) => tracing::error!(command = "delete_operation", error = %e, "FAIL"),
+    }
+    result
+}
+
+/// Clear the entire operation history.
+#[tauri::command]
+pub async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
+    tracing::info!(command = "clear_history", "handling");
+    let result = state
+        .facade
+        .clear_history()
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "clear_history", "OK"),
+        Err(e) => tracing::error!(command = "clear_history", error = %e, "FAIL"),
     }
     result
 }
@@ -578,7 +620,6 @@ pub fn get_app_metadata() -> crate::metadata::AppMetadata {
 #[tauri::command]
 pub async fn quit_app(app: AppHandle) -> Result<(), String> {
     tracing::info!("quit_app command — performing full shutdown");
-
     #[cfg(target_os = "windows")]
     {
         let pid_path = crate::platform::paths::pid_file_path();
@@ -588,13 +629,75 @@ pub async fn quit_app(app: AppHandle) -> Result<(), String> {
         }
     }
 
-    // Best-effort COM cleanup so Explorer releases the DLL from memory.
+    // Best-effort COM cleanup: remove registry keys so Explorer stops loading
+    // the DLL. Explorer is NOT restarted here — on every app exit that caused the
+    // reported endless Explorer restart loop.
     #[cfg(target_os = "windows")]
     {
-        let _ = crate::com::unregister();
+        let _ = crate::com::unregister(false);
     }
 
     tracing::info!("all cleanup done, exiting");
     app.exit(0);
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Queue commands
+// ---------------------------------------------------------------------------
+
+/// Enqueue a file operation for asynchronous execution by the persistent
+/// job worker. Returns the generated job id.
+#[tauri::command]
+pub async fn enqueue_operation(
+    state: State<'_, AppState>,
+    command: quicksort_ipc_contract::ExecuteOperationData,
+) -> Result<String, String> {
+    tracing::info!(command = "enqueue_operation", "handling");
+    let job_id = state.queue.enqueue(command).map_err(|e| {
+        tracing::error!(command = "enqueue_operation", error = %e, "FAIL");
+        e
+    })?;
+    tracing::info!(command = "enqueue_operation", job_id = %job_id.id, "OK");
+    Ok(job_id.id)
+}
+
+/// Enqueue a file operation (application DTO, as used by the frontend) for
+/// asynchronous execution by the persistent job worker. Returns the job id.
+#[tauri::command]
+pub async fn enqueue_operation_v2(
+    state: State<'_, AppState>,
+    command: quicksort_application::OperationCommand,
+) -> Result<String, String> {
+    tracing::info!(command = "enqueue_operation_v2", op_type = ?command.operation_type, sources = ?command.source_paths, "handling");
+    let data = crate::queue::command_to_execute_data(&command);
+    let job_id = state.queue.enqueue(data).map_err(|e| {
+        tracing::error!(command = "enqueue_operation_v2", error = %e, "FAIL");
+        e
+    })?;
+    tracing::info!(command = "enqueue_operation_v2", job_id = %job_id.id, "OK");
+    Ok(job_id.id)
+}
+
+/// List all queue jobs (queued, running, completed, failed, canceled).
+#[tauri::command]
+pub async fn get_jobs(
+    state: State<'_, AppState>,
+) -> Result<Vec<quicksort_ipc_contract::JobDto>, String> {
+    tracing::info!(command = "get_jobs", "handling");
+    let jobs = state.queue.list();
+    tracing::info!(command = "get_jobs", count = jobs.len(), "OK");
+    Ok(jobs)
+}
+
+/// Cancel a queued (not yet started) job.
+#[tauri::command]
+pub async fn cancel_job(state: State<'_, AppState>, job_id: String) -> Result<(), String> {
+    tracing::info!(command = "cancel_job", job_id = %job_id, "handling");
+    let result = state.queue.cancel(&job_id).map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => tracing::info!(command = "cancel_job", "OK"),
+        Err(e) => tracing::error!(command = "cancel_job", error = %e, "FAIL"),
+    }
+    result
 }

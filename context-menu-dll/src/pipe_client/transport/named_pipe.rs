@@ -2,21 +2,52 @@ use super::PipeTransport;
 use crate::pipe_client::error::PipeError;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_PIPE_BUSY, GENERIC_READ, GENERIC_WRITE, HANDLE,
+    CloseHandle, GetLastError, ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, GENERIC_READ, GENERIC_WRITE,
+    HANDLE,
 };
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, ReadFile, WriteFile, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE,
     OPEN_EXISTING,
 };
-use windows::Win32::System::Pipes::WaitNamedPipeW;
+use windows::Win32::System::Pipes::{PeekNamedPipe, WaitNamedPipeW};
 
 const PIPE_NAME: &str = r"\\.\pipe\quicksort_cmd";
 const CONNECT_TIMEOUT_MS: u32 = 500;
-const MAX_RETRIES: u32 = 5;
+const MAX_RETRIES: u32 = 10;
 const RETRY_INTERVAL_MS: u64 = 50;
+
+/// Maximum time the client waits for the server's response frame.
+///
+/// Local named pipes cannot express a read time-out via
+/// `SetNamedPipeHandleState` (that only applies to remote pipes), so
+/// `receive()` polls `PeekNamedPipe` and gives up after this deadline.
+/// Without this bound a stuck or missing server would block the Explorer
+/// thread forever.
+const READ_TIMEOUT_MS: u64 = 60_000;
+
+/// Waits until at least `needed` bytes are buffered in the pipe or the
+/// `deadline` expires.
+///
+/// `PeekNamedPipe` never blocks, so this loop gives the caller a hard upper
+/// bound on how long it can stall waiting for a server response.
+fn wait_for_bytes(handle: HANDLE, needed: u32, deadline: Instant) -> Result<(), PipeError> {
+    loop {
+        let mut available = 0u32;
+        unsafe {
+            PeekNamedPipe(handle, None, 0, None, Some(&mut available), None)?;
+        }
+        if available >= needed {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(PipeError::Timeout);
+        }
+        std::thread::sleep(Duration::from_millis(RETRY_INTERVAL_MS));
+    }
+}
 
 pub struct PipeHandle(HANDLE);
 
@@ -65,7 +96,11 @@ impl PipeTransport for NamedPipeTransport {
                 let wait_result = WaitNamedPipeW(pipe_name, CONNECT_TIMEOUT_MS);
                 if !wait_result.as_bool() {
                     let err = GetLastError();
-                    if err == ERROR_PIPE_BUSY {
+                    // The pipe may not exist yet (the Tauri IPC server is still
+                    // starting) or be momentarily busy. Both are transient, so
+                    // keep retrying until the server is ready instead of failing
+                    // the very first Explorer operation after launch.
+                    if err == ERROR_PIPE_BUSY || err == ERROR_FILE_NOT_FOUND {
                         if attempts >= self.retries {
                             return Err(PipeError::Busy);
                         }
@@ -116,6 +151,10 @@ impl PipeTransport for NamedPipeTransport {
 
     fn receive(&mut self) -> Result<Vec<u8>, PipeError> {
         let handle = self.handle.as_ref().ok_or(PipeError::Unavailable)?;
+        let deadline = Instant::now() + Duration::from_millis(READ_TIMEOUT_MS);
+
+        // Ensure the 4-byte length prefix has arrived before the blocking read.
+        wait_for_bytes(handle.as_handle(), 4, deadline)?;
 
         let mut len_buf = [0u8; 4];
         let mut bytes_read = 0u32;
@@ -141,6 +180,13 @@ impl PipeTransport for NamedPipeTransport {
                 max: 1024 * 1024,
             });
         }
+
+        // The 4-byte length prefix has already been consumed by the ReadFile
+        // above, so only `payload_len` payload bytes remain buffered in the
+        // pipe. Waiting for `4 + payload_len` would never be satisfied, since
+        // the prefix bytes are no longer available, and the client would stall
+        // until the timeout fires.
+        wait_for_bytes(handle.as_handle(), payload_len as u32, deadline)?;
 
         let mut payload = vec![0u8; payload_len];
         let mut total_read = 0usize;

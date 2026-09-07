@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { App } from 'antd';
+import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '../lib/invoke';
 import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
@@ -10,6 +11,12 @@ interface SelectorPageProps {
     onClose: () => void;
 }
 
+interface SelectorSettings {
+    default_operation?: 'Move' | 'Copy';
+    default_overwrite_policy?: 'Skip' | 'Overwrite' | 'AutoRename';
+    duplicate_check?: { mode?: 'name' | 'size' | 'content' };
+}
+
 const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
     const { t } = useTranslation();
     const [folders, setFolders] = useState<Folder[]>([]);
@@ -17,6 +24,9 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
     const [showAddFolder, setShowAddFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [newFolderPath, setNewFolderPath] = useState('');
+    const [operation, setOperation] = useState<'Move' | 'Copy'>('Move');
+    const [overwritePolicy, setOverwritePolicy] = useState<'Skip' | 'Overwrite' | 'AutoRename'>('Skip');
+    const [dupCheckMode, setDupCheckMode] = useState<'name' | 'size' | 'content'>('name');
     const { message } = App.useApp();
 
     const loadFolders = () => {
@@ -34,6 +44,13 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
     useEffect(() => {
         logger.action('SelectorPage', `mount — loading folders for ${files.length} file(s)`);
         loadFolders();
+        invoke<SelectorSettings>('get_settings')
+            .then((settings) => {
+                if (settings.default_operation) setOperation(settings.default_operation);
+                if (settings.default_overwrite_policy) setOverwritePolicy(settings.default_overwrite_policy);
+                if (settings.duplicate_check?.mode) setDupCheckMode(settings.duplicate_check.mode);
+            })
+            .catch((err) => logger.error('SelectorPage', 'failed to load settings', err));
     }, []);
 
     const filtered = folders.filter(
@@ -50,21 +67,22 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
             message.error(t('selector.no_files'));
             return;
         }
-        logger.action('SelectorPage', `move ${files.length} file(s) -> "${folder.name}" (${folder.path})`);
+        logger.action('SelectorPage', `queue ${files.length} file(s) -> "${folder.name}" (${folder.path})`);
         try {
             const command: OperationCommand = {
-                operation_type: 'Move',
+                operation_type: operation,
                 source_paths: files,
                 target_folder_id: folder.id,
                 target_paths: null,
-                overwrite_policy: 'Skip',
+                overwrite_policy: overwritePolicy,
+                duplicate_check_mode: dupCheckMode,
             };
-            const result = await invoke('execute_operation_v2', { command });
-            logger.info('SelectorPage', 'files moved successfully', result);
-            message.success(t('selector.move_success', { count: files.length, folder: folder.name }));
+            const jobId = await invoke<string>('enqueue_operation_v2', { command });
+            logger.info('SelectorPage', 'job queued successfully', jobId);
+            message.success(t('selector.queued', { count: files.length, folder: folder.name }));
             onClose();
         } catch (err) {
-            logger.error('SelectorPage', 'move files failed', err);
+            logger.error('SelectorPage', 'queue files failed', err);
             message.error(`${t('selector.move_error')} ${err}`);
         }
     };
@@ -86,6 +104,16 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
         }
     };
 
+    const handleBrowseFolder = async () => {
+        const selected = await open({ directory: true });
+        if (selected && typeof selected === 'string') {
+            setNewFolderPath(selected);
+            if (!newFolderName.trim()) {
+                setNewFolderName(selected.split('\\').pop() || selected);
+            }
+        }
+    };
+
     const inputStyle = {
         width: '100%',
         background: 'var(--qs-bg-secondary)',
@@ -95,6 +123,27 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
         color: 'var(--qs-text-primary)',
         fontFamily: 'var(--qs-font-body)',
         fontSize: '13px',
+        outline: 'none',
+    };
+
+    const optionLabelStyle: React.CSSProperties = {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontFamily: 'var(--qs-font-body)',
+        fontSize: '13px',
+        color: 'var(--qs-text-secondary)',
+    };
+
+    const optionSelectStyle: React.CSSProperties = {
+        background: 'var(--qs-bg-secondary)',
+        border: '1px solid var(--qs-border)',
+        borderRadius: 'var(--qs-radius-sm)',
+        padding: '6px 10px',
+        color: 'var(--qs-text-primary)',
+        fontFamily: 'var(--qs-font-body)',
+        fontSize: '13px',
+        cursor: 'pointer',
         outline: 'none',
     };
 
@@ -130,6 +179,52 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
                         : t('selector.files_count', { count: files.length })}
                 </div>
             </header>
+
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                padding: '8px 16px',
+                borderBottom: '1px solid var(--qs-border)',
+                background: 'var(--qs-bg-tertiary)',
+                flexWrap: 'wrap',
+            }}>
+                <label style={optionLabelStyle}>
+                    <span>{t('selector.options.operation')}</span>
+                    <select
+                        value={operation}
+                        onChange={(e) => setOperation(e.target.value as 'Move' | 'Copy')}
+                        style={optionSelectStyle}
+                    >
+                        <option value="Move">{t('settings.default_actions.move')}</option>
+                        <option value="Copy">{t('settings.default_actions.copy')}</option>
+                    </select>
+                </label>
+                <label style={optionLabelStyle}>
+                    <span>{t('selector.options.overwrite')}</span>
+                    <select
+                        value={overwritePolicy}
+                        onChange={(e) => setOverwritePolicy(e.target.value as 'Skip' | 'Overwrite' | 'AutoRename')}
+                        style={optionSelectStyle}
+                    >
+                        <option value="Skip">{t('settings.duplicates.skip')}</option>
+                        <option value="Overwrite">{t('settings.duplicates.overwrite')}</option>
+                        <option value="AutoRename">{t('settings.duplicates.auto_rename')}</option>
+                    </select>
+                </label>
+                <label style={optionLabelStyle}>
+                    <span>{t('selector.options.duplicate')}</span>
+                    <select
+                        value={dupCheckMode}
+                        onChange={(e) => setDupCheckMode(e.target.value as 'name' | 'size' | 'content')}
+                        style={optionSelectStyle}
+                    >
+                        <option value="name">{t('settings.duplicate_check.quick')}</option>
+                        <option value="size">{t('settings.duplicate_check.medium')}</option>
+                        <option value="content">{t('settings.duplicate_check.deep')}</option>
+                    </select>
+                </label>
+            </div>
 
             <div className="selector-search">
                 <input
@@ -206,13 +301,31 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
                         onChange={(e) => setNewFolderName(e.target.value)}
                         style={inputStyle}
                     />
-                    <input
-                        type="text"
-                        placeholder={t('selector.add_folder_path')}
-                        value={newFolderPath}
-                        onChange={(e) => setNewFolderPath(e.target.value)}
-                        style={inputStyle}
-                    />
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                            type="text"
+                            placeholder={t('selector.add_folder_path')}
+                            value={newFolderPath}
+                            onChange={(e) => setNewFolderPath(e.target.value)}
+                            style={{ ...inputStyle, flex: 1 }}
+                        />
+                        <button
+                            onClick={handleBrowseFolder}
+                            style={{
+                                padding: '8px 12px',
+                                background: 'var(--qs-bg-secondary)',
+                                border: '1px solid var(--qs-border)',
+                                borderRadius: 'var(--qs-radius-sm)',
+                                color: 'var(--qs-text-secondary)',
+                                fontFamily: 'var(--qs-font-body)',
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            {t('selector.browse')}
+                        </button>
+                    </div>
                     <button
                         onClick={handleAddFolder}
                         style={{

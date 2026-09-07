@@ -5,7 +5,6 @@ import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
 import FolderList from '../components/FolderList';
 import AddFolderButton from '../components/AddFolderButton';
-import StatusIndicator from '../components/StatusIndicator';
 import { Folder } from '../types';
 
 const AUTO_COLORS = [
@@ -119,20 +118,27 @@ const EditorPage: React.FC = () => {
         }
     };
 
-    const handleApply = async (newFolders: Folder[]) => {
-        setFolders(newFolders);
+    const handleRemove = async (id: string) => {
+        logger.action('EditorPage', `remove folder: ${id}`);
+        try {
+            await invoke('remove_folder_v2', { id });
+            setFolders(folders => folders.filter(f => f.id !== id));
+            logger.info('EditorPage', `folder removed: ${id}`);
+        } catch (err) {
+            logger.error('EditorPage', 'remove folder failed', err);
+            message.error(`${t('editor.remove_error')} ${err}`);
+        }
     };
 
     return (
         <div>
-            <StatusIndicator />
             <AddFolderButton onFolderAdded={handleAddFolder} />
             <FolderList
                 folders={folders}
                 onRename={handleRename}
                 onToggleFavorite={handleToggleFavorite}
                 onSetColor={handleSetColor}
-                onApply={handleApply}
+                onRemove={handleRemove}
             />
         </div>
     );

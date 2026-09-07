@@ -16,11 +16,22 @@ use std::fs;
 use std::path::PathBuf;
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
-use windows::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+use windows::Win32::System::Threading::{
+    GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 
 fn pid_file_path() -> Option<PathBuf> {
     let appdata = std::env::var("APPDATA").ok()?;
-    Some(PathBuf::from(appdata).join("QuickSort").join("dll_owner.pid"))
+    Some(
+        PathBuf::from(appdata)
+            .join("QuickSort")
+            // The app writes the PID via `config_dir()` which the `directories`
+            // crate resolves to `%APPDATA%\QuickSort\config\` (see the folders.json
+            // handling in shellext.rs). Reading the owner PID from the root here
+            // would miss the file, make the owner look dead, and hide the menu.
+            .join("config")
+            .join("dll_owner.pid"),
+    )
 }
 
 fn read_owner_pid() -> Option<u32> {

@@ -141,13 +141,12 @@ fn write_registry_keys() -> Result<(), String> {
     Ok(())
 }
 
-/// Register COM server keys. Explorer picks up the handler on next context menu invocation.
-pub fn register() -> Result<(), String> {
-    // Remove stale handler keys from previous versions that are no longer in HANDLERS.
-    // `*` was removed because Windows file-type ProgIDs override it.
-    // `Directory\Background` was removed because it shows the menu on desktop right-click.
-    // `Directory` and `Drive` were removed because they cause double entries for shortcuts
-    // and inconsistent positioning across file types.
+/// Remove stale handler keys from previous versions that are no longer in HANDLERS.
+/// `*` was removed because Windows file-type ProgIDs override it.
+/// `Directory\Background` was removed because it shows the menu on desktop right-click.
+/// `Directory` and `Drive` were removed because they cause double entries for shortcuts
+/// and inconsistent positioning across file types.
+fn remove_stale_handler_keys() {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let stale_handlers = ["*", "Directory\\Background", "Directory", "Drive"];
     for handler in &stale_handlers {
@@ -167,12 +166,38 @@ pub fn register() -> Result<(), String> {
             }
         }
     }
+}
 
+/// Register COM server keys.
+///
+/// `was_active` tells us whether a previous registration already existed with a
+/// DLL that Explorer might have mapped. Explorer is only restarted when a
+/// change actually requires it (upgrade or path move), never on a fresh
+/// install — restarting on first launch would needlessly poke Explorer and make
+/// the installer appear to touch the shell.
+pub fn register(was_active: bool) -> Result<(), String> {
+    remove_stale_handler_keys();
     write_registry_keys()?;
+    // Only restart Explorer if an old copy of the DLL may already be mapped in
+    // it (upgrade / path change). On a first-time registration nothing is mapped,
+    // so restarting just to "pick up" the handler is unnecessary and disruptive.
+    if was_active {
+        restart_explorer();
+    }
     Ok(())
 }
 
-pub fn unregister() -> Result<(), String> {
+/// Unregister COM server keys.
+///
+/// `restart` controls whether Explorer is restarted afterwards. Restarting is
+/// only needed when the in-memory DLL must be unloaded right away (explicit
+/// unregister / uninstall). Normal application quit should NOT kill Explorer —
+/// doing so on every exit is what caused Explorer to appear to close in a loop.
+pub fn unregister(restart: bool) -> Result<(), String> {
+    // Also clean up stale handlers from older versions so no dead
+    // QuickSort entries remain in Explorer after uninstall.
+    remove_stale_handler_keys();
+
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
     // Delete handler keys so Explorer won't load this extension anymore.
@@ -199,18 +224,39 @@ pub fn unregister() -> Result<(), String> {
         }
     }
 
-    // Restart Explorer so it unloads the DLL from memory.
-    restart_explorer();
+    if restart {
+        // Restart Explorer so it unloads the DLL from memory.
+        restart_explorer();
+    }
 
     Ok(())
 }
 
 /// Restart Explorer so it re-reads COM handler registrations from the registry.
+///
+/// The old Explorer process is killed, then we poll until it has actually
+/// terminated (with a timeout) before spawning a fresh instance. Spawning too
+/// early while the shell is still shutting down is what left the taskbar
+/// missing and Explorer failing to come back.
 fn restart_explorer() {
-    tracing::info!("Restarting Explorer to pick up new COM registration");
+    tracing::info!("Restarting Explorer to apply COM registration change");
     let _ = Command::new("taskkill")
         .args(["/f", "/im", "explorer.exe"])
         .output();
-    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // Wait (up to 5s) for every explorer.exe to exit before relaunching.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let running = Command::new("tasklist")
+            .args(["/fi", "imagename eq explorer.exe", "/fo", "csv", "/nh"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains("explorer.exe"))
+            .unwrap_or(false);
+        if !running || std::time::Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+
     let _ = Command::new("explorer.exe").spawn();
 }

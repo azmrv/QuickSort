@@ -44,6 +44,22 @@ use crate::pipe_client::{move_to_folder, select_folder};
 /// Loaded once on first use.
 static APP_ICON_BITMAP: OnceLock<Option<usize>> = OnceLock::new();
 
+/// Tracks the most recent all-.lnk selection so we can suppress the
+/// target-instance QCM call that Explorer fires immediately after.
+///
+/// Explorer calls QueryContextMenu twice for a shortcut: once for the .lnk
+/// file itself (lnk-instance) and once for the resolved target (target-instance).
+/// We render on the lnk-instance (so item_paths are the .lnk files) and bail on
+/// the target-instance (so the menu does not appear for the resolved target).
+///
+/// Detection heuristic: the two calls arrive within milliseconds of each other
+/// and the target-instance path count always matches the lnk-instance count.
+struct LnkSelectionState {
+    path_count: usize,
+    at: std::time::Instant,
+}
+static LNK_SELECTION_STATE: Mutex<Option<LnkSelectionState>> = Mutex::new(None);
+
 fn get_app_icon_bitmap() -> Option<windows::Win32::Graphics::Gdi::HBITMAP> {
     let opt = APP_ICON_BITMAP
         .get_or_init(|| icon::load_app_icon_bitmap().map(|bmp| bmp.0.expose_provenance()));
@@ -103,7 +119,6 @@ struct MenuFolder {
 pub struct QuickSortShellExt {
     item_paths: RefCell<Vec<PathBuf>>,
     folders: Mutex<Vec<MenuFolder>>,
-    min_cmd_id: std::cell::Cell<u32>,
 }
 
 impl Default for QuickSortShellExt {
@@ -114,7 +129,6 @@ impl Default for QuickSortShellExt {
         Self {
             item_paths: Default::default(),
             folders: Mutex::new(Vec::new()),
-            min_cmd_id: std::cell::Cell::new(0),
         }
     }
 }
@@ -343,6 +357,37 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                 log::info!("QueryContextMenu: no item paths, skipping (system dialog?)");
                 return S_OK;
             }
+
+            let all_shortcuts = paths.iter().all(|p| {
+                p.is_file()
+                    && p.extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("lnk"))
+            });
+
+            if all_shortcuts {
+                // lnk-instance: render menu here (item_paths = .lnk files → move
+                // the shortcuts themselves, not their targets). Record state so
+                // we can suppress the target-instance that follows immediately.
+                *LNK_SELECTION_STATE.lock() = Some(LnkSelectionState {
+                    path_count: paths.len(),
+                    at: std::time::Instant::now(),
+                });
+                log::info!(
+                    "QueryContextMenu: {} .lnk shortcuts — rendering on lnk-instance",
+                    paths.len()
+                );
+            } else if let Some(state) = LNK_SELECTION_STATE.lock().as_ref() {
+                if state.at.elapsed() < std::time::Duration::from_secs(2)
+                    && paths.len() == state.path_count
+                {
+                    log::info!(
+                        "QueryContextMenu: suppressing target-instance ({} paths, {}ms after lnk-instance)",
+                        paths.len(),
+                        state.at.elapsed().as_millis()
+                    );
+                    return S_OK;
+                }
+            }
         }
 
         let folders = match load_folders_from_json() {
@@ -353,7 +398,6 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             }
         };
 
-        self.this.min_cmd_id.set(min_cmd_id);
         *self.this.folders.lock() = folders.clone();
 
         let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
@@ -369,6 +413,17 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             favorites.len() as u32,
             available.saturating_sub(bottom_items),
         );
+
+        // QA report: for folders Explorer passes a larger menu_index (folder menus
+        // contain more built-in entries), which pushed "QuickSort" below the
+        // separator into the second section. Insert at the very top (position 0)
+        // when the selection contains at least one folder so the entry always
+        // stays in the first section.
+        let insert_at = if self.this.item_paths.borrow().iter().any(|p| p.is_dir()) {
+            0
+        } else {
+            menu_index
+        };
 
         unsafe {
             let h_submenu = CreatePopupMenu().unwrap();
@@ -448,7 +503,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             );
             let _ = InsertMenuItemW(
                 menu,
-                menu_index,
+                insert_at,
                 true,
                 &MENUITEMINFOW {
                     fMask: MIIM_ID | MIIM_STATE | MIIM_STRING | MIIM_BITMAP | MIIM_SUBMENU,
@@ -468,9 +523,20 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             return E_POINTER.ok();
         }
         let ici = unsafe { *info };
-        // Explorer sends the wID from InsertMenuItemW in the low 16 bits of lpVerb.
-        // The dispatch below uses wID-based lookup, not position-based.
-        let verb = (ici.lpVerb.0 as usize) & 0xFFFF;
+        // Explorer passes the selected command in the low 16 bits of lpVerb as a
+        // 0-based SLOT offset (relative to the idCmdFirst value we received in
+        // QueryContextMenu), NOT as an absolute menu ID. When HIWORD(lpVerb) is
+        // non-zero, lpVerb is a canonical string verb (foreign — we define no
+        // string verbs), so those are ignored.
+        if (ici.lpVerb.0 as usize) & 0xFFFF_0000 != 0 {
+            log::warn!("InvokeCommand: string verbs are not supported, ignoring");
+            return E_FAIL.ok();
+        }
+        // Low word is already the slot index used inside QueryContextMenu
+        // (0.. favorites / separator / "Все папки..." / "Выбрать путь...").
+        // Do NOT compare it against min_cmd_id: slots are small numbers and
+        // every real click (verb=1,4,5 in the field) was wrongly rejected.
+        let command = (ici.lpVerb.0 as usize) & 0xFFFF;
 
         let folders = self.this.folders.lock();
         let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
@@ -490,20 +556,20 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         }
 
         log::info!(
-            "InvokeCommand: verb={}, max_fav={}, sources={}",
-            verb,
+            "InvokeCommand: slot={}, max_fav={}, sources={}",
+            command,
             max_fav,
             sources.len()
         );
 
-        // Position 0..max_fav-1 → favorite folder
-        if verb < max_fav {
-            let target = favorites[verb];
+        // Slot 0..max_fav-1 → favorite folder (mirrors QueryContextMenu)
+        if command < max_fav {
+            let target = favorites[command];
             log::info!("Moving to: {} ({})", target.name, target.id);
 
             let target_id = target.id.clone();
             std::thread::spawn(move || {
-                match move_to_folder(sources, target_id, OverwritePolicy::Skip) {
+                match move_to_folder(sources, target_id, OverwritePolicy::Default) {
                     Ok(resp) => {
                         log::info!("Move OK: {:?}", resp);
                     }
@@ -512,20 +578,19 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                     }
                 }
             });
-        // Position max_fav = separator (not clickable)
-        // Position max_fav+1 = "All folders" (only if has_all_folders_entry)
-        // Position max_fav+2 (or max_fav+1) = "Choose path"
+        // Slot layout mirrors QueryContextMenu:
+        // favorites [max_fav], separator (only when favorites exist),
+        // "Все папки..." (only when folders non-empty), "Выбрать путь..." always.
         } else {
-            // Calculate the ID for "All folders" and "Choose path"
             let has_folders = !folders.is_empty();
-            let all_folders_id = max_fav + 1; // separator + 1
+            let all_folders_id = max_fav + usize::from(max_fav > 0); // after favorites + separator
             let choose_path_id = if has_folders {
                 all_folders_id + 1
             } else {
                 all_folders_id
             };
 
-            if verb == all_folders_id && has_folders {
+            if command == all_folders_id && has_folders {
                 // "Все папки..." — open folder selector via IPC pipe
                 let source_clone = sources.clone();
                 std::thread::spawn(move || match select_folder(source_clone) {
@@ -536,9 +601,11 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
                         log::error!("SelectFolder failed: {}", e);
                     }
                 });
-            } else if verb == choose_path_id {
+            } else if command == choose_path_id {
                 // "Выбрать путь..." — open native folder picker
                 self.handle_choose_path(sources);
+            } else {
+                log::warn!("InvokeCommand: unhandled command slot {}", command);
             }
         }
 
@@ -611,7 +678,7 @@ impl QuickSortShellExt_Impl {
                     match crate::pipe_client::client::move_to_path(
                         sources_clone,
                         target,
-                        quicksort_ipc_contract::OverwritePolicy::AutoRename,
+                        quicksort_ipc_contract::OverwritePolicy::Default,
                     ) {
                         Ok(resp) => {
                             log::info!(
@@ -640,9 +707,13 @@ impl QuickSortShellExt_Impl {
 // ============================================================================
 
 fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
+    // Keep in sync with the app's `platform::paths::folders_config_path()`:
+    // the `directories` crate resolves config to `%APPDATA%\QuickSort\config\`.
+    // Regression 3c87501 left the DLL reading the root, which emptied the menu.
     let appdata = std::env::var("APPDATA").map_err(|_| "APPDATA not set".to_string())?;
     let mut path = PathBuf::from(appdata);
     path.push("QuickSort");
+    path.push("config");
     path.push("folders.json");
 
     if !path.exists() {

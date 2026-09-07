@@ -83,6 +83,12 @@ impl OperationRepository for JsonOperationRepository {
     async fn load_all(&self) -> Result<Vec<Operation>, UseCaseError> {
         self.load_from_file()
     }
+
+    async fn clear(&self) -> Result<(), UseCaseError> {
+        // Write an empty array so an existing JSON file keeps a valid shape
+        // (rather than being deleted), which stays consistent with load/save.
+        self.save_to_file(&[])
+    }
 }
 
 // ---------------------------------------------------------------------------

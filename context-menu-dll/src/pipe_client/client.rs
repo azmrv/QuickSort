@@ -49,6 +49,7 @@ pub fn move_to_folder(
         target_folder_id: Some(target_folder_id),
         target_folder_path: None,
         overwrite_policy,
+        duplicate_check_mode: None,
     });
     send_command(&cmd)
 }
@@ -69,6 +70,7 @@ pub fn move_to_path(
         target_folder_id: None,
         target_folder_path: Some(target_path),
         overwrite_policy,
+        duplicate_check_mode: None,
     });
     send_command(&cmd)
 }

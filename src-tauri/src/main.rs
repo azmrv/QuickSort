@@ -9,6 +9,7 @@ mod metadata;
 mod pending;
 mod platform;
 mod progress;
+mod queue;
 mod state;
 
 use clap::{Parser, Subcommand};
@@ -16,7 +17,7 @@ use state::AppState;
 use std::sync::Arc;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
-    tray::TrayIconBuilder,
+    tray::{TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
 
@@ -36,6 +37,10 @@ use quicksort_infrastructure::JsonConfigurationRepository;
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
+
+    /// Register the COM server and exit
+    #[arg(long)]
+    register: bool,
 
     /// Unregister the COM server and exit
     #[arg(long)]
@@ -112,9 +117,30 @@ fn main() {
     let cli = Cli::parse();
 
     #[cfg(target_os = "windows")]
+    if cli.register {
+        tracing::info!("--register flag: registering COM server and exiting");
+        let was_active = matches!(
+            com::check_registration(),
+            com::RegistrationStatus::PathMismatch { .. }
+        );
+        match com::register(was_active) {
+            Ok(()) => {
+                tracing::info!("COM server registered successfully");
+                println!("COM server registered successfully.");
+            }
+            Err(e) => {
+                tracing::error!("Failed to register COM server: {}", e);
+                eprintln!("Failed to register COM server: {}", e);
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+
+    #[cfg(target_os = "windows")]
     if cli.unregister {
         tracing::info!("--unregister flag: unregistering COM server and exiting");
-        match com::unregister() {
+        match com::unregister(true) {
             Ok(()) => {
                 tracing::info!("COM server unregistered successfully");
                 println!("COM server unregistered successfully.");
@@ -237,15 +263,39 @@ fn start_tauri() {
         .with_plugin_manager(Arc::new(plugin_manager_use_case)),
     );
 
+    // Shared operation queue — persists jobs to queue.json and runs them
+    // one at a time on a dedicated worker thread.
+    let queue_path = platform::paths::queue_config_path();
+
+    // Migration: queue.json now lives in the data directory. Carry pending jobs
+    // over (best-effort) so a partially processed queue is not silently dropped
+    // on upgrade. A failed migration just starts with an empty queue.
+    let legacy_queue_path = platform::paths::config_dir().join("queue.json");
+    if !queue_path.exists() && legacy_queue_path.exists() {
+        if let Some(parent) = queue_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Err(e) = std::fs::rename(&legacy_queue_path, &queue_path) {
+            tracing::warn!("failed to migrate queue.json from config dir: {e}");
+        }
+    }
+
+    let job_queue = queue::JobQueue::new(queue_path, Arc::clone(&facade), crate::ipc::op_lock());
+    job_queue.start_worker();
+
     let facade_for_ipc = Arc::clone(&facade);
+    let queue_for_ipc = Arc::clone(&job_queue);
     std::thread::Builder::new()
         .name("ipc-pipe-server".into())
         .spawn(move || {
-            crate::ipc::server::start_pipe_server(facade_for_ipc);
+            crate::ipc::server::start_pipe_server(facade_for_ipc, queue_for_ipc);
         })
         .expect("failed to spawn IPC pipe server thread");
 
-    let app_state = AppState { facade };
+    let app_state = AppState {
+        facade,
+        queue: job_queue,
+    };
 
     tauri::Builder::default()
         // Single-instance must be first so it can intercept second launches
@@ -263,12 +313,6 @@ fn start_tauri() {
 
                     crate::pending::set_pending_file(file.to_string());
 
-                    // Show and focus the existing main window
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
-
                     // Emit event so the frontend switches to selector mode
                     let _ = app.emit(
                         "pending-file",
@@ -277,6 +321,14 @@ fn start_tauri() {
                         },
                     );
                 }
+            }
+
+            // A second launch (shortcut click or repeat run) restores the
+            // hidden-to-tray main window and brings it to the front.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
             }
         }))
         .plugin(tauri_plugin_dialog::init())
@@ -301,6 +353,8 @@ fn start_tauri() {
             commands::get_settings,
             commands::save_settings,
             commands::get_operations,
+            commands::delete_operation,
+            commands::clear_history,
             commands::launch_teracopy,
             commands::check_teracopy_installed,
             commands::create_new_folder,
@@ -312,11 +366,16 @@ fn start_tauri() {
             commands::search_files,
             commands::get_app_metadata,
             commands::quit_app,
+            commands::enqueue_operation,
+            commands::enqueue_operation_v2,
+            commands::get_jobs,
+            commands::cancel_job,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());
             progress::set_app_handle(app.handle().clone());
             crate::ipc::set_app_handle(app.handle().clone());
+            queue::set_app_handle(app.handle().clone());
 
             #[cfg(target_os = "windows")]
             {
@@ -335,7 +394,13 @@ fn start_tauri() {
                             | RegistrationStatus::PathMismatch { .. } => {
                                 tracing::info!("COM registration: {} — registering", status);
                                 let _ = handle.emit("com-status", "registering");
-                                match com::register() {
+                                // Explorer needs a restart only when an older copy of the DLL
+                                // may already be mapped in it (upgrade / path change). A fresh
+                                // install has nothing mapped, so no restart is required — this
+                                // also keeps the installer from appearing to poke Explorer.
+                                let was_active =
+                                    matches!(status, RegistrationStatus::PathMismatch { .. });
+                                match com::register(was_active) {
                                     Ok(()) => {
                                         tracing::info!("COM registered");
                                         let _ = handle.emit("com-status", "active");
@@ -375,15 +440,28 @@ fn start_tauri() {
                     }
                     "quit" => {
                         tracing::info!("tray quit — performing cleanup");
-                        // Best-effort COM cleanup so Explorer releases the DLL from memory.
+                        // Best-effort COM cleanup: remove registry keys so Explorer
+                        // stops loading the shell extension. Explorer is NOT restarted
+                        // here — restarting it on every app exit is what caused the
+                        // reported endless Explorer restart loop.
                         #[cfg(target_os = "windows")]
                         {
-                            let _ = crate::com::unregister();
+                            let _ = crate::com::unregister(false);
                         }
                         tracing::info!("all cleanup done, exiting");
                         app.exit(0);
                     }
                     _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::DoubleClick { .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
                 })
                 .build(app)?;
             Ok(())
@@ -394,8 +472,9 @@ fn start_tauri() {
                 // Hide to tray instead — the app keeps running in background.
                 // Full shutdown is via Settings page "Exit" button.
                 api.prevent_close();
-                if let Some(window) = window.app_handle().get_webview_window("main") {
-                    let _ = window.hide();
+                let label = window.label().to_string();
+                if let Some(win) = window.app_handle().get_webview_window(&label) {
+                    let _ = win.hide();
                 }
             }
         })

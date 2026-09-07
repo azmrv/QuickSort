@@ -4,16 +4,17 @@
 //! all platform-specific transport implementations.  The transport loop
 //! is generic over [`IpcTransport`].
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use quicksort_application::{
-    AbsolutePath, ApplicationFacadeImpl, DuplicateCheckMode, ExecuteOperation, FolderId,
-    GetFolders, OperationCommand, OperationType as DomainOpType,
-    OverwritePolicy as AppOverwritePolicy,
+    AbsolutePath, ApplicationFacadeImpl, DefaultOverwritePolicy, DuplicateCheckMode,
+    ExecuteOperation, FolderId, GetFolders, LoadSettings, OperationCommand,
+    OperationType as DomainOpType, OverwritePolicy as AppOverwritePolicy,
 };
 use quicksort_ipc_contract::{
-    CommandMessage, ExecuteOperationData, OperationType as IpcOpType,
-    OverwritePolicy as IpcOverwritePolicy, ResponseMessage, ResponseStatus, SelectFolderData,
+    CommandMessage, DuplicateCheckMode as IpcDuplicateCheckMode, ExecuteOperationData,
+    OperationType as IpcOpType, OverwritePolicy as IpcOverwritePolicy, ResponseMessage,
+    ResponseStatus, SelectFolderData,
 };
 
 use tauri::{Emitter, Manager};
@@ -39,7 +40,49 @@ fn convert_overwrite_policy(p: IpcOverwritePolicy) -> AppOverwritePolicy {
         IpcOverwritePolicy::Overwrite => AppOverwritePolicy::Overwrite,
         IpcOverwritePolicy::AutoRename => AppOverwritePolicy::AutoRename,
         IpcOverwritePolicy::Ask => AppOverwritePolicy::AutoRename, // non-interactive fallback
+        // Unreachable: Default is resolved to a concrete policy at the IPC
+        // boundary before conversion (see resolve_default_overwrite_policy).
+        IpcOverwritePolicy::Default => AppOverwritePolicy::Skip,
     }
+}
+
+/// Resolves the `Default` overwrite policy to the policy configured in
+/// settings.json (`default_overwrite_policy`), falling back to `Skip`.
+fn resolve_default_overwrite_policy(
+    facade: &Arc<ApplicationFacadeImpl>,
+    rt: &tokio::runtime::Runtime,
+) -> IpcOverwritePolicy {
+    let policy = match rt.block_on(facade.load_settings()) {
+        Ok(settings) => settings.default_overwrite_policy,
+        Err(e) => {
+            tracing::warn!(error = %e, "settings unavailable; falling back to Skip");
+            return IpcOverwritePolicy::Skip;
+        }
+    };
+    match policy {
+        DefaultOverwritePolicy::Skip => IpcOverwritePolicy::Skip,
+        DefaultOverwritePolicy::Overwrite => IpcOverwritePolicy::Overwrite,
+        DefaultOverwritePolicy::AutoRename => IpcOverwritePolicy::AutoRename,
+    }
+}
+
+/// Resolves a `None` duplicate check mode to the mode configured in
+/// settings.json (`duplicate_check.mode`), falling back to `Name`.
+pub(crate) fn resolve_default_duplicate_check_mode(
+    facade: &Arc<ApplicationFacadeImpl>,
+    rt: &tokio::runtime::Runtime,
+) -> IpcDuplicateCheckMode {
+    let mode = match rt.block_on(facade.load_settings()) {
+        Ok(settings) => settings.duplicate_check.mode,
+        Err(e) => {
+            tracing::warn!(error = %e, "settings unavailable; falling back to Name");
+            return IpcDuplicateCheckMode::Name;
+        }
+    };
+    // The settings DTO's DuplicateCheckMode is a distinct type from the
+    // application's; both serialize to the same lowercase strings, so
+    // convert through JSON to avoid a direct domain dependency.
+    serde_json::from_value(serde_json::to_value(mode).unwrap_or_default()).unwrap_or_default()
 }
 
 fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> {
@@ -63,7 +106,13 @@ fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> 
         target_folder_id,
         target_paths: None,
         overwrite_policy: convert_overwrite_policy(data.overwrite_policy),
-        duplicate_check_mode: DuplicateCheckMode::default(),
+        duplicate_check_mode: match data.duplicate_check_mode {
+            // Unreachable: None is normalized to the configured mode at the
+            // IPC boundary before conversion (see resolve_default_duplicate_check_mode).
+            Some(IpcDuplicateCheckMode::Name) | None => DuplicateCheckMode::Name,
+            Some(IpcDuplicateCheckMode::Size) => DuplicateCheckMode::Size,
+            Some(IpcDuplicateCheckMode::Content) => DuplicateCheckMode::Content,
+        },
     })
 }
 
@@ -112,13 +161,13 @@ fn handle_select_folder(data: SelectFolderData) -> ResponseMessage {
 
     match crate::ipc::get_app_handle() {
         Some(app) => {
-            // Show and focus the main window.
-            if let Some(window) = app.get_webview_window("main") {
+            // Show and focus the dedicated selector window.
+            if let Some(window) = app.get_webview_window("selector") {
                 let _ = window.show();
                 let _ = window.set_focus();
             }
 
-            // Emit event so the frontend switches to selector mode.
+            // Emit event so the frontend displays the pending files.
             let _ = app.emit(
                 "pending-file",
                 PendingFilePayload {
@@ -155,10 +204,15 @@ fn handle_select_folder(data: SelectFolderData) -> ResponseMessage {
 // ---------------------------------------------------------------------------
 
 /// Processes a single command and returns a response.
+///
+/// `op_lock` serializes background file operations: the JSON history
+/// repository is file-backed and not safe for concurrent read-modify-write.
 fn process_command(
     cmd: CommandMessage,
-    facade: &ApplicationFacadeImpl,
+    facade: &Arc<ApplicationFacadeImpl>,
     rt: &tokio::runtime::Runtime,
+    op_lock: &Arc<Mutex<()>>,
+    queue: &Arc<crate::queue::JobQueue>,
 ) -> ResponseMessage {
     match cmd {
         CommandMessage::ExecuteOperation(data) => {
@@ -167,6 +221,15 @@ fn process_command(
             // Resolve target_folder_path to a registered folder ID
             // when target_folder_id is not provided.
             let mut data = data;
+            // Normalize the shell extension's Default policy to the
+            // user-configured one (settings.json) before the domain layer
+            // sees it; Single source of truth for conflict resolution.
+            if matches!(data.overwrite_policy, IpcOverwritePolicy::Default) {
+                data.overwrite_policy = resolve_default_overwrite_policy(facade, rt);
+            }
+            if data.duplicate_check_mode.is_none() {
+                data.duplicate_check_mode = Some(resolve_default_duplicate_check_mode(facade, rt));
+            }
             let mut early_response: Option<ResponseMessage> = None;
 
             if data.target_folder_id.is_none() {
@@ -207,33 +270,58 @@ fn process_command(
             match early_response {
                 Some(resp) => resp,
                 None => match convert_execute_data(data) {
-                    Some(command) => match rt.block_on(facade.execute(command)) {
-                        Ok(result) => {
-                            let op_id = result.operation_id.to_string();
-                            let processed = result.processed_files;
-                            tracing::info!(
-                                "ExecuteOperation OK: op_id={}, files={}, bytes={}",
-                                op_id,
-                                processed,
-                                result.bytes_moved
-                            );
-                            ResponseMessage {
-                                status: ResponseStatus::Ok,
-                                message: format!("Processed {} files", processed),
-                                operation_id: Some(op_id),
-                                data: None,
+                    // Run the operation in the background so the accept loop
+                    // stays responsive and the DLL never waits on a blocking
+                    // pipe read for the whole operation duration.  The result
+                    // is logged on the worker thread.
+                    Some(command) => {
+                        let facade = Arc::clone(facade);
+                        let op_lock = Arc::clone(op_lock);
+                        std::thread::spawn(move || {
+                            // Serialize operations: a single worker at a time
+                            // so history writes cannot race.
+                            let _guard = op_lock.lock().unwrap_or_else(|e| e.into_inner());
+
+                            // Fresh runtime per background operation; the IPC
+                            // runtime must not be shared across threads.
+                            let worker_rt = match tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                            {
+                                Ok(rt) => rt,
+                                Err(e) => {
+                                    tracing::error!(
+                                        "ExecuteOperation: failed to create worker runtime: {}",
+                                        e
+                                    );
+                                    return;
+                                }
+                            };
+
+                            match worker_rt.block_on(facade.execute(command)) {
+                                Ok(result) => {
+                                    let op_id = result.operation_id.to_string();
+                                    let processed = result.processed_files;
+                                    tracing::info!(
+                                        "ExecuteOperation OK: op_id={}, files={}, bytes={}",
+                                        op_id,
+                                        processed,
+                                        result.bytes_moved
+                                    );
+                                }
+                                Err(e) => {
+                                    tracing::error!("ExecuteOperation FAIL: {}", e);
+                                }
                             }
+                        });
+
+                        ResponseMessage {
+                            status: ResponseStatus::Ok,
+                            message: "Operation started".to_string(),
+                            operation_id: None,
+                            data: None,
                         }
-                        Err(e) => {
-                            tracing::error!("ExecuteOperation FAIL: {}", e);
-                            ResponseMessage {
-                                status: ResponseStatus::Error,
-                                message: e.to_string(),
-                                operation_id: None,
-                                data: None,
-                            }
-                        }
-                    },
+                    }
                     None => {
                         tracing::error!("ExecuteOperation FAIL: no valid source paths");
                         ResponseMessage {
@@ -256,6 +344,66 @@ fn process_command(
             tracing::info!("Received SelectFolder: {:?}", data);
             handle_select_folder(data)
         }
+        CommandMessage::EnqueueOperation(mut data) => {
+            tracing::info!("Received EnqueueOperation: {:?}", data);
+            if matches!(data.overwrite_policy, IpcOverwritePolicy::Default) {
+                data.overwrite_policy = resolve_default_overwrite_policy(facade, rt);
+            }
+            if data.duplicate_check_mode.is_none() {
+                data.duplicate_check_mode = Some(resolve_default_duplicate_check_mode(facade, rt));
+            }
+            match queue.enqueue(data) {
+                Ok(job_id) => ResponseMessage {
+                    status: ResponseStatus::Ok,
+                    message: "Operation queued".to_string(),
+                    operation_id: None,
+                    data: Some(serde_json::json!({ "job_id": job_id.id })),
+                },
+                Err(e) => ResponseMessage {
+                    status: ResponseStatus::Error,
+                    message: e,
+                    operation_id: None,
+                    data: None,
+                },
+            }
+        }
+        CommandMessage::QueryJobs => {
+            let jobs: Vec<quicksort_ipc_contract::JobDto> = queue.list();
+            ResponseMessage {
+                status: ResponseStatus::Ok,
+                message: "Jobs listed".to_string(),
+                operation_id: None,
+                data: Some(serde_json::to_value(jobs).unwrap_or_default()),
+            }
+        }
+        CommandMessage::GetJobStatus(job_id) => match queue.get(&job_id.id) {
+            Some(job) => ResponseMessage {
+                status: ResponseStatus::Ok,
+                message: "Job status".to_string(),
+                operation_id: None,
+                data: Some(serde_json::to_value(job).unwrap_or_default()),
+            },
+            None => ResponseMessage {
+                status: ResponseStatus::Error,
+                message: "Job not found".to_string(),
+                operation_id: None,
+                data: None,
+            },
+        },
+        CommandMessage::CancelJob(job_id) => match queue.cancel(&job_id.id) {
+            Ok(()) => ResponseMessage {
+                status: ResponseStatus::Ok,
+                message: "Job canceled".to_string(),
+                operation_id: None,
+                data: None,
+            },
+            Err(e) => ResponseMessage {
+                status: ResponseStatus::Error,
+                message: e,
+                operation_id: None,
+                data: None,
+            },
+        },
     }
 }
 
@@ -268,7 +416,13 @@ fn process_command(
 /// # Blocking
 /// This function never returns under normal operation.  It must be spawned
 /// on a dedicated OS thread.
-pub fn start_ipc_server<T: IpcTransport>(transport: T, facade: Arc<ApplicationFacadeImpl>) {
+pub fn start_ipc_server<T: IpcTransport>(
+    transport: T,
+    facade: Arc<ApplicationFacadeImpl>,
+    queue: Arc<crate::queue::JobQueue>,
+) where
+    T::Stream: Send + 'static,
+{
     tracing::info!("IPC server starting ({})", transport.name());
 
     if let Err(e) = transport.start() {
@@ -276,14 +430,10 @@ pub fn start_ipc_server<T: IpcTransport>(transport: T, facade: Arc<ApplicationFa
         return;
     }
 
-    // Create a Tokio runtime for blocking on async facade calls.
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("failed to create tokio runtime for IPC server");
+    let op_lock = super::op_lock();
 
     loop {
-        let mut stream = match transport.accept() {
+        let stream = match transport.accept() {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!("Accept failed: {}", e);
@@ -294,51 +444,87 @@ pub fn start_ipc_server<T: IpcTransport>(transport: T, facade: Arc<ApplicationFa
 
         tracing::info!("Client connected");
 
-        loop {
-            let data = match stream.read_frame() {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    // Broken pipe is expected when the client disconnects
-                    // after sending a single command.
-                    if e.kind() == std::io::ErrorKind::BrokenPipe
-                        || e.to_string().contains("broken pipe")
-                    {
-                        tracing::debug!("Client disconnected: {}", e);
-                    } else {
-                        tracing::error!("Read error: {}", e);
-                    }
-                    break;
-                }
-            };
+        // Serve each client on a dedicated thread so the accept loop keeps
+        // taking new connections.  With a single in-loop handler the server
+        // would stay blocked in read_frame while one client holds the pipe,
+        // and every later context-menu click would wait ~60 s for that
+        // client to disconnect.
+        let facade = Arc::clone(&facade);
+        let queue = Arc::clone(&queue);
+        let op_lock = Arc::clone(&op_lock);
+        std::thread::spawn(move || handle_client(stream, facade, op_lock, queue));
+    }
+}
 
-            let cmd: CommandMessage = match serde_json::from_slice(&data) {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("Deserialization error: {}", e);
-                    let resp = ResponseMessage {
-                        status: ResponseStatus::Error,
-                        message: format!("Invalid JSON: {}", e),
-                        operation_id: None,
-                        data: None,
-                    };
-                    let _ = stream.write_frame(&serde_json::to_vec(&resp).unwrap_or_default());
-                    continue;
-                }
-            };
+/// Serves one connected client until it disconnects.
+///
+/// Reads length-framed commands, processes them and writes responses back.
+/// The stream is dropped on disconnect or any IO/protocol error, which
+/// closes the pipe instance and frees the transport slot.
+fn handle_client<S: IpcStream>(
+    mut stream: S,
+    facade: Arc<ApplicationFacadeImpl>,
+    op_lock: Arc<Mutex<()>>,
+    queue: Arc<crate::queue::JobQueue>,
+) {
+    // Fresh runtime per connection; the current-thread runtime must not be
+    // shared across threads, and moving the server's single runtime into a
+    // per-client thread is not sound.
+    let rt = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(rt) => rt,
+        Err(e) => {
+            tracing::error!("Failed to create tokio runtime for IPC client: {}", e);
+            return;
+        }
+    };
 
-            let response = process_command(cmd, &facade, &rt);
-
-            let response_bytes = match serde_json::to_vec(&response) {
-                Ok(b) => b,
-                Err(e) => {
-                    tracing::error!("Response serialization failed: {}", e);
-                    break;
+    loop {
+        let data = match stream.read_frame() {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                // Broken pipe is expected when the client disconnects
+                // after sending a single command.
+                if e.kind() == std::io::ErrorKind::BrokenPipe
+                    || e.to_string().contains("broken pipe")
+                {
+                    tracing::debug!("Client disconnected: {}", e);
+                } else {
+                    tracing::error!("Read error: {}", e);
                 }
-            };
-            if let Err(e) = stream.write_frame(&response_bytes) {
-                tracing::error!("Write response failed: {}", e);
                 break;
             }
+        };
+
+        let cmd: CommandMessage = match serde_json::from_slice(&data) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("Deserialization error: {}", e);
+                let resp = ResponseMessage {
+                    status: ResponseStatus::Error,
+                    message: format!("Invalid JSON: {}", e),
+                    operation_id: None,
+                    data: None,
+                };
+                let _ = stream.write_frame(&serde_json::to_vec(&resp).unwrap_or_default());
+                continue;
+            }
+        };
+
+        let response = process_command(cmd, &facade, &rt, &op_lock, &queue);
+
+        let response_bytes = match serde_json::to_vec(&response) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::error!("Response serialization failed: {}", e);
+                break;
+            }
+        };
+        if let Err(e) = stream.write_frame(&response_bytes) {
+            tracing::error!("Write response failed: {}", e);
+            break;
         }
     }
 }
@@ -347,15 +533,15 @@ pub fn start_ipc_server<T: IpcTransport>(transport: T, facade: Arc<ApplicationFa
 ///
 /// This is the main entry point called from `main.rs`.  It selects the
 /// correct transport implementation based on the target platform.
-pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>) {
+pub fn start_pipe_server(facade: Arc<ApplicationFacadeImpl>, queue: Arc<crate::queue::JobQueue>) {
     #[cfg(target_os = "windows")]
     {
         let transport = super::named_pipe::NamedPipeTransport::new();
-        start_ipc_server(transport, facade);
+        start_ipc_server(transport, facade, queue);
     }
     #[cfg(not(target_os = "windows"))]
     {
         let transport = super::unix_socket::UnixSocketTransport::new();
-        start_ipc_server(transport, facade);
+        start_ipc_server(transport, facade, queue);
     }
 }
