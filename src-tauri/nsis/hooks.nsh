@@ -17,6 +17,44 @@
 !macro NSIS_HOOK_POSTINSTALL
 !macroend
 
+; Quietly stops a running QuickSort without any interactive prompt. The stock
+; Tauri CheckIfAppIsRunning macro shows a modal MessageBox that can end up
+; behind the installer window and look like a hang (QA 07.09.2026); this kills
+; the process silently with up to 3 retries (500 ms pause each) and falls back
+; to a log warning instead of blocking. Works for install and uninstall.
+;
+; Parameters:
+;   BINARY_NAME - main executable name (e.g. "Quicksort.exe")
+;   _uniq       - unique label prefix per insertion site (Tauri pattern, since
+;                 NSIS macro labels must not collide when inserted twice).
+!macro QuickSortStopRunning BINARY_NAME _uniq
+  DetailPrint "Stopping a running QuickSort, if any..."
+  StrCpy $3 0 ; attempt counter
+${_uniq}_retry:
+  IntOp $3 $3 + 1
+  ${If} $3 > 3
+    DetailPrint "Warning: QuickSort is still running after 3 attempts; continuing anyway"
+    Goto ${_uniq}_done
+  ${EndIf}
+  ; taskkill /im is case-insensitive, one call covers every binary-name casing.
+  ; Macro parameters are referenced with ${...} (NSIS), NOT $... like variables.
+  nsExec::ExecToStack 'taskkill /f /im "${BINARY_NAME}"'
+  Pop $1 ; exit code
+  Pop $2 ; console output
+  Sleep 500
+  ; CSV no-header mode prints an EMPTY line when no process matches, so an
+  ; empty output means the app is gone and we can proceed.
+  nsExec::ExecToStack 'tasklist /fi "imagename eq ${BINARY_NAME}" /fo csv /nh'
+  Pop $1 ; exit code
+  Pop $2 ; console output
+  ${If} $2 == ""
+    Goto ${_uniq}_done
+  ${EndIf}
+  DetailPrint "QuickSort is still running, retrying (attempt $3/3)..."
+  Goto ${_uniq}_retry
+${_uniq}_done:
+!macroend
+
 ; Runs at the very start of uninstall, before any files are removed.
 ; Remove COM registry keys directly from NSIS (no elevation issues), then
 ; restart Explorer so the shell extension DLL is unloaded from memory and the
@@ -27,11 +65,10 @@
   ; the shell-extension DLL next to it (plus it rewrites the owner PID/registry
   ; on exit), so the uninstaller must kill it before touching files, otherwise
   ; the whole Program Files folder survives deletion and leaves traces behind.
-  ; Kill both possible binary names (productName casing differs across builds).
-  nsExec::Exec 'taskkill /f /im Quicksort.exe'
-  nsExec::Exec 'taskkill /f /im quicksort.exe'
+  !insertmacro QuickSortStopRunning "${MAINBINARYNAME}.exe" qs_preun
 
   ; 2) Remove COM keys so Explorer will not show the menu anymore.
+  DetailPrint "Removing QuickSort context-menu registry entries..."
   DeleteRegKey HKCU "Software\Classes\CLSID\{12345678-1234-1234-1234-1234567890AB}"
   DeleteRegKey HKCU "Software\Classes\AllFilesystemObjects\shellex\ContextMenuHandlers\QuickSort"
   ; Also clean stale handler keys from older versions that no longer ship.
@@ -59,9 +96,11 @@
   ; no header prints an EMPTY line when no task matches), not the taskbar
   ; window - Shell_TrayWnd can disappear before the process has fully exited.
   ; Mirrors restart_explorer() in src-tauri src/com.rs.
+  DetailPrint "Restarting Windows Explorer to unload the shell extension..."
   nsExec::Exec 'taskkill /f /im explorer.exe'
 
   ; Wait for the old shell process to fully exit (up to 5 s, 200 ms steps).
+  DetailPrint "Waiting for Windows Explorer to fully exit..."
   StrCpy $0 0
 qs_explorer_poll:
   IntOp $0 $0 + 1
