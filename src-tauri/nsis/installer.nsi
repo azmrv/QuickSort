@@ -354,10 +354,26 @@ Function PageLeaveReinstall
     ${Else}
       ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
       ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
-      ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE
-      ${IfThen} $PassiveMode = 1 ${|} StrCpy $R1 "$R1 /P" ${|} ; append /P
-      StrCpy $R1 "$R1 _?=$4" ; append uninstall directory
-      ExecWait '$R1' $0
+      ; QuickSort: if the recorded uninstaller no longer exists (manually
+      ; deleted install folder, interrupted previous run), ExecWait on the stale
+      ; UninstallString hangs the installer in a hidden window with no way out
+      ; (QA 07.09.2026). Clean the stale registry entries manually instead and
+      ; continue as a fresh install.
+      ${If} ${FileExists} "$4\uninstall.exe"
+        ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE
+        ${IfThen} $PassiveMode = 1 ${|} StrCpy $R1 "$R1 /P" ${|} ; append /P
+        StrCpy $R1 "$R1 _?=$4" ; append uninstall directory
+        ExecWait '$R1' $0
+      ${Else}
+        DetailPrint "Previous uninstaller not found ($4\uninstall.exe), cleaning leftovers manually"
+        DeleteRegKey SHCTX "${UNINSTKEY}"
+        DeleteRegKey SHCTX "${MANUPRODUCTKEY}"
+        DeleteRegKey /ifempty SHCTX "${MANUKEY}"
+        ; Remove the empty leftover folder (files still in use are left alone)
+        RMDir "$4"
+        BringToFront
+        Goto reinst_done
+      ${EndIf}
     ${EndIf}
 
     BringToFront
@@ -655,7 +671,8 @@ Section Install
     !insertmacro NSIS_HOOK_PREINSTALL
   !endif
 
-  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  ; QuickSort: silently stop any running app instead of the stock modal prompt
+  !insertmacro QuickSortStopRunning "${MAINBINARYNAME}.exe" qs_install
 
   ; Copy main executable
   File "${MAINBINARYSRCPATH}"
@@ -792,7 +809,8 @@ Section Uninstall
     !insertmacro NSIS_HOOK_PREUNINSTALL
   !endif
 
-  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  ; QuickSort: silent kill (app was already stopped in PREUNINSTALL), no dialog
+  !insertmacro QuickSortStopRunning "${MAINBINARYNAME}.exe" qs_un
 
   ; Delete the app directory and its content from disk
   ; Copy main executable
