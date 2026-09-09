@@ -4,14 +4,13 @@
 //! Delete operations. Each scenario follows the Given-When-Then structure
 //! defined in `SPECIFICATION.md`.
 
-use std::sync::Arc;
 use chrono::Utc;
 
-use quicksort_domain::{OperationType, OperationState, AbsolutePath};
 use quicksort_application::{
-    ExecuteOperation, OperationCommand, OverwritePolicy, UseCaseError,
-    use_cases::ExecuteOperationUseCase,
+    use_cases::ExecuteOperationUseCase, ExecuteOperation, OperationCommand, OverwritePolicy,
+    UseCaseError,
 };
+use quicksort_domain::{AbsolutePath, DuplicateCheckMode, OperationState, OperationType};
 
 use crate::mocks::*;
 
@@ -42,27 +41,28 @@ async fn delete_single_file() {
     let src_path = wp("C:\\Users\\Test\\Downloads\\temp.txt");
 
     let fs = MockFileSystem::new();
-    fs.add_file(src_path.to_path_buf(), 512);  // file exists with 512 bytes
+    fs.add_file(src_path.to_path_buf(), 512); // file exists with 512 bytes
 
     let op_repo = MockOperationRepository::new();
     let id_gen = MockIdGenerator::new();
     let clock = MockClock::new(Utc::now());
 
     let use_case = ExecuteOperationUseCase::new(
-        Arc::new(config_repo),
-        Arc::new(op_repo.clone()),
-        Arc::new(fs.clone()),
-        Arc::new(id_gen),
-        Arc::new(clock),
-        Arc::new(MockConflictResolver),
+        Box::new(op_repo.clone()),
+        Box::new(config_repo),
+        Box::new(fs.clone()),
+        Box::new(id_gen),
+        Box::new(clock),
+        Box::new(MockDuplicateDetector),
     );
 
     let command = OperationCommand {
         operation_type: OperationType::Delete,
         source_paths: vec![src_path.clone()],
-        target_folder_id: None,           // Delete has no target
-        overwrite_policy: OverwritePolicy::Skip,  // not relevant for Delete
+        target_folder_id: None,                  // Delete has no target
+        overwrite_policy: OverwritePolicy::Skip, // not relevant for Delete
         target_paths: None,
+        duplicate_check_mode: DuplicateCheckMode::default(),
     };
 
     // ---- When ----
@@ -77,7 +77,11 @@ async fn delete_single_file() {
     assert!(!fs.exists(&src_path).await.unwrap());
 
     // Operation must be persisted
-    let saved_op = op_repo.find_by_id(&result.operation_id).await.unwrap().unwrap();
+    let saved_op = op_repo
+        .find_by_id(&result.operation_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(matches!(saved_op.state, OperationState::Completed { .. }));
 }
 
@@ -102,12 +106,12 @@ async fn delete_nonexistent_file() {
 
     let op_repo = MockOperationRepository::new();
     let use_case = ExecuteOperationUseCase::new(
-        Arc::new(config_repo),
-        Arc::new(op_repo.clone()),
-        Arc::new(fs.clone()),
-        Arc::new(MockIdGenerator::new()),
-        Arc::new(MockClock::new(Utc::now())),
-        Arc::new(MockConflictResolver),
+        Box::new(op_repo.clone()),
+        Box::new(config_repo),
+        Box::new(fs.clone()),
+        Box::new(MockIdGenerator::new()),
+        Box::new(MockClock::new(Utc::now())),
+        Box::new(MockDuplicateDetector),
     );
 
     let command = OperationCommand {
@@ -116,6 +120,7 @@ async fn delete_nonexistent_file() {
         target_folder_id: None,
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: None,
+        duplicate_check_mode: DuplicateCheckMode::default(),
     };
 
     // ---- When ----
@@ -123,6 +128,6 @@ async fn delete_nonexistent_file() {
 
     // ---- Then ----
     assert!(matches!(result, Err(UseCaseError::FileNotFound(_))));
-    // No operation should be saved on failure
-    assert_eq!(op_repo.count(), 0);
+    // The failed operation is still persisted so the user can retry it
+    assert_eq!(op_repo.count(), 1);
 }

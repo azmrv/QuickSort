@@ -6,15 +6,15 @@
 //!
 //! # Running Tests
 //! ```bash
-//! cargo test --test integration scenarios::execute_operation
-//! cargo test --test integration scenarios::execute_operation::move
-//! cargo test --test integration scenarios::execute_operation::conflicts -- --nocapture
+//! cargo test --test mod scenarios::execute_operation
+//! cargo test --test mod scenarios::execute_operation::move
+//! cargo test --test mod scenarios::execute_operation::conflicts -- --nocapture
 //! ```
 
 mod conflicts;
 mod copy;
 mod delete;
 mod errors;
-mod move;
+mod r#move;
 mod rename;
 mod undo;

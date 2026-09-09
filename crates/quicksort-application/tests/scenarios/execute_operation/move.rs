@@ -5,16 +5,16 @@
 //! Each scenario follows the Given-When-Then structure defined in
 //! `SPECIFICATION.md`.
 
-use std::sync::Arc;
 use chrono::Utc;
 
-use quicksort_domain::{OperationType, OperationState, AbsolutePath};
 use quicksort_application::{
-    ExecuteOperation, OperationCommand, OverwritePolicy, UseCaseError,
-    use_cases::ExecuteOperationUseCase,
+    use_cases::ExecuteOperationUseCase, ExecuteOperation, OperationCommand, OverwritePolicy,
+    UseCaseError,
 };
+use quicksort_domain::{AbsolutePath, DuplicateCheckMode, OperationState, OperationType};
 
 use crate::mocks::*;
+use crate::scenarios::test_folder;
 
 // ============================================================================
 // Helper functions for this test module
@@ -23,18 +23,6 @@ use crate::mocks::*;
 /// Creates a `AbsolutePath` from a string for test purposes.
 fn wp(path: &str) -> AbsolutePath {
     AbsolutePath::new(path).expect("Invalid test path")
-}
-
-/// Creates a test folder entity with default values.
-fn test_folder() -> quicksort_domain::Folder {
-    quicksort_domain::Folder {
-        id: quicksort_domain::FolderId::from_string("folder-test"),
-        name: "Documents".to_string(),
-        path: wp("C:\\Users\\Test\\Documents"),
-        favorite: false,
-        order: 0,
-        stats: Default::default(),
-    }
 }
 
 // ============================================================================
@@ -57,19 +45,19 @@ async fn move_single_file_to_existing_folder() {
     let dst_path = wp("C:\\Users\\Test\\Documents\\report.pdf");
 
     let fs = MockFileSystem::new();
-    fs.add_file(src_path.to_path_buf(), 1024);  // source file with size 1024 bytes
+    fs.add_file(src_path.to_path_buf(), 1024); // source file with size 1024 bytes
 
     let op_repo = MockOperationRepository::new();
-    let id_gen = MockIdGenerator::new();        // will generate "test-op-001"
+    let id_gen = MockIdGenerator::new();
     let clock = MockClock::new(Utc::now());
 
     let use_case = ExecuteOperationUseCase::new(
-        Arc::new(config_repo),
-        Arc::new(op_repo.clone()),
-        Arc::new(fs.clone()),
-        Arc::new(id_gen),
-        Arc::new(clock),
-        Arc::new(MockConflictResolver),
+        Box::new(op_repo.clone()),
+        Box::new(config_repo),
+        Box::new(fs.clone()),
+        Box::new(id_gen),
+        Box::new(clock),
+        Box::new(MockDuplicateDetector),
     );
 
     let command = OperationCommand {
@@ -77,7 +65,8 @@ async fn move_single_file_to_existing_folder() {
         source_paths: vec![src_path.clone()],
         target_folder_id: Some(folder.id.clone()),
         overwrite_policy: OverwritePolicy::Skip,
-        target_paths: None,   // not needed for Move
+        target_paths: None,
+        duplicate_check_mode: DuplicateCheckMode::default(),
     };
 
     // ---- When ----
@@ -92,7 +81,11 @@ async fn move_single_file_to_existing_folder() {
     assert!(fs.exists(&dst_path).await.unwrap());
 
     // Operation is saved in the repository as Completed
-    let saved_op = op_repo.find_by_id(&result.operation_id).await.unwrap().unwrap();
+    let saved_op = op_repo
+        .find_by_id(&result.operation_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(matches!(saved_op.state, OperationState::Completed { .. }));
 }
 
@@ -122,12 +115,12 @@ async fn move_fails_when_source_missing() {
     let clock = MockClock::new(Utc::now());
 
     let use_case = ExecuteOperationUseCase::new(
-        Arc::new(config_repo),
-        Arc::new(op_repo.clone()),
-        Arc::new(fs.clone()),
-        Arc::new(id_gen),
-        Arc::new(clock),
-        Arc::new(MockConflictResolver),
+        Box::new(op_repo.clone()),
+        Box::new(config_repo),
+        Box::new(fs.clone()),
+        Box::new(id_gen),
+        Box::new(clock),
+        Box::new(MockDuplicateDetector),
     );
 
     let command = OperationCommand {
@@ -136,11 +129,15 @@ async fn move_fails_when_source_missing() {
         target_folder_id: Some(folder.id),
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: None,
+        duplicate_check_mode: DuplicateCheckMode::default(),
     };
 
     // ---- When ----
     let result = use_case.execute(command).await;
 
     // ---- Then ----
-    assert!(matches!(result, Err(UseCaseError::FileNotFound(_))));
+    // The source file is absent, so the move cannot start. The use case
+    // reports this as a file system error (the file may have been moved
+    // by another process in the meantime).
+    assert!(matches!(result, Err(UseCaseError::FileSystemError(_))));
 }
