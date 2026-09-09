@@ -301,11 +301,16 @@ mod tests {
     }
 
     fn completed_move_op(source: &[&str], target: &str) -> Operation {
+        let root = if cfg!(target_os = "windows") {
+            "C:\\"
+        } else {
+            "/"
+        };
         let src: Vec<AbsolutePath> = source
             .iter()
-            .map(|s| AbsolutePath::new(s).unwrap())
+            .map(|s| AbsolutePath::new(&format!("{root}{s}")).unwrap())
             .collect();
-        let tgt = AbsolutePath::new(target).unwrap();
+        let tgt = AbsolutePath::new(&format!("{root}{target}")).unwrap();
         let mut op = Operation::new_move(src, tgt, Utc::now());
         op.start().unwrap();
         op.complete(source.len() as u32, 0).unwrap();
@@ -314,7 +319,7 @@ mod tests {
 
     #[tokio::test]
     async fn undo_move_restores_existing_file() {
-        let op = completed_move_op(&["C:\\src\\a.txt"], "C:\\dst");
+        let op = completed_move_op(&["src/a.txt"], "dst");
         let target = op.target_folder_path.clone().unwrap();
         let file_name = op.source_paths[0].file_name().unwrap();
         let existing = target.join(file_name);
@@ -332,7 +337,7 @@ mod tests {
 
     #[tokio::test]
     async fn undo_move_skips_missing_target_file() {
-        let op = completed_move_op(&["C:\\src\\a.txt"], "C:\\dst");
+        let op = completed_move_op(&["src/a.txt"], "dst");
 
         let repo = MockOperationRepository::new(op.clone());
         let fs = MockFileSystem::new(vec![]);
