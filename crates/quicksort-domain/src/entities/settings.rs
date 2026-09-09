@@ -78,6 +78,64 @@ pub enum Locale {
     Ja,
 }
 
+/// Logging verbosity level.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    /// Trace — most verbose, includes detailed debug tracing.
+    Trace,
+    /// Debug — extended debug information.
+    Debug,
+    /// Info — normal operational events.
+    #[default]
+    Info,
+    /// Warn — suspicious or recoverable conditions.
+    Warn,
+    /// Error — failures and unrecoverable conditions.
+    Error,
+}
+
+/// Log output format.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogFormat {
+    /// Human-readable text lines.
+    #[default]
+    Text,
+    /// Structured JSON lines (applies to the file log only).
+    Json,
+}
+
+/// Logging configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LoggingConfig {
+    /// Verbosity level applied when no `RUST_LOG` override is set.
+    pub level: LogLevel,
+    /// Output format for the file log. The stdout and frontend streams keep
+    /// their own fixed formats regardless of this value.
+    pub format: LogFormat,
+    /// Optional log file name override. The parent directory selects the log
+    /// folder and the file stem becomes the rotated file prefix
+    /// (e.g. `custom` -> `custom.2026-09-09.log`). When `None`, the default
+    /// `quicksort` prefix is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_path: Option<String>,
+    /// Optional limit on how many rotated log files are kept on disk.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_files: Option<u32>,
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: LogLevel::default(),
+            format: LogFormat::default(),
+            file_path: None,
+            max_files: None,
+        }
+    }
+}
+
 /// User settings entity.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -96,6 +154,9 @@ pub struct Settings {
     /// UI language.
     #[serde(default)]
     pub locale: Locale,
+    /// Logging configuration.
+    #[serde(default)]
+    pub logging: LoggingConfig,
 }
 
 impl Settings {
@@ -121,6 +182,10 @@ mod tests {
         assert_eq!(settings.duplicate_check.mode, DuplicateCheckMode::Size);
         assert_eq!(settings.theme_mode, ThemeMode::System);
         assert_eq!(settings.locale, Locale::En);
+        assert_eq!(settings.logging.level, LogLevel::Info);
+        assert_eq!(settings.logging.format, LogFormat::Text);
+        assert!(settings.logging.file_path.is_none());
+        assert!(settings.logging.max_files.is_none());
     }
 
     #[test]
@@ -140,6 +205,9 @@ mod tests {
         assert!(json.contains("\"size\""));
         assert!(json.contains("\"system\""));
         assert!(json.contains("\"en\""));
+        assert!(json.contains("\"logging\""));
+        assert!(json.contains("\"info\""));
+        assert!(json.contains("\"text\""));
     }
 
     #[test]
@@ -149,5 +217,30 @@ mod tests {
         let settings: Settings = serde_json::from_str(old_json).unwrap();
         assert_eq!(settings.theme_mode, ThemeMode::System);
         assert_eq!(settings.locale, Locale::En);
+        assert_eq!(settings.logging, LoggingConfig::default());
+    }
+
+    #[test]
+    fn test_logging_config_round_trip() {
+        let config = LoggingConfig {
+            level: LogLevel::Debug,
+            format: LogFormat::Json,
+            file_path: Some("debug.log".into()),
+            max_files: Some(7),
+        };
+        let settings = Settings {
+            logging: config.clone(),
+            ..Settings::default()
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        let deserialized: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.logging, config);
+    }
+
+    #[test]
+    fn test_logging_config_defaults_omit_optional_fields() {
+        let json = serde_json::to_string(&LoggingConfig::default()).unwrap();
+        assert!(!json.contains("file_path"));
+        assert!(!json.contains("max_files"));
     }
 }

@@ -29,8 +29,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 pub use quicksort_application::ports::outbound::{
-    Clock, ConfigurationRepository, DuplicateDetectionPort, FileSystem, IdGenerator,
-    OperationRepository,
+    Clock, ConfigurationRepository, DuplicateDetectionPort, FileSearchPort, FileSearchResult,
+    FileSystem, IdGenerator, OperationRepository, SearchResult,
 };
 
 // ============================================================================
@@ -433,5 +433,71 @@ impl DuplicateDetectionPort for MockDuplicateDetector {
             exists: false,
             mode: mode.clone(),
         })
+    }
+}
+
+// ============================================================================
+// Mock FileSearchPort
+// ============================================================================
+
+/// A controllable file search port for testing.
+///
+/// The search result is set up-front by the test; the mock records the
+/// arguments of the latest search call for verification.
+#[derive(Clone, Default)]
+pub struct MockFileSearchPort {
+    result: Arc<Mutex<Option<SearchResult>>>,
+    last_directories: Arc<Mutex<Vec<String>>>,
+    last_query: Arc<Mutex<String>>,
+}
+
+impl MockFileSearchPort {
+    /// Creates a new mock that returns an empty result set.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Pre-loads the result returned by the next `search` call.
+    pub fn set_result(&self, result: SearchResult) {
+        *self.result.lock().unwrap() = Some(result);
+    }
+
+    /// Returns the directories of the most recent search call.
+    pub fn last_directories(&self) -> Vec<String> {
+        self.last_directories.lock().unwrap().clone()
+    }
+
+    /// Returns the query text of the most recent search call.
+    pub fn last_query(&self) -> String {
+        self.last_query.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl FileSearchPort for MockFileSearchPort {
+    async fn search(
+        &self,
+        directories: &[String],
+        query_text: &str,
+        _max_results: usize,
+    ) -> Result<SearchResult, UseCaseError> {
+        *self.last_directories.lock().unwrap() = directories.to_vec();
+        *self.last_query.lock().unwrap() = query_text.to_string();
+        Ok(self
+            .result
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(empty_search_result))
+    }
+}
+
+/// Builds an empty, non-truncated search result (used by default).
+fn empty_search_result() -> SearchResult {
+    SearchResult {
+        files: Vec::new(),
+        total_count: 0,
+        search_time_ms: 0,
+        truncated: false,
     }
 }

@@ -17,5 +17,6 @@ pub use plugin::{
     PluginCapabilities, PluginConfig, PluginError, PluginInfo, PluginType,
 };
 pub use settings::{
-    DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, Locale, Settings, ThemeMode,
+    DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, Locale, LogFormat, LogLevel,
+    LoggingConfig, Settings, ThemeMode,
 };

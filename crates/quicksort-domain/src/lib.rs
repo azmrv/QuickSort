@@ -28,8 +28,8 @@ pub use entities::{
     ArchiveEntry, ArchivePlugin, ConflictContext, ConflictResolution, ConflictStats, ContentPlugin,
     DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig, DuplicateCheckMode,
     DuplicateCheckResult, DuplicateChecker, FileSystemPlugin, Folder, FolderStats, ListerPlugin,
-    Locale, Operation, OperationState, OperationType, Plugin, PluginCapabilities, PluginConfig,
-    PluginError, PluginInfo, PluginType, Settings, ThemeMode,
+    Locale, LogFormat, LogLevel, LoggingConfig, Operation, OperationState, OperationType, Plugin,
+    PluginCapabilities, PluginConfig, PluginError, PluginInfo, PluginType, Settings, ThemeMode,
 };
 pub use errors::DomainError;
 pub use events::DomainEvent;
