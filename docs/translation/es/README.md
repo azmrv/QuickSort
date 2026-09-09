@@ -9,7 +9,7 @@ QuickSort combina la velocidad de una extensión de shell con la potencia de un 
 [![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust)](https://www.rust-lang.org)
 [![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat&logo=tauri)](https://tauri.app)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react)](https://react.dev)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: No-Sell](https://img.shields.io/badge/License-No--Sell-green.svg)](LICENSE)
 
 </div>
 
@@ -194,7 +194,10 @@ Este proyecto está inspirado en el trabajo de muchos desarrolladores y proyecto
 
 ## Licencia
 
-[MIT](LICENSE) — libre para usar, modificar y distribuir.
+[Licencia QuickSort (No-Sell)](LICENSE) — libre de usar y modificar; se permite
+su uso en entornos empresariales conforme a los términos de atribución y
+share-alike; se prohíbe vender el Software u obras derivadas, u obtener
+beneficios de su distribución (términos completos en LICENSE).
 
 ---
 

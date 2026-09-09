@@ -9,7 +9,7 @@ QuickSort 结合了 Shell 扩展的速度和现代文件管理系统的强大功
 [![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust)](https://www.rust-lang.org)
 [![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat&logo=tauri)](https://tauri.app)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react)](https://react.dev)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: No-Sell](https://img.shields.io/badge/License-No--Sell-green.svg)](LICENSE)
 
 </div>
 
@@ -194,7 +194,9 @@ QuickSort/
 
 ## 许可证
 
-[MIT](LICENSE) — 自由使用、修改和分发。
+[QuickSort 许可证 (No-Sell)](LICENSE) — 可自由使用和修改；允许在商业机构内
+使用（需遵守署名和相同方式共享条款）；禁止出售本软件或衍生作品，或从其
+分发中获利（完整条款见 LICENSE）。
 
 ---
 

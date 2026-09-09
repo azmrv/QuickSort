@@ -35,8 +35,7 @@ allow = [
   "0BSD",
 ]
 confidence-threshold = 0.8
-# NOTE: README states "MIT" while LICENSE contains the custom No-Sell license.
-# Contradiction surfaced to the author (2026-09-09); not silently normalized here.
+# README and translations were aligned with the actual No-Sell LICENSE (2026-09-09).
 
 [bans]
 multiple-versions = "warn"

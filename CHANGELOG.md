@@ -20,6 +20,8 @@ derived from `git log` (137 commits, 2026-07-02 → 2026-08-25) and the Wiki
 ### Changed
 - Development launches use a relaxed CSP overlay (`src-tauri/tauri.dev.conf.json`) via
   `npm run tauri:dev` (Vite HMR / React refresh require inline scripts in dev)
+- README and translated READMEs now describe the actual `LICENSE` (custom
+  "QuickSort License (No-Sell)" instead of "MIT")
 
 ---
 
