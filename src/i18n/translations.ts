@@ -50,7 +50,20 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         // Settings - Logging
         'settings.logging.title': 'Logging',
-        'settings.logging.description': 'Minimum log level sent from the backend to the journal.',
+        'settings.logging.description': 'Configure the logging level and output format.',
+        'settings.logging.level': 'Level',
+        'settings.logging.level.trace': 'Trace',
+        'settings.logging.level.debug': 'Debug',
+        'settings.logging.level.info': 'Info',
+        'settings.logging.level.warn': 'Warn',
+        'settings.logging.level.error': 'Error',
+        'settings.logging.format': 'Format',
+        'settings.logging.format.text': 'Text',
+        'settings.logging.format.json': 'JSON',
+
+        // Settings - Logs panel
+        'settings.logs.title': 'Logs',
+        'settings.logs.description': 'Live event journal from the backend and frontend.',
 
         // Settings - Application
         'settings.application.title': 'Application',
@@ -193,6 +206,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': 'Copied {count} entries',
         'log.all_levels': 'All levels',
         'log.copy_all': 'Copy all',
+        'log.search': 'Search log...',
+        'log.search_no_results': 'No entries match the search',
         'log.empty': 'No entries',
         'log.col.time': 'Time',
         'log.col.level': 'Level',
@@ -280,7 +295,20 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         // Settings - Logging
         'settings.logging.title': 'Логирование',
-        'settings.logging.description': 'Минимальный уровень логов, отправляемых из бэкенда в журнал.',
+        'settings.logging.description': 'Настройка уровня логирования и формата вывода.',
+        'settings.logging.level': 'Уровень',
+        'settings.logging.level.trace': 'Трассировка',
+        'settings.logging.level.debug': 'Отладка',
+        'settings.logging.level.info': 'Инфо',
+        'settings.logging.level.warn': 'Предупреждения',
+        'settings.logging.level.error': 'Ошибки',
+        'settings.logging.format': 'Формат',
+        'settings.logging.format.text': 'Текст',
+        'settings.logging.format.json': 'JSON',
+
+        // Settings - Logs panel
+        'settings.logs.title': 'Журнал логов',
+        'settings.logs.description': 'Живой журнал событий из бэкенда и фронтенда.',
 
         // Settings - Application
         'settings.application.title': 'Приложение',
@@ -423,6 +451,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': 'Скопировано {count} записей',
         'log.all_levels': 'Все уровни',
         'log.copy_all': 'Копировать всё',
+        'log.search': 'Поиск по журналу...',
+        'log.search_no_results': 'Нет записей, соответствующих поиску',
         'log.empty': 'Нет записей',
         'log.col.time': 'Время',
         'log.col.level': 'Уровень',
@@ -503,7 +533,20 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.duplicate_check.deep': 'Tief (SHA-256-Hash)',
 
         'settings.logging.title': 'Protokollierung',
-        'settings.logging.description': 'Minimales Protokollniveau, das vom Backend gesendet wird.',
+        'settings.logging.description': 'Protokollierungsstufe und Ausgabeformat konfigurieren.',
+        'settings.logging.level': 'Stufe',
+        'settings.logging.level.trace': 'Trace',
+        'settings.logging.level.debug': 'Debug',
+        'settings.logging.level.info': 'Info',
+        'settings.logging.level.warn': 'Warnung',
+        'settings.logging.level.error': 'Fehler',
+        'settings.logging.format': 'Format',
+        'settings.logging.format.text': 'Text',
+        'settings.logging.format.json': 'JSON',
+
+        // Settings - Logs panel
+        'settings.logs.title': 'Protokoll',
+        'settings.logs.description': 'Live-Ereignisprotokoll vom Backend und Frontend.',
 
         'settings.application.title': 'Anwendung',
         'settings.application.quit': 'Anwendung beenden',
@@ -638,6 +681,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': '{count} Einträge kopiert',
         'log.all_levels': 'Alle Level',
         'log.copy_all': 'Alles kopieren',
+        'log.search': 'Protokoll durchsuchen...',
+        'log.search_no_results': 'Keine Einträge entsprechen der Suche',
         'log.empty': 'Keine Einträge',
         'log.col.time': 'Zeit',
         'log.col.level': 'Stufe',
@@ -714,7 +759,20 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.duplicate_check.deep': 'Profundo (SHA-256 hash)',
 
         'settings.logging.title': 'Registro',
-        'settings.logging.description': 'Nivel mínimo de registro enviado desde el backend.',
+        'settings.logging.description': 'Configurar el nivel de registro y el formato de salida.',
+        'settings.logging.level': 'Nivel',
+        'settings.logging.level.trace': 'Traza',
+        'settings.logging.level.debug': 'Depuración',
+        'settings.logging.level.info': 'Info',
+        'settings.logging.level.warn': 'Advertencia',
+        'settings.logging.level.error': 'Error',
+        'settings.logging.format': 'Formato',
+        'settings.logging.format.text': 'Texto',
+        'settings.logging.format.json': 'JSON',
+
+        // Settings - Logs panel
+        'settings.logs.title': 'Registro',
+        'settings.logs.description': 'Registro de eventos en vivo desde el backend y el frontend.',
 
         'settings.application.title': 'Aplicación',
         'settings.application.quit': 'Salir de la aplicación',
@@ -849,6 +907,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': '{count} entradas copiadas',
         'log.all_levels': 'Todos los niveles',
         'log.copy_all': 'Copiar todo',
+        'log.search': 'Buscar en el registro...',
+        'log.search_no_results': 'No hay entradas que coincidan con la búsqueda',
         'log.empty': 'No hay entradas',
         'log.col.time': 'Hora',
         'log.col.level': 'Nivel',
@@ -925,7 +985,20 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.duplicate_check.deep': '深度（SHA-256 哈希）',
 
         'settings.logging.title': '日志',
-        'settings.logging.description': '从后端发送到日志的最低日志级别。',
+        'settings.logging.description': '配置日志级别和输出格式。',
+        'settings.logging.level': '级别',
+        'settings.logging.level.trace': '追踪',
+        'settings.logging.level.debug': '调试',
+        'settings.logging.level.info': '信息',
+        'settings.logging.level.warn': '警告',
+        'settings.logging.level.error': '错误',
+        'settings.logging.format': '格式',
+        'settings.logging.format.text': '文本',
+        'settings.logging.format.json': 'JSON',
+
+        // Settings - Logs panel
+        'settings.logs.title': '日志',
+        'settings.logs.description': '来自后端和前端的实时事件日志。',
 
         'settings.application.title': '应用程序',
         'settings.application.quit': '退出应用',
@@ -1060,6 +1133,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': '已复制 {count} 条记录',
         'log.all_levels': '所有级别',
         'log.copy_all': '复制全部',
+        'log.search': '搜索日志...',
+        'log.search_no_results': '没有与搜索匹配的记录',
         'log.empty': '无记录',
         'log.col.time': '时间',
         'log.col.level': '级别',
@@ -1136,7 +1211,20 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.duplicate_check.deep': '深度（SHA-256ハッシュ）',
 
         'settings.logging.title': 'ログ',
-        'settings.logging.description': 'バックエンドから送信される最小ログレベル。',
+        'settings.logging.description': 'ログレベルと出力形式を設定します。',
+        'settings.logging.level': 'レベル',
+        'settings.logging.level.trace': 'トレース',
+        'settings.logging.level.debug': 'デバッグ',
+        'settings.logging.level.info': '情報',
+        'settings.logging.level.warn': '警告',
+        'settings.logging.level.error': 'エラー',
+        'settings.logging.format': '形式',
+        'settings.logging.format.text': 'テキスト',
+        'settings.logging.format.json': 'JSON',
+
+        // Settings - Logs panel
+        'settings.logs.title': 'ログ',
+        'settings.logs.description': 'バックエンドとフロントエンドからのライブイベントログ。',
 
         'settings.application.title': 'アプリケーション',
         'settings.application.quit': 'アプリを終了',
@@ -1271,6 +1359,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': '{count} 件のエントリをコピーしました',
         'log.all_levels': 'すべてのレベル',
         'log.copy_all': 'すべてコピー',
+        'log.search': 'ログを検索...',
+        'log.search_no_results': '検索に一致するエントリがありません',
         'log.empty': 'エントリなし',
         'log.col.time': '時刻',
         'log.col.level': 'レベル',

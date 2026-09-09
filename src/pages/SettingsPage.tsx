@@ -5,8 +5,16 @@ import { emit } from '@tauri-apps/api/event';
 import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
 import { LOCALE_LABELS, type Locale } from '../i18n/translations';
+import LogPage from './LogPage';
 
-const LOG_LEVELS = ['info', 'debug', 'warn', 'error'];
+// Log levels understood by the backend tracing subscriber (src-tauri/src/logging.rs).
+const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error'] as const;
+type LogLevel = (typeof LOG_LEVELS)[number];
+
+interface LoggingConfig {
+    level: LogLevel;
+    format: 'text' | 'json';
+}
 
 interface Settings {
     default_operation: 'Move' | 'Copy';
@@ -17,27 +25,44 @@ interface Settings {
     };
     theme_mode: 'system' | 'light' | 'dark';
     locale: Locale;
+    logging: LoggingConfig;
 }
+
+// Defaults for the logging config so the page works even when the field
+// is absent from an older settings.json on disk.
+const DEFAULT_LOGGING: LoggingConfig = { level: 'info', format: 'text' };
+
+const DEFAULT_SETTINGS: Settings = {
+    default_operation: 'Move',
+    default_overwrite_policy: 'Skip',
+    duplicate_check: {
+        enabled: true,
+        mode: 'name',
+    },
+    theme_mode: 'system',
+    locale: 'en',
+    logging: DEFAULT_LOGGING,
+};
 
 const SettingsPage: React.FC = () => {
     const { t } = useTranslation();
     const { message } = App.useApp();
-    const [logLevel, setLogLevel] = useState('info');
-    const [settings, setSettings] = useState<Settings>({
-        default_operation: 'Move',
-        default_overwrite_policy: 'Skip',
-        duplicate_check: {
-            enabled: true,
-            mode: 'name',
-        },
-        theme_mode: 'system',
-        locale: 'en',
-    });
+    const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        invoke<Settings>('get_settings')
-            .then(setSettings)
+        invoke<Partial<Settings>>('get_settings')
+            .then((loaded) => {
+                const next: Settings = {
+                    ...DEFAULT_SETTINGS,
+                    ...loaded,
+                    logging: {
+                        ...DEFAULT_LOGGING,
+                        ...(loaded.logging ?? {}),
+                    },
+                };
+                setSettings(next);
+            })
             .catch((err) => {
                 logger.error('SettingsPage', 'Failed to load settings', err);
             })
@@ -345,19 +370,66 @@ const SettingsPage: React.FC = () => {
                 <p style={labelStyle}>
                     {t('settings.logging.description')}
                 </p>
-                <select
-                    value={logLevel}
-                    onChange={(e) => {
-                        const level = e.target.value;
-                        setLogLevel(level);
-                        logger.action('SettingsPage', `log level changed → ${level}`);
-                    }}
-                    style={selectStyle}
-                >
-                    {LOG_LEVELS.map(l => (
-                        <option key={l} value={l}>{l.toUpperCase()}</option>
-                    ))}
-                </select>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                        <p style={{ ...labelStyle, marginBottom: '4px', fontSize: '13px' }}>
+                            {t('settings.logging.level')}
+                        </p>
+                        <select
+                            value={settings.logging.level}
+                            onChange={(e) => {
+                                const newSettings = {
+                                    ...settings,
+                                    logging: {
+                                        ...settings.logging,
+                                        level: e.target.value as LogLevel,
+                                    },
+                                };
+                                saveSettings(newSettings);
+                            }}
+                            style={selectStyle}
+                        >
+                            {LOG_LEVELS.map((l) => (
+                                <option key={l} value={l}>
+                                    {t(`settings.logging.level.${l}`)}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <p style={{ ...labelStyle, marginBottom: '4px', fontSize: '13px' }}>
+                            {t('settings.logging.format')}
+                        </p>
+                        <select
+                            value={settings.logging.format}
+                            onChange={(e) => {
+                                const newSettings = {
+                                    ...settings,
+                                    logging: {
+                                        ...settings.logging,
+                                        format: e.target.value as 'text' | 'json',
+                                    },
+                                };
+                                saveSettings(newSettings);
+                            }}
+                            style={selectStyle}
+                        >
+                            <option value="text">{t('settings.logging.format.text')}</option>
+                            <option value="json">{t('settings.logging.format.json')}</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            {/* Live log viewer — moved from the Log tab into Settings per release plan */}
+            <div>
+                <h3 style={sectionStyle}>{t('settings.logs.title')}</h3>
+                <p style={labelStyle}>
+                    {t('settings.logs.description')}
+                </p>
+                <div className="settings-logs-panel">
+                    <LogPage />
+                </div>
             </div>
 
             {/* Application */}

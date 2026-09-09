@@ -8,7 +8,6 @@ import { LanguageProvider, useTranslation } from './i18n/LanguageContext';
 import { LOCALE_LABELS, type Locale } from './i18n/translations';
 import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
-import LogPage from './pages/LogPage';
 import HistoryPage from './pages/HistoryPage';
 import QueuePage from './pages/QueuePage';
 import SettingsPage from './pages/SettingsPage';
@@ -55,11 +54,15 @@ function AppContent() {
     });
     const [activeTab, setActiveTab] = useState('folders');
     const [paletteOpen, setPaletteOpen] = useState(false);
+    // Full settings snapshot loaded at startup; persistSettings merges into it
+    // so header saves (theme/locale) never drop other settings fields.
+    const [fullSettings, setFullSettings] = useState<Settings | null>(null);
 
     // Load settings and apply theme on startup
     useEffect(() => {
         logger.info('App', 'startup');
         invoke<Settings>('get_settings').then((settings) => {
+            setFullSettings(settings);
             setThemeMode(settings.theme_mode || 'system');
             const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
             setIsDark(deriveIsDark(settings.theme_mode || 'system', systemDark));
@@ -157,7 +160,6 @@ function AppContent() {
         { key: 'history', label: t('tab.history'), content: <HistoryPage /> },
         { key: 'queue', label: t('tab.queue'), content: <QueuePage /> },
         { key: 'plugins', label: t('tab.plugins'), content: <PluginsPage /> },
-        { key: 'log', label: t('tab.log'), content: <LogPage /> },
         { key: 'settings', label: t('tab.settings'), content: <SettingsPage /> },
         { key: 'about', label: t('tab.about'), content: <AboutPage /> },
     ];
@@ -165,12 +167,14 @@ function AppContent() {
     const persistSettings = async (patch: Partial<Settings>) => {
         const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
         const next: Settings = {
+            ...(fullSettings ?? {}),
             theme_mode: themeMode,
             locale: locale,
             ...patch,
         };
         try {
             await invoke('save_settings', { settings: next });
+            setFullSettings(next);
             await emit('settings-changed', next);
             if (patch.theme_mode) {
                 setThemeMode(patch.theme_mode);

@@ -647,6 +647,12 @@
     gap: var(--qs-space-md);
 }
 
+/* Embedded log viewer inside Settings — fixed height since the
+   settings form itself scrolls and .log-page needs a bounded parent. */
+.settings-logs-panel {
+    height: 420px;
+}
+
 .log-toolbar {
     display: flex;
     gap: var(--qs-space-sm);
@@ -668,6 +674,22 @@
 }
 
 .log-toolbar select:focus {
+    border-color: var(--qs-accent);
+}
+
+.log-toolbar input[type="text"] {
+    padding: 6px 12px;
+    background: var(--qs-bg-tertiary);
+    border: 1px solid var(--qs-border);
+    border-radius: var(--qs-radius-sm);
+    color: var(--qs-text-primary);
+    font-family: var(--qs-font-body);
+    font-size: 13px;
+    outline: none;
+    width: 220px;
+}
+
+.log-toolbar input[type="text"]:focus {
     border-color: var(--qs-accent);
 }
 

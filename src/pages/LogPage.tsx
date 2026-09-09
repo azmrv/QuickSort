@@ -67,6 +67,7 @@ const LogPage = () => {
     const [backendLogs, setBackendLogs] = useState<BackendLog[]>([]);
     const [frontendLogs, setFrontendLogs] = useState(logger.getLogs());
     const [filter, setFilter] = useState<LogLevel>('ALL');
+    const [searchQuery, setSearchQuery] = useState('');
     const [showBackend, setShowBackend] = useState(true);
     const [showFrontend, setShowFrontend] = useState(true);
     const [sortColumns, setSortColumns] = useState<SortColumn[]>([{ columnKey: 'time', direction: 'DESC' }]);
@@ -130,10 +131,19 @@ const LogPage = () => {
     const backendFiltered = showBackend ? backendLogs.filter(filterLevel) : [];
     const frontendFiltered = showFrontend ? frontendLogs.filter(filterLevel) : [];
 
+    const matchesSearch = (log: MergedLog): boolean => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return true;
+        return (
+            log.message.toLowerCase().includes(q) ||
+            (log.target ?? '').toLowerCase().includes(q)
+        );
+    };
+
     const allLogs: MergedLog[] = [
         ...backendFiltered.map(l => ({ ...l, source: 'backend' as const })),
         ...frontendFiltered.map(l => ({ ...l, source: 'frontend' as const })),
-    ];
+    ].filter(matchesSearch);
 
     const getSortValue = (log: MergedLog, key: LogSortKey): string | number => {
         switch (key) {
@@ -258,6 +268,13 @@ const LogPage = () => {
                     <option value="DEBUG">DEBUG+</option>
                 </select>
 
+                <input
+                    type="text"
+                    placeholder={t('log.search')}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                />
+
                 <label>
                     <input type="checkbox" checked={showBackend} onChange={(e) => setShowBackend(e.target.checked)} />
                     Backend
@@ -276,7 +293,9 @@ const LogPage = () => {
 
             <div className="log-list" ref={listRef}>
                 {sortedLogs.length === 0 ? (
-                    <div className="log-empty">{t('log.empty')}</div>
+                    <div className="log-empty">
+                        {searchQuery.trim() ? t('log.search_no_results') : t('log.empty')}
+                    </div>
                 ) : (
                     <DataGrid<MergedLog>
                         columns={orderedColumns}
