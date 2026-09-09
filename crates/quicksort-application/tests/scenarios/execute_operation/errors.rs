@@ -20,9 +20,14 @@ use crate::mocks::*;
 // Helper functions for this test module
 // ============================================================================
 
-/// Creates a `AbsolutePath` from a string for test purposes.
+/// Creates a `AbsolutePath` from a relative test path on every platform.
 fn wp(path: &str) -> AbsolutePath {
-    AbsolutePath::new(path).expect("Invalid test path")
+    let root = if cfg!(target_os = "windows") {
+        "C:\\Users\\Test\\"
+    } else {
+        "/home/test/"
+    };
+    AbsolutePath::new(&format!("{root}{path}")).expect("Invalid test path")
 }
 
 // ============================================================================
@@ -42,7 +47,7 @@ async fn move_target_folder_not_found() {
     let config_repo = MockConfigurationRepository::new();
 
     // A file system with a single source file
-    let src_path = wp("C:\\file.txt");
+    let src_path = wp("file.txt");
     let fs = MockFileSystem::new();
     fs.add_file(src_path.to_path_buf(), 100); // 100 bytes
 

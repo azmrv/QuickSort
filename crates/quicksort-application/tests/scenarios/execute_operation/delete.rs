@@ -18,9 +18,14 @@ use crate::mocks::*;
 // Helper functions for this test module
 // ============================================================================
 
-/// Creates a `AbsolutePath` from a string for test purposes.
+/// Creates a `AbsolutePath` from a relative test path on every platform.
 fn wp(path: &str) -> AbsolutePath {
-    AbsolutePath::new(path).expect("Invalid test path")
+    let root = if cfg!(target_os = "windows") {
+        "C:\\Users\\Test\\"
+    } else {
+        "/home/test/"
+    };
+    AbsolutePath::new(&format!("{root}{path}")).expect("Invalid test path")
 }
 
 // ============================================================================
@@ -38,7 +43,7 @@ async fn delete_single_file() {
     let config_repo = MockConfigurationRepository::new();
     // No folder configuration needed for Delete
 
-    let src_path = wp("C:\\Users\\Test\\Downloads\\temp.txt");
+    let src_path = wp("Downloads/temp.txt");
 
     let fs = MockFileSystem::new();
     fs.add_file(src_path.to_path_buf(), 512); // file exists with 512 bytes
@@ -99,7 +104,7 @@ async fn delete_nonexistent_file() {
     // ---- Given ----
     let config_repo = MockConfigurationRepository::new();
 
-    let src_path = wp("C:\\Users\\Test\\Downloads\\missing.txt");
+    let src_path = wp("Downloads/missing.txt");
 
     let fs = MockFileSystem::new();
     // File is NOT added – it does not exist

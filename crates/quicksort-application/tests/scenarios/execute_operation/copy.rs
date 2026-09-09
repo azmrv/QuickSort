@@ -19,9 +19,14 @@ use crate::scenarios::test_folder;
 // Helper functions for this test module
 // ============================================================================
 
-/// Creates a `AbsolutePath` from a string for test purposes.
+/// Creates a `AbsolutePath` from a relative test path on every platform.
 fn wp(path: &str) -> AbsolutePath {
-    AbsolutePath::new(path).expect("Invalid test path")
+    let root = if cfg!(target_os = "windows") {
+        "C:\\Users\\Test\\"
+    } else {
+        "/home/test/"
+    };
+    AbsolutePath::new(&format!("{root}{path}")).expect("Invalid test path")
 }
 
 // ============================================================================
@@ -40,8 +45,8 @@ async fn copy_single_file_to_existing_folder() {
     let config_repo = MockConfigurationRepository::new();
     config_repo.add(folder.clone()).await.unwrap();
 
-    let src_path = wp("C:\\Users\\Test\\Downloads\\report.pdf");
-    let dst_path = wp("C:\\Users\\Test\\Documents\\report.pdf");
+    let src_path = wp("Downloads/report.pdf");
+    let dst_path = wp("Documents/report.pdf");
 
     let fs = MockFileSystem::new();
     fs.add_file(src_path.to_path_buf(), 1024); // source file with size 1024 bytes
@@ -105,9 +110,9 @@ async fn copy_with_conflict_auto_rename() {
     let config_repo = MockConfigurationRepository::new();
     config_repo.add(folder.clone()).await.unwrap();
 
-    let src_path = wp("C:\\Users\\Test\\Downloads\\report.pdf");
-    let dst_existing = wp("C:\\Users\\Test\\Documents\\report.pdf");
-    let dst_renamed = wp("C:\\Users\\Test\\Documents\\report (1).pdf");
+    let src_path = wp("Downloads/report.pdf");
+    let dst_existing = wp("Documents/report.pdf");
+    let dst_renamed = wp("Documents/report (1).pdf");
 
     let fs = MockFileSystem::new();
     fs.add_file(src_path.to_path_buf(), 1024); // source

@@ -18,9 +18,14 @@ use crate::mocks::*;
 // Helper functions for this test module
 // ============================================================================
 
-/// Creates a `AbsolutePath` from a string for test purposes.
+/// Creates a `AbsolutePath` from a relative test path on every platform.
 fn wp(path: &str) -> AbsolutePath {
-    AbsolutePath::new(path).expect("Invalid test path")
+    let root = if cfg!(target_os = "windows") {
+        "C:\\Users\\Test\\"
+    } else {
+        "/home/test/"
+    };
+    AbsolutePath::new(&format!("{root}{path}")).expect("Invalid test path")
 }
 
 // ============================================================================
@@ -38,8 +43,8 @@ async fn rename_single_file() {
     // Rename does not require a target folder, so the config repo can be empty
     let config_repo = MockConfigurationRepository::new();
 
-    let old_path = wp("C:\\Users\\Test\\Downloads\\old_name.txt");
-    let new_path = wp("C:\\Users\\Test\\Downloads\\new_name.txt");
+    let old_path = wp("Downloads/old_name.txt");
+    let new_path = wp("Downloads/new_name.txt");
 
     let fs = MockFileSystem::new();
     fs.add_file(old_path.to_path_buf(), 1024); // source file exists
@@ -103,8 +108,8 @@ async fn rename_mismatched_counts() {
     // ---- Given ----
     let config_repo = MockConfigurationRepository::new();
 
-    let old_path = wp("C:\\old.txt");
-    let new_path = wp("C:\\new.txt");
+    let old_path = wp("old.txt");
+    let new_path = wp("new.txt");
 
     let fs = MockFileSystem::new();
     fs.add_file(old_path.to_path_buf(), 512);
@@ -119,10 +124,10 @@ async fn rename_mismatched_counts() {
     );
 
     // Two source paths, but only one target path – the second source
-    // (C:\second.txt) does not exist on the file system.
+    // (second.txt) does not exist on the file system.
     let command = OperationCommand {
         operation_type: OperationType::Rename,
-        source_paths: vec![old_path.clone(), wp("C:\\second.txt")],
+        source_paths: vec![old_path.clone(), wp("second.txt")],
         target_folder_id: None,
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: Some(vec![new_path.clone()]),

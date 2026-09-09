@@ -19,9 +19,14 @@ use crate::scenarios::test_folder;
 // Helper functions for this test module
 // ============================================================================
 
-/// Creates a `AbsolutePath` from a string for test purposes.
+/// Creates a `AbsolutePath` from a relative test path on every platform.
 fn wp(path: &str) -> AbsolutePath {
-    AbsolutePath::new(path).expect("Invalid test path")
+    let root = if cfg!(target_os = "windows") {
+        "C:\\Users\\Test\\"
+    } else {
+        "/home/test/"
+    };
+    AbsolutePath::new(&format!("{root}{path}")).expect("Invalid test path")
 }
 
 // ============================================================================
@@ -42,8 +47,8 @@ async fn undo_move_operation() {
     config_repo.add(folder.clone()).await.unwrap();
 
     // Setup file system with a source file
-    let src_path = wp("C:\\Users\\Test\\Downloads\\file.txt");
-    let dst_path = wp("C:\\Users\\Test\\Documents\\file.txt");
+    let src_path = wp("Downloads/file.txt");
+    let dst_path = wp("Documents/file.txt");
 
     let fs = MockFileSystem::new();
     fs.add_file(src_path.to_path_buf(), 1024); // source file exists
@@ -112,11 +117,8 @@ async fn undo_fails_for_non_completed_operation() {
     let fs = MockFileSystem::new();
 
     // Create a Pending operation (not yet started)
-    let pending_op = quicksort_domain::Operation::new_move(
-        vec![wp("C:\\src.txt")],
-        wp("C:\\dst.txt"),
-        Utc::now(),
-    );
+    let pending_op =
+        quicksort_domain::Operation::new_move(vec![wp("src.txt")], wp("dst.txt"), Utc::now());
     op_repo.set_operation(pending_op.clone());
 
     let undo_use_case = UndoOperationUseCase::new(Box::new(op_repo.clone()), Box::new(fs));

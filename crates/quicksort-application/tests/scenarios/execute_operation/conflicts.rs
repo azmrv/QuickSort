@@ -20,9 +20,14 @@ use crate::scenarios::test_folder;
 // Helper functions for this test module
 // ============================================================================
 
-/// Creates a `AbsolutePath` from a string for test purposes.
+/// Creates a `AbsolutePath` from a relative test path on every platform.
 fn wp(path: &str) -> AbsolutePath {
-    AbsolutePath::new(path).expect("Invalid test path")
+    let root = if cfg!(target_os = "windows") {
+        "C:\\Users\\Test\\"
+    } else {
+        "/home/test/"
+    };
+    AbsolutePath::new(&format!("{root}{path}")).expect("Invalid test path")
 }
 
 // ============================================================================
@@ -41,9 +46,9 @@ async fn move_with_conflict_auto_rename() {
     let config_repo = MockConfigurationRepository::new();
     config_repo.add(folder.clone()).await.unwrap();
 
-    let src_path = wp("C:\\Users\\Test\\Downloads\\file.txt");
-    let dst_existing = wp("C:\\Users\\Test\\Documents\\file.txt");
-    let dst_renamed = wp("C:\\Users\\Test\\Documents\\file (1).txt");
+    let src_path = wp("Downloads/file.txt");
+    let dst_existing = wp("Documents/file.txt");
+    let dst_renamed = wp("Documents/file (1).txt");
 
     let fs = MockFileSystem::new();
     fs.add_file(src_path.to_path_buf(), 1024); // source file
@@ -108,8 +113,8 @@ async fn move_with_conflict_skip() {
     let config_repo = MockConfigurationRepository::new();
     config_repo.add(folder.clone()).await.unwrap();
 
-    let src_path = wp("C:\\Users\\Test\\Downloads\\file.txt");
-    let dst_existing = wp("C:\\Users\\Test\\Documents\\file.txt");
+    let src_path = wp("Downloads/file.txt");
+    let dst_existing = wp("Documents/file.txt");
 
     let fs = MockFileSystem::new();
     fs.add_file(src_path.to_path_buf(), 1024);
@@ -160,8 +165,8 @@ async fn move_with_conflict_overwrite() {
     let config_repo = MockConfigurationRepository::new();
     config_repo.add(folder.clone()).await.unwrap();
 
-    let src_path = wp("C:\\Users\\Test\\Downloads\\file.txt");
-    let dst_existing = wp("C:\\Users\\Test\\Documents\\file.txt");
+    let src_path = wp("Downloads/file.txt");
+    let dst_existing = wp("Documents/file.txt");
 
     let fs = MockFileSystem::new();
     fs.add_file(src_path.to_path_buf(), 1024);
