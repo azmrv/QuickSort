@@ -2,6 +2,7 @@
 name = "quicksort-application"
 version = "0.1.0"
 edition = "2021"
+publish = false # Workspace-internal crate, never published to crates.io
 
 # ---------------------------------------------------------------------------
 # Dependencies – follow the Dependency Rule:

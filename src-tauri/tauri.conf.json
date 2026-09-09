@@ -15,7 +15,8 @@
         "label": "main",
         "title": "Quicksort",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "devtools": false
       },
       {
         "label": "selector",
@@ -24,11 +25,18 @@
         "height": 640,
         "resizable": true,
         "visible": false,
-        "center": true
+        "center": true,
+        "devtools": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": "'self'",
+        "connect-src": "ipc: http://ipc.localhost",
+        "img-src": "'self' data:",
+        "style-src": "'self' 'unsafe-inline'",
+        "script-src": "'self'"
+      }
     }
   },
   "bundle": {

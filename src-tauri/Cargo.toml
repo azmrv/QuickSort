@@ -4,6 +4,7 @@ version = "0.2.5"
 description = "QuickSort – быстрая сортировка файлов"
 authors = ["pr0math3us"]
 edition = "2021"
+publish = false # Workspace-internal crate, never published to crates.io
 
 # ---------------------------------------------------------------------------
 # Build dependencies – only needed during compilation
