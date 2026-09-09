@@ -35,30 +35,42 @@ QuickSort combines the speed of a shell extension with the power of a modern fil
 
 - **Cascading context menu** — favorite folders appear directly in Explorer (no UAC)
 - **Instant move/copy** — atomic file operations with cross-drive support
-- **Duplicate detection** — pre-operation checks by name, size, or SHA-256 content hash
-- **Operation history** — full audit trail of every file operation with undo support
-- **Configurable defaults** — default operation type, overwrite policy, and duplicate check mode
+- **Duplicate detection** — pre-operation checks by name, size, or SHA-256 content hash, configured per operation
+- **Operation history** — full audit trail of every file operation with undo support (undo skips files that were already moved manually)
+- **Background operation queue** — persistent batch queue with a worker; operations execute one by one with progress reporting
+- **Configurable defaults** — default operation type, overwrite policy, and duplicate check mode (context menu follows the configured mode)
 
 ### Interface
 
 - **Folder editor** — add, rename, toggle favorites in a clean GUI
-- **All folders selector** — search, filter, and pick from your entire folder library
-- **Event log** — real-time backend and frontend logging with filtering
-- **Dark theme** — built-in light and dark color schemes with amber accents
+- **All folders selector** — search, filter, and pick from your entire folder library; opens in a dedicated window
+- **Total Commander plugins** — install, enable/disable, and manage WCX archive plugins (drag-and-drop)
+- **File search** — Everything-style query syntax (`SearchQuery`) with content/name filtering
+- **Command palette** — interactive CLI-style input (Ctrl+Shift+Space) with Everything search syntax
+- **Event log** — real-time backend and frontend logging with filtering (ring buffer), plus queue job progress
+- **Operation status header** — COM registration and queue state at a glance
+- **Rich data tables** — History/Queue/Log tables with column resize, drag-and-drop and multi-sort (react-data-grid)
+- **Dark theme** — built-in light and dark color schemes with amber accents, synced with Windows
 - **System tray** — runs in background, keeps taskbar clean
 
 ### Smart Install
 
 - **Zero-install deployment** — single executable, auto-registers COM server on first launch
-- **Portable mode** — no admin rights required, everything runs in user space
+- **Portable mode** — portable ZIP (exe + COM DLL + icon); no admin rights required, everything runs in user space
+- **NSIS installer** — per-user install (no admin rights), dual-language (EN/RU), clean uninstall restoring the Windows shell
 
 ## Vision
 
-QuickSort is evolving into a full-featured file manager with:
+QuickSort is evolving into a full-featured, cross-platform file manager:
 
-- **Command line interface** — interactive text input with Everything-style search syntax for advanced file queries, filtering, and sorting
-- **Batch operations** — queue-based processing for large-scale file movements with progress tracking
+- **Cross-platform** — Windows today (NSIS installer + portable ZIP); Linux (Nautilus/Dolphin/Thunar/LXQt via Python IPC clients) and macOS (Automator Services, shared-file bridge) on the same Rust/Tauri core (ADR-017)
+- **Command line interface** — interactive Everything-style search syntax for advanced file queries, filtering, and sorting (the command palette already speaks this syntax)
+- **Batch operations** — scale the background queue into large-scale moves with pause/resume and streaming copy (ADR-020 fast copy manager)
 - **Smart file analysis** — content-based duplicate detection, file type recognition, and metadata indexing
+- **Total Commander ecosystem** — WDX (content), WFX (virtual FS) and WLX (lister) plugins beside the implemented WCX archives
+- **File organizer** — plan-and-preview organization by category with quarantine (ADR-022)
+- **Native WASM plugins + Marketplace** — a plugin runtime beyond the TC formats
+- **SQLite** — migrate storage from JSON as the data layer grows
 
 ## Tech Stack
 
