@@ -4,36 +4,29 @@
 //! previously completed operations. Each scenario follows the Given-When-Then
 //! structure defined in `SPECIFICATION.md`.
 
-use std::sync::Arc;
 use chrono::Utc;
 
-use quicksort_domain::{OperationType, OperationState, AbsolutePath, OperationId};
 use quicksort_application::{
-    ExecuteOperation, OperationCommand, OverwritePolicy, UseCaseError,
     use_cases::{ExecuteOperationUseCase, UndoOperationUseCase},
+    ExecuteOperation, OperationCommand, OverwritePolicy, UndoOperation, UseCaseError,
 };
+use quicksort_domain::{AbsolutePath, DuplicateCheckMode, OperationState, OperationType};
 
 use crate::mocks::*;
+use crate::scenarios::test_folder;
 
 // ============================================================================
 // Helper functions for this test module
 // ============================================================================
 
-/// Creates a `AbsolutePath` from a string for test purposes.
+/// Creates a `AbsolutePath` from a relative test path on every platform.
 fn wp(path: &str) -> AbsolutePath {
-    AbsolutePath::new(path).expect("Invalid test path")
-}
-
-/// Creates a test folder entity with default values.
-fn test_folder() -> quicksort_domain::Folder {
-    quicksort_domain::Folder {
-        id: quicksort_domain::FolderId::from_string("folder-test"),
-        name: "Documents".to_string(),
-        path: wp("C:\\Users\\Test\\Documents"),
-        favorite: false,
-        order: 0,
-        stats: Default::default(),
-    }
+    let root = if cfg!(target_os = "windows") {
+        "C:\\Users\\Test\\"
+    } else {
+        "/home/test/"
+    };
+    AbsolutePath::new(&format!("{root}{path}")).expect("Invalid test path")
 }
 
 // ============================================================================
@@ -54,11 +47,11 @@ async fn undo_move_operation() {
     config_repo.add(folder.clone()).await.unwrap();
 
     // Setup file system with a source file
-    let src_path = wp("C:\\Users\\Test\\Downloads\\file.txt");
-    let dst_path = wp("C:\\Users\\Test\\Documents\\file.txt");
+    let src_path = wp("Downloads/file.txt");
+    let dst_path = wp("Documents/file.txt");
 
     let fs = MockFileSystem::new();
-    fs.add_file(src_path.to_path_buf(), 1024);  // source file exists
+    fs.add_file(src_path.to_path_buf(), 1024); // source file exists
 
     // Shared operation repository (used by both use cases)
     let op_repo = MockOperationRepository::new();
@@ -68,12 +61,12 @@ async fn undo_move_operation() {
 
     // Step 1: Execute a Move operation
     let execute_use_case = ExecuteOperationUseCase::new(
-        Arc::new(config_repo),
-        Arc::new(op_repo.clone()),
-        Arc::new(fs.clone()),
-        Arc::new(id_gen),
-        Arc::new(clock.clone()),
-        Arc::new(MockConflictResolver),
+        Box::new(op_repo.clone()),
+        Box::new(config_repo),
+        Box::new(fs.clone()),
+        Box::new(id_gen),
+        Box::new(clock),
+        Box::new(MockDuplicateDetector),
     );
 
     let command = OperationCommand {
@@ -82,6 +75,7 @@ async fn undo_move_operation() {
         target_folder_id: Some(folder.id.clone()),
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: None,
+        duplicate_check_mode: DuplicateCheckMode::default(),
     };
 
     let result = execute_use_case.execute(command).await.unwrap();
@@ -92,14 +86,10 @@ async fn undo_move_operation() {
     assert!(fs.exists(&dst_path).await.unwrap());
 
     // Step 2: Undo the Move operation
-    let undo_use_case = UndoOperationUseCase::new(
-        Arc::new(op_repo.clone()),
-        Arc::new(fs.clone()),
-        Arc::new(clock.clone()),
-    );
+    let undo_use_case = UndoOperationUseCase::new(Box::new(op_repo.clone()), Box::new(fs.clone()));
 
     // ---- When ----
-    let undo_result = undo_use_case.undo(op_id.clone()).await.unwrap();
+    let _undo_result = undo_use_case.undo(op_id.clone()).await.unwrap();
 
     // ---- Then ----
     // File is back at the original location
@@ -125,21 +115,13 @@ async fn undo_fails_for_non_completed_operation() {
     // ---- Given ----
     let op_repo = MockOperationRepository::new();
     let fs = MockFileSystem::new();
-    let clock = MockClock::new(Utc::now());
 
     // Create a Pending operation (not yet started)
-    let pending_op = quicksort_domain::Operation::new_move(
-        vec![wp("C:\\src.txt")],
-        wp("C:\\dst.txt"),
-        Utc::now(),
-    );
+    let pending_op =
+        quicksort_domain::Operation::new_move(vec![wp("src.txt")], wp("dst.txt"), Utc::now());
     op_repo.set_operation(pending_op.clone());
 
-    let undo_use_case = UndoOperationUseCase::new(
-        Arc::new(op_repo.clone()),
-        Arc::new(fs),
-        Arc::new(clock),
-    );
+    let undo_use_case = UndoOperationUseCase::new(Box::new(op_repo.clone()), Box::new(fs));
 
     // ---- When ----
     let result = undo_use_case.undo(pending_op.id.clone()).await;

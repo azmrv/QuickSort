@@ -5,41 +5,29 @@
 //! Each scenario follows the Given-When-Then structure defined in
 //! `SPECIFICATION.md`.
 
-use std::sync::Arc;
 use chrono::Utc;
 
-use quicksort_domain::{OperationType, OperationState, AbsolutePath};
 use quicksort_application::{
-    ExecuteOperation, OperationCommand, OverwritePolicy, UseCaseError,
-    use_cases::ExecuteOperationUseCase,
+    use_cases::ExecuteOperationUseCase, ExecuteOperation, OperationCommand, OverwritePolicy,
+    UseCaseError,
 };
-use quicksort_application::ports::outbound::{
-    ConfigurationRepository, OperationRepository, FileSystem,
-    IdGenerator, Clock, ConflictResolver,
-};
+use quicksort_domain::{AbsolutePath, DuplicateCheckMode, OperationState, OperationType};
 
 use crate::mocks::*;
-use crate::scenarios::common::*;
+use crate::scenarios::test_folder;
 
 // ============================================================================
 // Helper functions for this test module
 // ============================================================================
 
-/// Creates a `AbsolutePath` from a string for test purposes.
+/// Creates a `AbsolutePath` from a relative test path on every platform.
 fn wp(path: &str) -> AbsolutePath {
-    AbsolutePath::new(path).expect("Invalid test path")
-}
-
-/// Creates a test folder entity with default values.
-fn test_folder() -> quicksort_domain::Folder {
-    quicksort_domain::Folder {
-        id: quicksort_domain::FolderId::from_string("folder-test"),
-        name: "Test Folder".to_string(),
-        path: wp("C:\\Users\\Test\\Documents"),
-        favorite: false,
-        order: 0,
-        stats: Default::default(),
-    }
+    let root = if cfg!(target_os = "windows") {
+        "C:\\Users\\Test\\"
+    } else {
+        "/home/test/"
+    };
+    AbsolutePath::new(&format!("{root}{path}")).expect("Invalid test path")
 }
 
 // ============================================================================
@@ -58,27 +46,26 @@ async fn move_with_conflict_auto_rename() {
     let config_repo = MockConfigurationRepository::new();
     config_repo.add(folder.clone()).await.unwrap();
 
-    let src_path = wp("C:\\Users\\Test\\Downloads\\file.txt");
-    let dst_existing = wp("C:\\Users\\Test\\Documents\\file.txt");
-    let dst_renamed = wp("C:\\Users\\Test\\Documents\\file (1).txt");
+    let src_path = wp("Downloads/file.txt");
+    let dst_existing = wp("Documents/file.txt");
+    let dst_renamed = wp("Documents/file (1).txt");
 
     let fs = MockFileSystem::new();
-    fs.add_file(src_path.to_path_buf(), 1024);   // source file
+    fs.add_file(src_path.to_path_buf(), 1024); // source file
     fs.add_file(dst_existing.to_path_buf(), 2048); // existing destination
 
     let op_repo = MockOperationRepository::new();
     let fixed_time = Utc::now();
     let id_gen = MockIdGenerator::new();
     let clock = MockClock::new(fixed_time);
-    let conflict_resolver = MockConflictResolver;
 
     let use_case = ExecuteOperationUseCase::new(
-        Arc::new(config_repo),
-        Arc::new(op_repo.clone()),
-        Arc::new(fs.clone()),
-        Arc::new(id_gen),
-        Arc::new(clock),
-        Arc::new(conflict_resolver),
+        Box::new(op_repo.clone()),
+        Box::new(config_repo),
+        Box::new(fs.clone()),
+        Box::new(id_gen),
+        Box::new(clock),
+        Box::new(MockDuplicateDetector),
     );
 
     let command = OperationCommand {
@@ -86,7 +73,8 @@ async fn move_with_conflict_auto_rename() {
         source_paths: vec![src_path.clone()],
         target_folder_id: Some(folder.id.clone()),
         overwrite_policy: OverwritePolicy::AutoRename,
-        target_paths: None,   // not needed for Move
+        target_paths: None,
+        duplicate_check_mode: DuplicateCheckMode::default(),
     };
 
     // ---- When ----
@@ -125,8 +113,8 @@ async fn move_with_conflict_skip() {
     let config_repo = MockConfigurationRepository::new();
     config_repo.add(folder.clone()).await.unwrap();
 
-    let src_path = wp("C:\\Users\\Test\\Downloads\\file.txt");
-    let dst_existing = wp("C:\\Users\\Test\\Documents\\file.txt");
+    let src_path = wp("Downloads/file.txt");
+    let dst_existing = wp("Documents/file.txt");
 
     let fs = MockFileSystem::new();
     fs.add_file(src_path.to_path_buf(), 1024);
@@ -134,12 +122,12 @@ async fn move_with_conflict_skip() {
 
     let op_repo = MockOperationRepository::new();
     let use_case = ExecuteOperationUseCase::new(
-        Arc::new(config_repo),
-        Arc::new(op_repo.clone()),
-        Arc::new(fs.clone()),
-        Arc::new(MockIdGenerator::new()),
-        Arc::new(MockClock::new(Utc::now())),
-        Arc::new(MockConflictResolver),
+        Box::new(op_repo.clone()),
+        Box::new(config_repo),
+        Box::new(fs.clone()),
+        Box::new(MockIdGenerator::new()),
+        Box::new(MockClock::new(Utc::now())),
+        Box::new(MockDuplicateDetector),
     );
 
     let command = OperationCommand {
@@ -148,6 +136,7 @@ async fn move_with_conflict_skip() {
         target_folder_id: Some(folder.id.clone()),
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: None,
+        duplicate_check_mode: DuplicateCheckMode::default(),
     };
 
     // ---- When ----
@@ -176,8 +165,8 @@ async fn move_with_conflict_overwrite() {
     let config_repo = MockConfigurationRepository::new();
     config_repo.add(folder.clone()).await.unwrap();
 
-    let src_path = wp("C:\\Users\\Test\\Downloads\\file.txt");
-    let dst_existing = wp("C:\\Users\\Test\\Documents\\file.txt");
+    let src_path = wp("Downloads/file.txt");
+    let dst_existing = wp("Documents/file.txt");
 
     let fs = MockFileSystem::new();
     fs.add_file(src_path.to_path_buf(), 1024);
@@ -185,12 +174,12 @@ async fn move_with_conflict_overwrite() {
 
     let op_repo = MockOperationRepository::new();
     let use_case = ExecuteOperationUseCase::new(
-        Arc::new(config_repo),
-        Arc::new(op_repo.clone()),
-        Arc::new(fs.clone()),
-        Arc::new(MockIdGenerator::new()),
-        Arc::new(MockClock::new(Utc::now())),
-        Arc::new(MockConflictResolver),
+        Box::new(op_repo.clone()),
+        Box::new(config_repo),
+        Box::new(fs.clone()),
+        Box::new(MockIdGenerator::new()),
+        Box::new(MockClock::new(Utc::now())),
+        Box::new(MockDuplicateDetector),
     );
 
     let command = OperationCommand {
@@ -199,6 +188,7 @@ async fn move_with_conflict_overwrite() {
         target_folder_id: Some(folder.id.clone()),
         overwrite_policy: OverwritePolicy::Overwrite,
         target_paths: None,
+        duplicate_check_mode: DuplicateCheckMode::default(),
     };
 
     // ---- When ----

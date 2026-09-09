@@ -6,14 +6,13 @@
 //! Each scenario follows the Given-When-Then structure defined in
 //! `SPECIFICATION.md`.
 
-use std::sync::Arc;
 use chrono::Utc;
 
-use quicksort_domain::{OperationType, OperationState, AbsolutePath, FolderId};
 use quicksort_application::{
-    ExecuteOperation, OperationCommand, OverwritePolicy, UseCaseError,
-    use_cases::ExecuteOperationUseCase,
+    use_cases::ExecuteOperationUseCase, ExecuteOperation, OperationCommand, OverwritePolicy,
+    UseCaseError,
 };
+use quicksort_domain::{AbsolutePath, DuplicateCheckMode, FolderId, OperationType};
 
 use crate::mocks::*;
 
@@ -21,9 +20,14 @@ use crate::mocks::*;
 // Helper functions for this test module
 // ============================================================================
 
-/// Creates a `AbsolutePath` from a string for test purposes.
+/// Creates a `AbsolutePath` from a relative test path on every platform.
 fn wp(path: &str) -> AbsolutePath {
-    AbsolutePath::new(path).expect("Invalid test path")
+    let root = if cfg!(target_os = "windows") {
+        "C:\\Users\\Test\\"
+    } else {
+        "/home/test/"
+    };
+    AbsolutePath::new(&format!("{root}{path}")).expect("Invalid test path")
 }
 
 // ============================================================================
@@ -43,44 +47,37 @@ async fn move_target_folder_not_found() {
     let config_repo = MockConfigurationRepository::new();
 
     // A file system with a single source file
-    let src_path = wp("C:\\file.txt");
+    let src_path = wp("file.txt");
     let fs = MockFileSystem::new();
-    fs.add_file(src_path.to_path_buf(), 100);  // 100 bytes
+    fs.add_file(src_path.to_path_buf(), 100); // 100 bytes
 
     let op_repo = MockOperationRepository::new();
     let id_gen = MockIdGenerator::new();
     let clock = MockClock::new(Utc::now());
 
     let use_case = ExecuteOperationUseCase::new(
-        Arc::new(config_repo),
-        Arc::new(op_repo.clone()),
-        Arc::new(fs.clone()),
-        Arc::new(id_gen),
-        Arc::new(clock),
-        Arc::new(MockConflictResolver),
+        Box::new(op_repo.clone()),
+        Box::new(config_repo),
+        Box::new(fs.clone()),
+        Box::new(id_gen),
+        Box::new(clock),
+        Box::new(MockDuplicateDetector),
     );
 
     // A command targeting a folder that does not exist
-    // FolderId::from_string is not a constructor; we create a FolderId
-    // directly using a test helper or the newtype's constructor.
     let command = OperationCommand {
         operation_type: OperationType::Move,
         source_paths: vec![src_path],
-        target_folder_id: Some("non-existent".to_string()),
+        target_folder_id: Some(FolderId::new()),
         overwrite_policy: OverwritePolicy::Skip,
-        target_paths: None,   // required field
+        target_paths: None,
+        duplicate_check_mode: DuplicateCheckMode::default(),
     };
 
     // ---- When ----
     let result = use_case.execute(command).await;
 
-    // ---- Then ----    
-    // The error variant may be different depending on how the use case
-    // resolves the folder ID. With our current implementation,
-    // OperationCommand::target_folder_id is a plain String, and the
-    // use case calls config_repo.load_all().await and then searches
-    // for a matching folder. If none is found, it returns
-    // UseCaseError::FolderNotFound.
+    // ---- Then ----
     assert!(matches!(result, Err(UseCaseError::FolderNotFound(_))));
 }
 
@@ -101,30 +98,26 @@ async fn empty_source_paths() {
     let op_repo = MockOperationRepository::new();
 
     let use_case = ExecuteOperationUseCase::new(
-        Arc::new(config_repo),
-        Arc::new(op_repo),
-        Arc::new(fs),
-        Arc::new(MockIdGenerator::new()),
-        Arc::new(MockClock::new(Utc::now())),
-        Arc::new(MockConflictResolver),
+        Box::new(op_repo),
+        Box::new(config_repo),
+        Box::new(fs),
+        Box::new(MockIdGenerator::new()),
+        Box::new(MockClock::new(Utc::now())),
+        Box::new(MockDuplicateDetector),
     );
 
     let command = OperationCommand {
         operation_type: OperationType::Move,
-        source_paths: vec![],          // empty source list
-        target_folder_id: Some("folder-1".to_string()),
+        source_paths: vec![],
+        target_folder_id: Some(FolderId::new()),
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: None,
+        duplicate_check_mode: DuplicateCheckMode::default(),
     };
 
     // ---- When ----
     let result = use_case.execute(command).await;
 
     // ---- Then ----
-    // The use case should detect the empty source list and return
-    // an InvalidCommand error. This validation is currently performed
-    // in the pipeline (pipeline::validate_command). If the use case
-    // does not use the pipeline, this test will fail, indicating that
-    // validation should be added.
     assert!(matches!(result, Err(UseCaseError::InvalidCommand(_))));
 }

@@ -18,15 +18,20 @@
 //! single-threaded or use `tokio::task::spawn_blocking`, this is safe.
 
 use async_trait::async_trait;
-use quicksort_application::ports::outbound::{
-    Clock, ConfigurationRepository, ConflictResolver, FileSystem, IdGenerator, OperationRepository,
-};
-use quicksort_application::OperationCommand;
 use quicksort_application::UseCaseError;
-use quicksort_domain::{AbsolutePath, Folder, FolderId, Operation, OperationId};
+use quicksort_domain::errors::DomainError;
+use quicksort_domain::{
+    AbsolutePath, DuplicateCheckMode, DuplicateCheckResult, Folder, FolderId, Operation,
+    OperationId,
+};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+pub use quicksort_application::ports::outbound::{
+    Clock, ConfigurationRepository, DuplicateDetectionPort, FileSystem, IdGenerator,
+    OperationRepository,
+};
 
 // ============================================================================
 // Mock ConfigurationRepository
@@ -36,16 +41,17 @@ use std::sync::Mutex;
 ///
 /// Allows pre-loading of folder data and captures save operations
 /// for verification.
+#[derive(Clone)]
 pub struct MockConfigurationRepository {
     /// Internal storage for folders, protected by a mutex.
-    folders: Mutex<Vec<Folder>>,
+    folders: Arc<Mutex<Vec<Folder>>>,
 }
 
 impl MockConfigurationRepository {
     /// Creates a new empty repository.
     pub fn new() -> Self {
         Self {
-            folders: Mutex::new(Vec::new()),
+            folders: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -121,15 +127,16 @@ impl ConfigurationRepository for MockConfigurationRepository {
 ///
 /// Stores operations in a `HashMap<OperationId, Operation>` for
 /// fast lookup and supports all CRUD operations.
+#[derive(Clone)]
 pub struct MockOperationRepository {
-    operations: Mutex<HashMap<String, Operation>>,
+    operations: Arc<Mutex<HashMap<String, Operation>>>,
 }
 
 impl MockOperationRepository {
     /// Creates a new empty repository.
     pub fn new() -> Self {
         Self {
-            operations: Mutex::new(HashMap::new()),
+            operations: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -190,16 +197,17 @@ impl OperationRepository for MockOperationRepository {
 /// Uses a `HashMap<PathBuf, (bool, u64)>` where the key is the file path,
 /// the boolean indicates existence, and the u64 is the file size.
 /// Supports basic operations: exists, move, copy, delete, rename.
+#[derive(Clone)]
 pub struct MockFileSystem {
     /// Simulated file system state: (exists, size_in_bytes)
-    files: Mutex<HashMap<PathBuf, (bool, u64)>>,
+    files: Arc<Mutex<HashMap<PathBuf, (bool, u64)>>>,
 }
 
 impl MockFileSystem {
     /// Creates a new empty file system.
     pub fn new() -> Self {
         Self {
-            files: Mutex::new(HashMap::new()),
+            files: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -337,29 +345,24 @@ impl FileSystem for MockFileSystem {
 // Mock IdGenerator
 // ============================================================================
 
-/// A predictable ID generator for testing.
+/// A random ID generator for testing.
 ///
-/// Returns incrementing IDs of the form `test-op-001`, `test-op-002`, etc.
-/// This makes test assertions deterministic.
-pub struct MockIdGenerator {
-    counter: Mutex<u32>,
-}
+/// Returns a fresh `OperationId` on every call, mirroring the real
+/// generator. Tests that need to inspect the operation id use the value
+/// returned by the use case.
+#[derive(Clone, Default)]
+pub struct MockIdGenerator;
 
 impl MockIdGenerator {
-    /// Creates a new generator starting at 1.
+    /// Creates a new generator.
     pub fn new() -> Self {
-        Self {
-            counter: Mutex::new(1),
-        }
+        Self
     }
 }
 
 impl IdGenerator for MockIdGenerator {
     fn generate(&self) -> OperationId {
-        let mut counter = self.counter.lock().unwrap();
-        let id = format!("test-op-{:03}", *counter);
-        *counter += 1;
-        OperationId::from_string(&id).unwrap()
+        OperationId::new()
     }
 }
 
@@ -371,16 +374,17 @@ impl IdGenerator for MockIdGenerator {
 ///
 /// The time can be set manually, allowing tests to verify timestamp-based
 /// logic (e.g., `created_at`, `updated_at`).
+#[derive(Clone)]
 pub struct MockClock {
     /// The current time, settable by the test.
-    now: Mutex<chrono::DateTime<chrono::Utc>>,
+    now: Arc<Mutex<chrono::DateTime<chrono::Utc>>>,
 }
 
 impl MockClock {
     /// Creates a new clock with a fixed timestamp.
     pub fn new(now: chrono::DateTime<chrono::Utc>) -> Self {
         Self {
-            now: Mutex::new(now),
+            now: Arc::new(Mutex::new(now)),
         }
     }
 
@@ -403,20 +407,31 @@ impl Clock for MockClock {
 }
 
 // ============================================================================
-// Mock ConflictResolver
+// Mock DuplicateDetector
 // ============================================================================
 
-/// A simple conflict resolver that always returns the command unchanged.
+/// A duplicate detector that never reports a duplicate.
 ///
-/// For tests that need specific conflict resolution behavior,
-/// create a custom mock or use a conditional resolver.
-pub struct MockConflictResolver;
+/// The use case treats the real destination `exists()` check as
+/// authoritative for conflict resolution (the duplicate detector result
+/// is informational), so returning `exists: false` is safe for every
+/// overwrite-policy scenario exercised by the tests.
+#[derive(Clone, Default)]
+pub struct MockDuplicateDetector;
 
 #[async_trait]
-impl ConflictResolver for MockConflictResolver {
-    async fn resolve(&self, command: OperationCommand) -> Result<OperationCommand, UseCaseError> {
-        // By default, just return the command unchanged.
-        // Tests can override this behavior by replacing the mock.
-        Ok(command)
+impl DuplicateDetectionPort for MockDuplicateDetector {
+    async fn check_duplicate(
+        &self,
+        source: &AbsolutePath,
+        destination: &AbsolutePath,
+        mode: &DuplicateCheckMode,
+    ) -> Result<DuplicateCheckResult, DomainError> {
+        Ok(DuplicateCheckResult {
+            source: source.clone(),
+            destination: destination.clone(),
+            exists: false,
+            mode: mode.clone(),
+        })
     }
 }
