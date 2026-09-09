@@ -3,8 +3,8 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::mocks::MockConfigurationRepository;
-use quicksort_application::GetFolders;
 use quicksort_application::use_cases::GetFoldersUseCase;
+use quicksort_application::GetFolders;
 
 struct SpanRecorder {
     names: Mutex<Vec<String>>,

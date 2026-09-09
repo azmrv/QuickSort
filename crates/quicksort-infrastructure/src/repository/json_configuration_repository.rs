@@ -203,7 +203,7 @@ mod tests {
             .map(|(id, name, p)| FolderData {
                 id: id.to_string(),
                 name: name.to_string(),
-                path: p.to_string(),
+                path: test_path(p).to_string(),
                 favorite: false,
                 order: 0,
                 color: None,

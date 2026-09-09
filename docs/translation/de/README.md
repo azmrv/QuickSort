@@ -35,30 +35,42 @@ QuickSort kombiniert die Geschwindigkeit einer Shell-Erweiterung mit der Leistun
 
 - **Kaskaden-Kontextmenü** — Lieblingsordner direkt im Explorer (kein UAC)
 - **Sofortiges Verschieben/Kopieren** — atomare Dateioperationen mit Cross-Drive-Unterstützung
-- **Duplikaterkennung** — Vorab-Prüfungen nach Name, Größe oder SHA-256-Inhalts-Hash
-- **Operationsverlauf** — vollständige Audit-Trail aller Dateioperationen mit Undo-Unterstützung
-- **Konfigurierbare Standardwerte** — Standard-Operationstyp, Überschreibungsrichtlinie und Duplikat-Check-Modus
+- **Duplikaterkennung** — Vorab-Prüfungen nach Name, Größe oder SHA-256-Inhalts-Hash, konfiguriert pro Operation
+- **Operationsverlauf** — vollständige Audit-Trail aller Dateioperationen mit Undo-Unterstützung (Undo überspringt Dateien, die bereits manuell verschoben wurden)
+- **Hintergrund-Warteschlange** — Persistente Batch-Warteschlange mit Worker; Operationen werden nacheinander mit Fortschrittsberichterstattung ausgeführt
+- **Konfigurierbare Standardwerte** — Standard-Operationstyp, Überschreibungsrichtlinie und Duplikat-Check-Modus (Kontextmenü folgt dem konfigurierten Modus)
 
 ### Benutzeroberfläche
 
 - **Ordner-Editor** — Hinzufügen, Umbennen, Favoriten umschalten in einer sauberen GUI
-- **Alle Ordner auswählen** — Suche, Filter und Auswahl aus Ihrer gesamten Ordnerbibliothek
-- **Ereignisprotokoll** — Echtzeit-Backend- und Frontend-Protokollierung mit Filterung
-- **Dunkles Thema** — Integrierte helle und dunkle Farbschemen mit Bernstein-Akzenten
+- **Alle Ordner auswählen** — Suche, Filter und Auswahl aus Ihrer gesamten Ordnerbibliothek; öffnet sich in einem eigenen Fenster
+- **Total-Commander-Plugins** — Installieren, Aktivieren/Deaktivieren und Verwalten von WCX-Archiv-Plugins (Drag-and-Drop)
+- **Dateisuche** — Everything-Stil Suchsyntax (`SearchQuery`) mit Inhalt/Name-Filterung
+- **Befehlspalette** — Interaktive CLI-Eingabe (Ctrl+Shift+Space) mit Everything-Suchsyntax
+- **Ereignisprotokoll** — Echtzeit-Backend- und Frontend-Protokollierung mit Filterung (Ringbuffer), plus Fortschritt der Warteschlangen-Aufträge
+- **Operationsstatus-Header** — COM-Registrierung und Warteschlangenstatus auf einen Blick
+- **Datenreiche Tabellen** — Verlauf/Warteschlange/Log-Tabellen mit Spalten-Größenanpassung, Drag-and-Drop und mehrfacher Sortierung (react-data-grid)
+- **Dunkles Thema** — Integrierte helle und dunkle Farbschemen mit Bernstein-Akzenten, synchronisiert mit Windows
 - **Systemtray** — Läuft im Hintergrund, hält die Taskbar sauber
 
 ### Smarte Installation
 
 - **Null-Installations-Deployment** — Einzelne ausführbare Datei, automatische COM-Server-Registrierung beim ersten Start
-- **Portabler Modus** — Keine Administratorrechte erforderlich, alles läuft im Benutzerraum
+- **Portabler Modus** — Portables ZIP (exe + COM DLL + Icon); keine Administratorrechte erforderlich, alles läuft im Benutzerraum
+- **NSIS-Installer** — Benutzerinstallation (keine Administratorrechte), zweisprachig (EN/RU), sauberes Deinstallieren mit Wiederherstellung der Windows-Shell
 
 ## Vision
 
-QuickSort entwickelt sich zu einem vollwertigen Dateimanager mit:
+QuickSort entwickelt sich zu einem vollwertigen, plattformübergreifenden Dateimanager:
 
-- **Kommandozeile** — Interaktive Texteingabe mit Everything-Stil Suchsyntax für erweiterte Dateianfragen, Filterung und Sortierung
-- **Batch-Operationen** — Warteschlangenbasierte Verarbeitung für groß angelegte Dateibewegungen mit Fortschrittsverfolgung
+- **Plattformübergreifend** — Heute Windows (NSIS-Installer + portables ZIP); Linux (Nautilus/Dolphin/Thunar/LXQt über Python-IPC-Clients) und macOS (Automator Services, Shared-File-Bridge) auf demselben Rust/Tauri-Kern (ADR-017)
+- **Kommandozeile** — Interaktive Everything-Stil Suchsyntax für erweiterte Dateianfragen, Filterung und Sortierung (die Befehlspalette spricht diese Syntax bereits)
+- **Batch-Operationen** — Skalierung der Hintergrund-Warteschlange zu groß angelegten Verschiebungen mit Pause/Fortsetzen und Streaming-Kopie (ADR-020 Fast-Copy-Manager)
 - **Intelligente Dateianalyse** — Inhaltsbasierte Duplikaterkennung, Dateityperkennung und Metadaten-Indexierung
+- **Total-Commander-Ökosystem** — WDX (Inhalt), WFX (virtuelles Dateisystem) und WLX (Lister) Plugins neben den implementierten WCX-Archiven
+- **Datei-Organizer** — Planen und Vorschauen der Organisation nach Kategorien mit Quarantäne (ADR-022)
+- **Native WASM-Plugins + Marketplace** — Ein Plugin-Runtime jenseits der TC-Formate
+- **SQLite** — Migration des Speichers von JSON, wenn die Datenebene wächst
 
 ## Tech-Stack
 
