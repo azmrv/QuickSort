@@ -35,30 +35,42 @@ QuickSort combina la velocidad de una extensión de shell con la potencia de un 
 
 - **Menú contextual en cascada** — carpetas favoritas directamente en el Explorador (sin UAC)
 - **Mover/copiar instantáneo** — operaciones atómicas con soporte entre discos
-- **Detección de duplicados** — verificaciones previas por nombre, tamaño o hash SHA-256
-- **Historial de operaciones** — registro completo de todas las operaciones con soporte de deshacer
-- **Valores por defecto configurables** — tipo de operación, política de sobrescritura y modo de verificación de duplicados
+- **Detección de duplicados** — verificaciones previas por nombre, tamaño o hash SHA-256 del contenido, configurable por operación
+- **Historial de operaciones** — registro completo de todas las operaciones con soporte de deshacer (el deshacer omite archivos que ya fueron movidos manualmente)
+- **Cola de operaciones en segundo plano** — cola persistente por lotes con un worker; las operaciones se ejecutan una a una con informe de progreso
+- **Valores por defecto configurables** — tipo de operación por defecto, política de sobrescritura y modo de verificación de duplicados (el menú contextual sigue el modo configurado)
 
 ### Interfaz
 
 - **Editor de carpetas** — agregar, renombrar, marcar favoritos en una GUI limpia
-- **Selector de todas las carpetas** — buscar, filtrar y elegir de toda tu biblioteca de carpetas
-- **Registro de eventos** — logging en tiempo real de backend y frontend con filtración
-- **Tema oscuro** — esquemas de colores claro y oscuro con acentos ámbar
+- **Selector de todas las carpetas** — buscar, filtrar y elegir de toda tu biblioteca de carpetas; se abre en una ventana dedicada
+- **Plugins de Total Commander** — instalar, habilitar/deshabilitar y gestionar plugins de archivos WCX (arrastrar y soltar)
+- **Búsqueda de archivos** — sintaxis de consulta estilo Everything (`SearchQuery`) con filtrado por contenido/nombre
+- **Paleta de comandos** — entrada interactiva estilo CLI (Ctrl+Shift+Space) con sintaxis de búsqueda de Everything
+- **Registro de eventos** — logging en tiempo real de backend y frontend con filtrado (ring buffer), más el progreso de los trabajos de la cola
+- **Encabezado de estado de operación** — registro COM y estado de la cola de un vistazo
+- **Tablas de datos enriquecidas** — tablas de Historial/Cola/Registro con ajuste de columnas, arrastrar y soltar y multi-ordenación (react-data-grid)
+- **Tema oscuro** — esquemas de colores claro y oscuro con acentos ámbar, sincronizados con Windows
 - **Bandeja del sistema** — ejecuta en segundo plano, mantiene la barra de tareas limpia
 
 ### Instalación inteligente
 
 - **Despliegue sin instalación** — ejecutable único, auto-registra el servidor COM en el primer inicio
-- **Modo portátil** — no requiere derechos de administrador, todo ejecuta en espacio de usuario
+- **Modo portátil** — ZIP portátil (exe + DLL COM + icono); no requiere derechos de administrador, todo ejecuta en espacio de usuario
+- **Instalador NSIS** — instalación por usuario (sin derechos de administrador), bilingüe (EN/RU), desinstalación limpia que restaura el shell de Windows
 
 ## Visión
 
-QuickSort evoluciona hacia un gestor de archivos completo con:
+QuickSort evoluciona hacia un gestor de archivos completo y multiplataforma:
 
-- **Línea de comandos** — entrada de texto interactivo con sintaxis de búsqueda estilo Everything para consultas de archivos avanzadas, filtrado y ordenación
-- **Operaciones por lotes** — procesamiento basado en colas para movimientos a gran escala con seguimiento de progreso
-- **Análisis inteligente de archivos** — detección de duplicados por contenido, reconocimiento de tipos e indexación de metadatos
+- **Multiplataforma** — hoy Windows (instalador NSIS + ZIP portátil); Linux (Nautilus/Dolphin/Thunar/LXQt mediante clientes IPC Python) y macOS (Automator Services, puente de archivo compartido) sobre el mismo núcleo Rust/Tauri (ADR-017)
+- **Línea de comandos** — entrada de texto interactivo con sintaxis de búsqueda estilo Everything para consultas de archivos avanzadas, filtrado y ordenación (la paleta de comandos ya habla esta sintaxis)
+- **Operaciones por lotes** — escalar la cola en segundo plano hacia movimientos a gran escala con pausa/reanudación y copia en streaming (ADR-020 fast copy manager)
+- **Análisis inteligente de archivos** — detección de duplicados por contenido, reconocimiento de tipos de archivo e indexación de metadatos
+- **Ecosistema Total Commander** — plugins WDX (contenido), WFX (sistema de archivos virtual) y WLX (lister) junto a los archivos WCX ya implementados
+- **Organizador de archivos** — organización planificada y con vista previa por categorías con cuarentena (ADR-022)
+- **Plugins WASM nativos + Marketplace** — un runtime de plugins más allá de los formatos TC
+- **SQLite** — migrar el almacenamiento desde JSON a medida que crece la capa de datos
 
 ## Stack Tecnológico
 
