@@ -5,7 +5,14 @@ import 'react-data-grid/lib/styles.css';
 import { invoke } from '../../lib/invoke';
 import { logger } from '../../lib/logger';
 import { useTranslation } from '../../i18n/useTranslation';
-import { compareRowsByCreatedAtAsc, compareRowsByStateAsc, formatBytes, jobToRow, operationToRow } from './rowModel';
+import OperationsToolbar from './OperationsToolbar';
+import {
+    compareRowsByCreatedAtAsc,
+    compareRowsByStateAsc,
+    formatBytes,
+    jobToRow,
+    operationToRow,
+} from './rowModel';
 import {
     compareFilesFirst,
     compareSourceRank,
@@ -308,15 +315,14 @@ const OperationsTable = () => {
 
     return (
         <div style={{ padding: 'var(--qs-space-lg)' }}>
-            <h3 style={{
-                fontFamily: 'var(--qs-font-display)',
-                fontSize: '16px',
-                fontWeight: 600,
-                color: 'var(--qs-text-primary)',
-                margin: 0,
-            }}>
-                {t('operations.title')}
-            </h3>
+            <OperationsToolbar
+                selectedKeys={selectedKeys}
+                rows={rows}
+                loading={loading}
+                hasOperations={operations.length > 0}
+                onRefresh={reload}
+                onChanged={reload}
+            />
 
             {loading && rows.length === 0 ? (
                 <div style={{
