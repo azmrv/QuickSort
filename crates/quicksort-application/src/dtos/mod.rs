@@ -26,10 +26,12 @@
 //!   requires additional metadata.
 //! - `FolderConfigDTO` – for bulk folder operations (e.g., import/export).
 
+mod folder_metadata;
 mod operation_command;
 mod operation_result;
 mod pipe_command;
 
+pub use folder_metadata::FolderMetadata;
 pub use operation_command::{OperationCommand, OverwritePolicy};
 pub use operation_result::OperationResult;
 pub use pipe_command::{PipeAction, PipeCommand};

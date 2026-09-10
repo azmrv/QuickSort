@@ -33,4 +33,5 @@ pub fn test_folder() -> Folder {
 }
 
 pub mod execute_operation;
+pub mod file_system;
 pub mod logging;

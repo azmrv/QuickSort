@@ -9,6 +9,7 @@
 //! to ensure that only validated domain paths are accepted. This prevents
 //! malformed or unsafe paths from reaching the file system adapter.
 
+use crate::dtos::FolderMetadata;
 use crate::errors::UseCaseError;
 use async_trait::async_trait;
 use quicksort_domain::AbsolutePath;
@@ -135,4 +136,27 @@ pub trait FileSystem: Send + Sync {
     /// Returns `PermissionDenied` if access is restricted.
     async fn rename_file(&self, from: &AbsolutePath, to: &AbsolutePath)
         -> Result<(), UseCaseError>;
+
+    /// Generates a path that does not collide with an existing item.
+    ///
+    /// If `path` is free, it is returned unchanged. Otherwise candidates are
+    /// produced by inserting a numbered suffix before the extension
+    /// (`file (1).txt`, `file (2).txt`, ...).
+    ///
+    /// # Errors
+    /// Returns `Conflict` if no free candidate is found within the attempt
+    /// budget. Returns `FileSystemError` if existence checks fail.
+    async fn generate_unique_path(&self, path: &AbsolutePath)
+        -> Result<AbsolutePath, UseCaseError>;
+
+    /// Collects metadata about a folder (or single item) for the UI.
+    ///
+    /// A missing path yields `exists=false` with zeroed counters instead of
+    /// an error, so the UI can render a folder as "not available" without
+    /// special-casing error types.
+    ///
+    /// # Errors
+    /// Returns `FileSystemError` if metadata retrieval fails for a reason
+    /// other than the path not existing (e.g. permission denied).
+    async fn folder_metadata(&self, path: &AbsolutePath) -> Result<FolderMetadata, UseCaseError>;
 }

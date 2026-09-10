@@ -161,6 +161,7 @@ impl UndoOperationUseCase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::FolderMetadata;
     use chrono::Utc;
     use quicksort_domain::{AbsolutePath, OperationId};
     use std::collections::HashSet;
@@ -296,6 +297,20 @@ mod tests {
             _from: &AbsolutePath,
             _to: &AbsolutePath,
         ) -> Result<u64, UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+
+        async fn generate_unique_path(
+            &self,
+            _path: &AbsolutePath,
+        ) -> Result<AbsolutePath, UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+
+        async fn folder_metadata(
+            &self,
+            _path: &AbsolutePath,
+        ) -> Result<FolderMetadata, UseCaseError> {
             unimplemented!("not needed by undo tests")
         }
     }

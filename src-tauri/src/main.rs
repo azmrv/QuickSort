@@ -295,6 +295,7 @@ fn start_tauri() {
     let app_state = AppState {
         facade,
         queue: job_queue,
+        fs: Arc::new(quicksort_infrastructure::StdFileSystem::new()),
     };
 
     tauri::Builder::default()
@@ -338,6 +339,7 @@ fn start_tauri() {
             commands::undo_operation_v2,
             commands::repeat_operation_v2,
             commands::get_folders_v2,
+            commands::get_folders_with_metadata,
             commands::add_folder_v2,
             commands::remove_folder_v2,
             commands::toggle_favorite_v2,

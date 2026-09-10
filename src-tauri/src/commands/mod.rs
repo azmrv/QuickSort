@@ -1,11 +1,20 @@
 use crate::state::AppState;
 use quicksort_application::{
-    AbsolutePath, ExecuteOperation, Folder, FolderId, GetFolders, GetOperationHistory,
-    LoadSettings, ManageFolders, OperationId, PluginConfig, PluginInfoDto, PluginManager,
-    SaveSettings, Settings, UndoOperation,
+    AbsolutePath, ExecuteOperation, Folder, FolderId, FolderMetadata, GetFolders,
+    GetOperationHistory, LoadSettings, ManageFolders, OperationId, PluginConfig, PluginInfoDto,
+    PluginManager, SaveSettings, Settings, UndoOperation,
 };
+use serde::Serialize;
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
+
+/// A folder paired with live file-system metadata for the UI.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FolderWithMetadata {
+    pub folder: Folder,
+    pub metadata: FolderMetadata,
+}
 
 #[tauri::command]
 pub async fn get_folders_v2(state: State<'_, AppState>) -> Result<Vec<Folder>, String> {
@@ -16,6 +25,31 @@ pub async fn get_folders_v2(state: State<'_, AppState>) -> Result<Vec<Folder>, S
         Err(e) => tracing::error!(command = "get_folders_v2", error = %e, "FAIL"),
     }
     result
+}
+
+#[tauri::command]
+pub async fn get_folders_with_metadata(
+    state: State<'_, AppState>,
+) -> Result<Vec<FolderWithMetadata>, String> {
+    tracing::info!(command = "get_folders_with_metadata", "handling");
+    let folders = state.facade.get_all().await.map_err(|e| e.to_string())?;
+
+    let mut result = Vec::with_capacity(folders.len());
+    for folder in folders {
+        let metadata = state
+            .fs
+            .folder_metadata(&folder.path)
+            .await
+            .map_err(|e| e.to_string())?;
+        result.push(FolderWithMetadata { folder, metadata });
+    }
+
+    tracing::info!(
+        command = "get_folders_with_metadata",
+        count = result.len(),
+        "OK"
+    );
+    Ok(result)
 }
 
 #[tauri::command]

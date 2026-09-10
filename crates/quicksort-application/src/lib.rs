@@ -49,7 +49,7 @@ pub mod use_cases;
 pub use errors::UseCaseError;
 
 // DTOs – used by adapters to send commands and receive results.
-pub use dtos::{OperationCommand, OperationResult, OverwritePolicy};
+pub use dtos::{FolderMetadata, OperationCommand, OperationResult, OverwritePolicy};
 
 // Inbound ports – the contracts that adapters call.
 pub use ports::inbound::{

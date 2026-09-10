@@ -18,6 +18,7 @@
 //! single-threaded or use `tokio::task::spawn_blocking`, this is safe.
 
 use async_trait::async_trait;
+use quicksort_application::FolderMetadata;
 use quicksort_application::UseCaseError;
 use quicksort_domain::errors::DomainError;
 use quicksort_domain::{
@@ -338,6 +339,67 @@ impl FileSystem for MockFileSystem {
         files.insert(to_path, (true, size));
 
         Ok(())
+    }
+
+    async fn generate_unique_path(
+        &self,
+        path: &AbsolutePath,
+    ) -> Result<AbsolutePath, UseCaseError> {
+        if !self.exists(path).await? {
+            return Ok(path.clone());
+        }
+
+        let base = Self::to_pathbuf(path);
+        let parent = base
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_default();
+        let file_name = base
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let stem = base
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| file_name.clone());
+        let ext = base.extension().map(|e| e.to_string_lossy().into_owned());
+
+        const MAX_ATTEMPTS: u32 = 1000;
+        for n in 1..=MAX_ATTEMPTS {
+            let candidate_name = match &ext {
+                Some(ext) => format!("{stem} ({n}).{ext}"),
+                None => format!("{stem} ({n})"),
+            };
+            let candidate = AbsolutePath::from(parent.join(candidate_name));
+            if !self.exists(&candidate).await? {
+                return Ok(candidate);
+            }
+        }
+
+        Err(UseCaseError::Conflict(format!(
+            "could not generate a unique path for {} after {} attempts",
+            path, MAX_ATTEMPTS
+        )))
+    }
+
+    async fn folder_metadata(&self, path: &AbsolutePath) -> Result<FolderMetadata, UseCaseError> {
+        let path = Self::to_pathbuf(path);
+        let files = self.files.lock().unwrap();
+        match files.get(&path) {
+            Some((true, size)) => Ok(FolderMetadata {
+                exists: true,
+                is_dir: false,
+                total_size: *size,
+                item_count: 1,
+            }),
+            _ => Ok(FolderMetadata {
+                exists: false,
+                is_dir: false,
+                total_size: 0,
+                item_count: 0,
+            }),
+        }
     }
 }
 
