@@ -75,6 +75,12 @@ impl ExecuteOperation for ExecuteOperationUseCase {
             now,
         );
 
+        // Propagate the operation origin and its trace id from the command so
+        // the Operations UI and audit logs can link intent to execution
+        // (spec #15, release 0.2.6).
+        operation.source = command.source;
+        operation.correlation_id = command.correlation_id;
+
         operation
             .start()
             .map_err(|e| UseCaseError::Domain(e.to_string()))?;

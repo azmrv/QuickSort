@@ -71,6 +71,7 @@ async fn copy_single_file_to_existing_folder() {
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: None,
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     // ---- When ----
@@ -135,6 +136,7 @@ async fn copy_with_conflict_auto_rename() {
         overwrite_policy: OverwritePolicy::AutoRename,
         target_paths: None,
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     // ---- When ----

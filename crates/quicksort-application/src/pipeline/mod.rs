@@ -159,6 +159,7 @@ mod tests {
             overwrite_policy: OverwritePolicy::Skip,
             target_paths: None,
             duplicate_check_mode: quicksort_domain::DuplicateCheckMode::default(),
+            ..OperationCommand::default()
         }
     }
 

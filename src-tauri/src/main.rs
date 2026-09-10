@@ -337,6 +337,7 @@ fn start_tauri() {
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::execute_operation_v2,
+            commands::log_user_select,
             commands::undo_operation_v2,
             commands::repeat_operation_v2,
             commands::get_folders_v2,

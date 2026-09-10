@@ -69,6 +69,12 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
         }
         logger.action('SelectorPage', `queue ${files.length} file(s) -> "${folder.name}" (${folder.path})`);
         try {
+            const correlationId = crypto.randomUUID();
+            await invoke<string>('log_user_select', {
+                source: 'Selector',
+                paths: files,
+                correlation_id: correlationId,
+            });
             const command: OperationCommand = {
                 operation_type: operation,
                 source_paths: files,
@@ -76,6 +82,8 @@ const SelectorPage: React.FC<SelectorPageProps> = ({ files, onClose }) => {
                 target_paths: null,
                 overwrite_policy: overwritePolicy,
                 duplicate_check_mode: dupCheckMode,
+                source: 'Selector',
+                correlation_id: correlationId,
             };
             const jobId = await invoke<string>('enqueue_operation_v2', { command });
             logger.info('SelectorPage', 'job queued successfully', jobId);

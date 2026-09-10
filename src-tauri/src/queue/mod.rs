@@ -13,7 +13,7 @@ use tauri::{AppHandle, Emitter};
 
 use quicksort_application::{
     AbsolutePath, ApplicationFacadeImpl, DuplicateCheckMode, ExecuteOperation, FolderId,
-    GetFolders, LoadSettings, OperationCommand, OperationType as DomainOpType,
+    GetFolders, LoadSettings, OperationCommand, OperationSource, OperationType as DomainOpType,
     OverwritePolicy as AppOverwritePolicy,
 };
 use quicksort_ipc_contract::{
@@ -96,6 +96,11 @@ pub fn convert_execute_data(data: &ExecuteOperationData) -> Option<OperationComm
             Some(IpcDuplicateCheckMode::Size) => DuplicateCheckMode::Size,
             Some(IpcDuplicateCheckMode::Content) => DuplicateCheckMode::Content,
         },
+        // The pipe channel is exclusively the Explorer context menu, so the
+        // source is a channel constant; run_job may override it from the
+        // job's recorded origin (spec #15).
+        source: OperationSource::ContextMenu,
+        correlation_id: uuid::Uuid::new_v4(),
     })
 }
 
@@ -197,12 +202,21 @@ impl JobQueue {
     }
 
     /// Adds a new job to the tail of the queue and wakes the worker.
-    pub fn enqueue(&self, data: ExecuteOperationData) -> Result<JobId, String> {
+    ///
+    /// `source` is the operation origin stored on the job (for replay) and
+    /// `correlation_id` is the trace id from the initiating caller; `None`
+    /// means the worker generates a fresh one (used by the DLL pipe path).
+    pub fn enqueue(
+        &self,
+        data: ExecuteOperationData,
+        source: OperationSource,
+        correlation_id: Option<uuid::Uuid>,
+    ) -> Result<JobId, String> {
         if convert_execute_data(&data).is_none() {
             return Err("Invalid command: no valid source paths".to_string());
         }
         let id = uuid::Uuid::new_v4().to_string();
-        let job = Job::new(id.clone(), data);
+        let job = Job::new(id.clone(), data, source, correlation_id);
 
         let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
         guard.jobs.push(job.clone());
@@ -334,6 +348,11 @@ impl JobQueue {
         };
 
         let mut command = command;
+        // Restore the origin recorded at enqueue time: the frontend keeps
+        // source/correlation_id on the job, the DLL path recorded ContextMenu
+        // and a generated id (spec #15, release 0.2.6).
+        command.source = job.source;
+        command.correlation_id = job.correlation_id.unwrap_or_else(uuid::Uuid::new_v4);
         if command.target_folder_id.is_none() {
             if let Some(raw_path) = job.data.target_folder_path.clone() {
                 let folders = worker_rt

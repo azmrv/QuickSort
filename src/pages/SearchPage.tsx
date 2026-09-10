@@ -61,9 +61,18 @@ export default function SearchPage() {
         });
     };
 
-    const handleSelect = (item: FileSearchResult) => {
+    const handleSelect = async (item: FileSearchResult) => {
         logger.action('SearchPage', `selected: ${item.path}`);
-        // TODO: open file / reveal in explorer
+        const correlationId = crypto.randomUUID();
+        try {
+            await invoke<string>('log_user_select', {
+                source: 'Search',
+                paths: [item.path],
+                correlation_id: correlationId,
+            });
+        } catch (e) {
+            logger.error('SearchPage', `intent logging failed: ${e}`);
+        }
     };
 
     return (

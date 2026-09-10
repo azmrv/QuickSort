@@ -28,6 +28,9 @@ quicksort-domain = { path = "../quicksort-domain" }
 # Serialization for DTOs (OperationCommand, OperationResult, etc.)
 serde = { version = "1", features = ["derive"] }
 
+# Traceability ids (correlation_id) in OperationCommand (#15, release 0.2.6)
+uuid = { version = "1", features = ["v4", "serde"] }
+
 # ---------------------------------------------------------------------------
 # Dev-dependencies – only needed for tests
 # ---------------------------------------------------------------------------

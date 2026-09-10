@@ -72,6 +72,7 @@ async fn move_target_folder_not_found() {
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: None,
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     // ---- When ----
@@ -113,6 +114,7 @@ async fn empty_source_paths() {
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: None,
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     // ---- When ----

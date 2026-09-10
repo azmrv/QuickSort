@@ -11,6 +11,8 @@ export interface Folder {
     };
 }
 
+export type OperationSource = 'Search' | 'Selector' | 'ContextMenu' | 'Api';
+
 export interface OperationCommand {
     operation_type: 'Move' | 'Copy' | 'Delete' | 'Rename';
     source_paths: string[];
@@ -18,6 +20,8 @@ export interface OperationCommand {
     target_paths: string[] | null;
     overwrite_policy: 'Skip' | 'Overwrite' | 'AutoRename' | 'Ask';
     duplicate_check_mode: 'name' | 'size' | 'content';
+    source?: OperationSource;
+    correlation_id?: string | null;
 }
 
 export interface OperationResult {

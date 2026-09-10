@@ -21,6 +21,7 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 // use chrono::{DateTime, Utc}; — better serialization support
 
@@ -31,6 +32,24 @@ pub enum OperationType {
     Copy,
     Delete,
     Rename,
+}
+
+/// Origin of a file operation, used for audit logging and the Operations UI.
+///
+/// Serialized as PascalCase on the wire. Each variant corresponds to a
+/// specific caller context; `Api` is the fallback for programmatic or
+/// unknown callers.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OperationSource {
+    /// Search page UI action (file selection + Move/Copy).
+    Search,
+    /// Selector page UI action (target folder selection).
+    Selector,
+    /// Windows Explorer context menu (shell extension DLL via IPC).
+    ContextMenu,
+    /// Programmatic API call or unknown legacy caller (default fallback).
+    #[default]
+    Api,
 }
 
 /// Tracks the lifecycle of an operation.
@@ -67,6 +86,14 @@ pub struct Operation {
     pub processed_files: u32,
     #[serde(default)]
     pub bytes_processed: u64,
+    /// Where the operation originated (Search, Selector, ContextMenu, Api).
+    #[serde(default)]
+    pub source: OperationSource,
+    /// Traceability id linking intent (user-select) to operation execution
+    /// and result. Always present: generated from `Uuid::new_v4` when a
+    /// legacy caller does not provide one.
+    #[serde(default = "Uuid::new_v4")]
+    pub correlation_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(skip)]
@@ -92,6 +119,10 @@ impl Operation {
             target_paths,
             processed_files: 0,
             bytes_processed: 0,
+            // Defaults; callers may override source/correlation_id explicitly
+            // after construction (e.g. the use case copies them from the command).
+            source: OperationSource::default(),
+            correlation_id: Uuid::new_v4(),
             created_at: now,
             updated_at: now,
             events: Vec::new(),
@@ -291,5 +322,70 @@ mod tests {
         let mut op = Operation::new_delete(vec![test_path("C:\\a.txt")], now());
         op.start().unwrap();
         assert_eq!(op.events().len(), 1);
+    }
+
+    #[test]
+    fn test_default_source_is_api() {
+        // New operations default to Api when the caller does not specify one
+        // (spec #15, release 0.2.6).
+        let op = Operation::new_delete(vec![test_path("C:\\a.txt")], now());
+        assert_eq!(op.source, OperationSource::Api);
+    }
+
+    #[test]
+    fn test_correlation_id_is_generated() {
+        // A fresh operation always carries a non-nil correlation_id so the
+        // intent -> execution trace chain is never broken (spec #15).
+        let op = Operation::new_delete(vec![test_path("C:\\a.txt")], now());
+        assert_ne!(op.correlation_id, Uuid::nil());
+    }
+
+    #[test]
+    fn test_operation_serde_round_trip_with_source_and_correlation() {
+        let mut op = Operation::new_move(
+            vec![test_path("C:\\a.txt")],
+            test_path("C:\\dst.txt"),
+            now(),
+        );
+        op.source = OperationSource::Selector;
+        op.correlation_id = Uuid::parse_str("8e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b").unwrap();
+        let json = serde_json::to_string(&op).unwrap();
+        let restored: Operation = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.source, OperationSource::Selector);
+        assert_eq!(
+            restored.correlation_id,
+            Uuid::parse_str("8e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b").unwrap()
+        );
+        // Events are skipped by serialization (domain-internal).
+        assert!(restored.events().is_empty());
+    }
+
+    #[test]
+    fn test_operation_serde_backward_compat_missing_fields() {
+        // Old operations.json entries (no `source`/`correlation_id`) must still
+        // deserialize: source falls back to Api, correlation_id is generated.
+        let old_json = r#"{
+            "id": "8e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b",
+            "operation_type": "Move",
+            "state": "Pending",
+            "source_paths": ["C:\\a.txt"],
+            "target_folder_path": null,
+            "target_paths": null,
+            "processed_files": 0,
+            "bytes_processed": 0,
+            "created_at": "2026-09-10T10:00:00Z",
+            "updated_at": "2026-09-10T10:00:00Z"
+        }"#;
+        let restored: Operation = serde_json::from_str(old_json).unwrap();
+        assert_eq!(restored.source, OperationSource::Api);
+        assert_ne!(restored.correlation_id, Uuid::nil());
+    }
+
+    #[test]
+    fn test_operation_source_serializes_pascal_case() {
+        let json = serde_json::to_string(&OperationSource::ContextMenu).unwrap();
+        assert_eq!(json, "\"ContextMenu\"");
+        let json = serde_json::to_string(&OperationSource::Api).unwrap();
+        assert_eq!(json, "\"Api\"");
     }
 }

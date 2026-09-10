@@ -76,6 +76,7 @@ async fn undo_move_operation() {
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: None,
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     let result = execute_use_case.execute(command).await.unwrap();
