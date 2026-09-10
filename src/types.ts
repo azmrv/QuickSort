@@ -77,3 +77,34 @@ export interface SearchResult {
     search_time_ms: number;
     truncated: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard types (0.2.6 feature #19 / plan Q4)
+// ---------------------------------------------------------------------------
+
+export interface SystemInfoDto {
+    /** Average CPU utilization across all cores (0–100). */
+    cpu_usage: number;
+    /** Number of logical CPU cores. */
+    cpu_cores: number;
+    /** Current CPU frequency in MHz (0 if unavailable). */
+    cpu_frequency_mhz: number;
+    /** CPU die temperature in °C, if available. */
+    cpu_temperature: number | null;
+    /** Used RAM in bytes. */
+    ram_used_bytes: number;
+    /** Total physical RAM in bytes. */
+    ram_total_bytes: number;
+    /** Used disk space across all fixed drives in bytes. */
+    disk_used_bytes: number;
+    /** Total disk space across all fixed drives in bytes. */
+    disk_total_bytes: number;
+    /** Disk read throughput in bytes/sec. */
+    disk_read_bytes_per_sec: number;
+    /** Disk write throughput in bytes/sec. */
+    disk_write_bytes_per_sec: number;
+    /** Network receive throughput in bytes/sec. */
+    network_rx_bytes_per_sec: number;
+    /** Network transmit throughput in bytes/sec. */
+    network_tx_bytes_per_sec: number;
+}

@@ -69,6 +69,9 @@ tracing-appender = "0.2"
 # Efficient mutex for shared state
 parking_lot = "0.12"
 
+# System information (CPU, memory, disk, network) for the Dashboard
+sysinfo = "0.39"
+
 # Async trait support (needed for ProgressReporter implementation)
 async-trait = "0.1"
 

@@ -1,4 +1,4 @@
-use crate::state::AppState;
+use crate::state::{AppState, SystemInfoSample};
 use quicksort_application::{
     AbsolutePath, ExecuteOperation, Folder, FolderId, FolderMetadata, GetFolders,
     GetOperationHistory, LoadSettings, ManageFolders, OperationId, PluginConfig, PluginInfoDto,
@@ -6,6 +6,7 @@ use quicksort_application::{
 };
 use serde::Serialize;
 use std::path::PathBuf;
+use sysinfo::{Components, DiskRefreshKind, Disks, Networks, System};
 use tauri::{AppHandle, State};
 
 /// A folder paired with live file-system metadata for the UI.
@@ -734,4 +735,162 @@ pub async fn cancel_job(state: State<'_, AppState>, job_id: String) -> Result<()
         Err(e) => tracing::error!(command = "cancel_job", error = %e, "FAIL"),
     }
     result
+}
+
+// ---------------------------------------------------------------------------
+// System information (Dashboard, 0.2.6 feature #19 / plan Q4)
+// ---------------------------------------------------------------------------
+
+/// Snapshot of system resource metrics returned to the frontend Dashboard.
+/// CPU usage is the average across all cores; temperature is read from
+/// platform-specific hardware sensors when available.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SystemInfoDto {
+    /// Average CPU utilization across all cores (0.0 – 100.0).
+    pub cpu_usage: f32,
+    /// Number of logical CPU cores.
+    pub cpu_cores: usize,
+    /// Current CPU frequency in MHz (0 if unavailable).
+    pub cpu_frequency_mhz: u64,
+    /// CPU die temperature in °C, if the platform exposes sensor data.
+    pub cpu_temperature: Option<f32>,
+    /// Used RAM in bytes.
+    pub ram_used_bytes: u64,
+    /// Total physical RAM in bytes.
+    pub ram_total_bytes: u64,
+    /// Used disk space across all fixed drives in bytes.
+    pub disk_used_bytes: u64,
+    /// Total disk space across all fixed drives in bytes.
+    pub disk_total_bytes: u64,
+    /// Disk read throughput in bytes/sec since the previous poll.
+    pub disk_read_bytes_per_sec: u64,
+    /// Disk write throughput in bytes/sec since the previous poll.
+    pub disk_write_bytes_per_sec: u64,
+    /// Network receive throughput in bytes/sec since the previous poll.
+    pub network_rx_bytes_per_sec: u64,
+    /// Network transmit throughput in bytes/sec since the previous poll.
+    pub network_tx_bytes_per_sec: u64,
+}
+
+/// Returns a snapshot of current system resource metrics for the Dashboard.
+///
+/// Disk/network throughput fields are computed as per-second deltas between
+/// the previous and current poll using `AppState::system_sample`. On the
+/// first call they are zero.
+#[tauri::command]
+pub async fn get_system_info(state: State<'_, AppState>) -> Result<SystemInfoDto, String> {
+    let mut sys = System::new();
+    sys.refresh_memory();
+    // First CPU refresh — needed by sysinfo to establish a baseline.
+    sys.refresh_cpu_all();
+    // Small sleep so the next refresh yields a meaningful utilization value.
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    sys.refresh_cpu_all();
+
+    // CPU temperature — best-effort, not available on all platforms.
+    let cpu_temperature = Components::new_with_refreshed_list()
+        .into_iter()
+        .find(|c| {
+            let label = c.label().to_lowercase();
+            label.contains("cpu") || label.contains("core") || label.contains("processor")
+        })
+        .and_then(|c| c.temperature());
+
+    // Aggregate disk stats. `everything()` refreshes Kind + Storage + IoUsage,
+    // and `usage()` exposes cumulative read/written totals.
+    let mut disk_read: u64 = 0;
+    let mut disk_write: u64 = 0;
+    let mut disk_used: u64 = 0;
+    let mut disk_total: u64 = 0;
+    for disk in Disks::new_with_refreshed_list_specifics(DiskRefreshKind::everything()).list() {
+        let total = disk.total_space();
+        let available = disk.available_space();
+        disk_total += total;
+        disk_used += total - available;
+        disk_read += disk.usage().total_read_bytes;
+        disk_write += disk.usage().total_written_bytes;
+    }
+
+    // Aggregate network stats (cumulative totals since boot).
+    let mut network_rx: u64 = 0;
+    let mut network_tx: u64 = 0;
+    for data in Networks::new_with_refreshed_list().list().values() {
+        network_rx += data.total_received();
+        network_tx += data.total_transmitted();
+    }
+
+    // Compute per-second throughput deltas against the previous sample.
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64);
+
+    let mut sample = state.system_sample.lock();
+    let (disk_read_bps, disk_write_bps, network_rx_bps, network_tx_bps) =
+        if sample.timestamp_ms == 0 {
+            // First poll — store the baseline and report zero throughput.
+            *sample = SystemInfoSample {
+                disk_read,
+                disk_write,
+                network_rx,
+                network_tx,
+                timestamp_ms: now_ms,
+            };
+            (0, 0, 0, 0)
+        } else {
+            let dt_ms = now_ms.saturating_sub(sample.timestamp_ms);
+            let dt_secs = (dt_ms as f64) / 1000.0;
+            let bps = |cur: u64, prev: u64| {
+                if dt_secs > 0.0 && cur >= prev {
+                    ((cur - prev) as f64 / dt_secs) as u64
+                } else {
+                    0
+                }
+            };
+            let speeds = (
+                bps(disk_read, sample.disk_read),
+                bps(disk_write, sample.disk_write),
+                bps(network_rx, sample.network_rx),
+                bps(network_tx, sample.network_tx),
+            );
+            *sample = SystemInfoSample {
+                disk_read,
+                disk_write,
+                network_rx,
+                network_tx,
+                timestamp_ms: now_ms,
+            };
+            speeds
+        };
+    drop(sample);
+
+    let ram_total = sys.total_memory();
+    let ram_used = sys.used_memory();
+
+    let dto = SystemInfoDto {
+        cpu_usage: sys.global_cpu_usage(),
+        cpu_cores: sys.cpus().len(),
+        cpu_frequency_mhz: sys.cpus().first().map_or(0, |c| c.frequency()),
+        cpu_temperature,
+        ram_used_bytes: ram_used,
+        ram_total_bytes: ram_total,
+        disk_used_bytes: disk_used,
+        disk_total_bytes: disk_total,
+        disk_read_bytes_per_sec: disk_read_bps,
+        disk_write_bytes_per_sec: disk_write_bps,
+        network_rx_bytes_per_sec: network_rx_bps,
+        network_tx_bytes_per_sec: network_tx_bps,
+    };
+
+    tracing::debug!(
+        command = "get_system_info",
+        cpu = dto.cpu_usage,
+        ram_pct = if ram_total > 0 {
+            (ram_used as f64 / ram_total as f64 * 100.0) as f32
+        } else {
+            0.0
+        },
+        "OK"
+    );
+    Ok(dto)
 }

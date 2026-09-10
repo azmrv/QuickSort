@@ -4,6 +4,7 @@ import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewW
 import { invoke } from './lib/invoke';
 import { logger } from './lib/logger';
 import { ConfigProvider, theme, App as AntApp } from 'antd';
+import { MantineProvider } from '@mantine/core';
 import { LanguageProvider, useTranslation } from './i18n/LanguageContext';
 import { LOCALE_LABELS, type Locale } from './i18n/translations';
 import EditorPage from './pages/EditorPage';
@@ -199,6 +200,7 @@ function AppContent() {
     };
 
     return (
+        <MantineProvider forceColorScheme={isDark ? 'dark' : 'light'}>
         <ConfigProvider
             theme={{
                 algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
@@ -270,6 +272,7 @@ function AppContent() {
                 )}
             </AntApp>
         </ConfigProvider>
+        </MantineProvider>
     );
 }
 

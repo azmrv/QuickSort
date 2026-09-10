@@ -296,6 +296,7 @@ fn start_tauri() {
         facade,
         queue: job_queue,
         fs: Arc::new(quicksort_infrastructure::StdFileSystem::new()),
+        system_sample: parking_lot::Mutex::new(crate::state::SystemInfoSample::default()),
     };
 
     tauri::Builder::default()
@@ -372,6 +373,7 @@ fn start_tauri() {
             commands::enqueue_operation_v2,
             commands::get_jobs,
             commands::cancel_job,
+            commands::get_system_info,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());

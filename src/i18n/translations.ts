@@ -271,6 +271,22 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         // Add Folder Button
         'add_folder_button': 'Add folder',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': 'System',
+        'dashboard.cpu': 'CPU',
+        'dashboard.ram': 'RAM',
+        'dashboard.disk': 'Disk',
+        'dashboard.network': 'Network',
+        'dashboard.status.ok': 'Healthy',
+        'dashboard.status.warn': 'Elevated',
+        'dashboard.status.critical': 'Critical',
+        'dashboard.cores': 'cores',
+        'dashboard.temp': 'temp',
+        'dashboard.read': 'read',
+        'dashboard.write': 'write',
+        'dashboard.rx': 'in',
+        'dashboard.tx': 'out',
     },
 
     ru: {
@@ -539,6 +555,22 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         // Add Folder Button
         'add_folder_button': 'Добавить папку',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': 'Система',
+        'dashboard.cpu': 'ЦП',
+        'dashboard.ram': 'ОЗУ',
+        'dashboard.disk': 'Диск',
+        'dashboard.network': 'Сеть',
+        'dashboard.status.ok': 'Норма',
+        'dashboard.status.warn': 'Повышена',
+        'dashboard.status.critical': 'Критично',
+        'dashboard.cores': 'ядер',
+        'dashboard.temp': 'темп',
+        'dashboard.read': 'чтение',
+        'dashboard.write': 'запись',
+        'dashboard.rx': 'приём',
+        'dashboard.tx': 'передача',
     },
 
     de: {
@@ -792,6 +824,22 @@ export const translations: Record<Locale, Record<string, string>> = {
         'folder_list.delete': 'Löschen',
 
         'add_folder_button': 'Ordner hinzufügen',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': 'System',
+        'dashboard.cpu': 'CPU',
+        'dashboard.ram': 'RAM',
+        'dashboard.disk': 'Festplatte',
+        'dashboard.network': 'Netzwerk',
+        'dashboard.status.ok': 'Normal',
+        'dashboard.status.warn': 'Erhöht',
+        'dashboard.status.critical': 'Kritisch',
+        'dashboard.cores': 'Kerne',
+        'dashboard.temp': 'Temp',
+        'dashboard.read': 'Lesen',
+        'dashboard.write': 'Schreiben',
+        'dashboard.rx': 'Eingang',
+        'dashboard.tx': 'Ausgang',
     },
 
     es: {
@@ -1045,6 +1093,22 @@ export const translations: Record<Locale, Record<string, string>> = {
         'folder_list.delete': 'Eliminar',
 
         'add_folder_button': 'Agregar carpeta',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': 'Sistema',
+        'dashboard.cpu': 'CPU',
+        'dashboard.ram': 'RAM',
+        'dashboard.disk': 'Disco',
+        'dashboard.network': 'Red',
+        'dashboard.status.ok': 'Normal',
+        'dashboard.status.warn': 'Elevado',
+        'dashboard.status.critical': 'Crítico',
+        'dashboard.cores': 'núcleos',
+        'dashboard.temp': 'temp',
+        'dashboard.read': 'lectura',
+        'dashboard.write': 'escritura',
+        'dashboard.rx': 'entrada',
+        'dashboard.tx': 'salida',
     },
 
     zh: {
@@ -1298,6 +1362,22 @@ export const translations: Record<Locale, Record<string, string>> = {
         'folder_list.delete': '删除',
 
         'add_folder_button': '添加文件夹',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': '系统',
+        'dashboard.cpu': 'CPU',
+        'dashboard.ram': '内存',
+        'dashboard.disk': '磁盘',
+        'dashboard.network': '网络',
+        'dashboard.status.ok': '正常',
+        'dashboard.status.warn': '偏高',
+        'dashboard.status.critical': '严重',
+        'dashboard.cores': '核心',
+        'dashboard.temp': '温度',
+        'dashboard.read': '读取',
+        'dashboard.write': '写入',
+        'dashboard.rx': '下行',
+        'dashboard.tx': '上行',
     },
 
     ja: {
@@ -1551,6 +1631,22 @@ export const translations: Record<Locale, Record<string, string>> = {
         'folder_list.delete': '削除',
 
         'add_folder_button': 'フォルダを追加',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': 'システム',
+        'dashboard.cpu': 'CPU',
+        'dashboard.ram': 'メモリ',
+        'dashboard.disk': 'ディスク',
+        'dashboard.network': 'ネットワーク',
+        'dashboard.status.ok': '正常',
+        'dashboard.status.warn': '高め',
+        'dashboard.status.critical': '重大',
+        'dashboard.cores': 'コア',
+        'dashboard.temp': '温度',
+        'dashboard.read': '読み取り',
+        'dashboard.write': '書き込み',
+        'dashboard.rx': '受信',
+        'dashboard.tx': '送信',
     },
 };
 
