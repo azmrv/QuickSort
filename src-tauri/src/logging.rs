@@ -146,14 +146,12 @@ fn level_filter(config: &LoggingConfig) -> tracing_subscriber::filter::EnvFilter
 }
 
 fn resolve_log_prefix(config: &LoggingConfig) -> String {
-    let from_env = std::env::var("LOG_FILE")
-        .ok()
-        .and_then(|name| {
-            Path::new(&name)
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .map(str::to_string)
-        });
+    let from_env = std::env::var("LOG_FILE").ok().and_then(|name| {
+        Path::new(&name)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(str::to_string)
+    });
     let from_config = config.file_path.as_deref().and_then(|path| {
         Path::new(path)
             .file_stem()
@@ -190,7 +188,9 @@ pub fn init() {
         builder = builder.max_log_files(max_files as usize);
     }
 
-    let file_appender = builder.build(&log_dir).expect("create rolling file appender");
+    let file_appender = builder
+        .build(&log_dir)
+        .expect("create rolling file appender");
 
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
     let _ = _FILE_GUARD.set(guard);

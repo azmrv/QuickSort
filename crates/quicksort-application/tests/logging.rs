@@ -104,7 +104,8 @@ struct SpanVisitor(HashMap<String, String>);
 
 impl tracing::field::Visit for SpanVisitor {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0.insert(field.name().to_string(), format!("{value:?}"));
+        self.0
+            .insert(field.name().to_string(), format!("{value:?}"));
     }
 }
 
@@ -220,9 +221,7 @@ async fn search_files_emits_tracing_span() {
 
     // Bring the SearchFiles trait into scope so `search()` is callable.
     use quicksort_application::SearchFiles;
-    let result = use_case
-        .search("report", &["C:\\test".to_string()])
-        .await;
+    let result = use_case.search("report", &["C:\\test".to_string()]).await;
 
     assert!(result.is_ok());
 
@@ -254,7 +253,9 @@ async fn search_files_emits_tracing_span() {
         "search_files span should carry the query_text creation field"
     );
     assert_eq!(
-        span.creation_fields.get("directory_count").map(String::as_str),
+        span.creation_fields
+            .get("directory_count")
+            .map(String::as_str),
         Some("1"),
         "search_files span should carry the directory_count creation field"
     );
