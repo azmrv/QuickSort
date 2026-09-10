@@ -26,9 +26,9 @@ pub enum DefaultOverwritePolicy {
 #[serde(rename_all = "lowercase")]
 pub enum DuplicateCheckMode {
     /// Quick check: file with same name exists at destination.
+    #[default]
     Name,
     /// Medium check: same name AND same file size.
-    #[default]
     Size,
     /// Deep check: SHA-256 hash comparison (slowest, most accurate).
     Content,
@@ -168,7 +168,8 @@ mod tests {
             DefaultOverwritePolicy::AutoRename
         );
         assert!(settings.duplicate_check.enabled);
-        assert_eq!(settings.duplicate_check.mode, DuplicateCheckMode::Size);
+        // Default intentionally changed from Size to Name per 0.2.6 spec (#11).
+        assert_eq!(settings.duplicate_check.mode, DuplicateCheckMode::Name);
         assert_eq!(settings.theme_mode, ThemeMode::System);
         assert_eq!(settings.locale, Locale::En);
         assert_eq!(settings.logging.level, LogLevel::Info);
@@ -191,7 +192,8 @@ mod tests {
         let json = serde_json::to_string_pretty(&settings).unwrap();
         assert!(json.contains("\"Move\""));
         assert!(json.contains("\"AutoRename\""));
-        assert!(json.contains("\"size\""));
+        // JSON mode serialized as lowercase; default is "name" per 0.2.6 spec (#11).
+        assert!(json.contains("\"name\""));
         assert!(json.contains("\"system\""));
         assert!(json.contains("\"en\""));
         assert!(json.contains("\"logging\""));
