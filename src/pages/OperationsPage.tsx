@@ -1,22 +1,11 @@
-import HistoryPage from './HistoryPage';
-import QueuePage from './QueuePage';
+import OperationsTable from './operations/OperationsTable';
 
 /**
- * Operations tab (0.2.6 navigation Q2): unifies operation history and the
- * active job queue. In 4a the historical and queue views are shown as two
- * sections on one page; 4b merges them into a single Operations table.
+ * Operations tab (0.2.6 feature 4c): a single unified Operations table that
+ * merges the live job queue and the operation history (see OperationsTable).
  */
 const OperationsPage = () => {
-    return (
-        <div style={{ padding: 'var(--qs-space-lg)' }}>
-            <div style={{ marginBottom: 'var(--qs-space-lg)' }}>
-                <QueuePage />
-            </div>
-            <div>
-                <HistoryPage />
-            </div>
-        </div>
-    );
+    return <OperationsTable />;
 };
 
 export default OperationsPage;

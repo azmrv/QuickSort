@@ -818,3 +818,36 @@
 .log-list::-webkit-scrollbar-thumb:hover {
     background: var(--qs-border-hover);
 }
+
+/* ================================
+   Operations table (4c) — react-data-grid overrides
+   ================================ */
+.operations-grid-wrapper {
+    border: 1px solid var(--qs-border);
+    border-radius: var(--qs-radius-md);
+    overflow: hidden;
+    margin: var(--qs-space-lg) 0;
+}
+
+.operations-grid {
+    --rdg-font-size: 12px;
+    --rdg-background-color: var(--qs-bg-secondary);
+    --rdg-color: var(--qs-text-primary);
+    --rdg-border-color: var(--qs-border);
+    --rdg-border-width: 1px;
+    --rdg-header-background-color: var(--qs-bg-tertiary);
+    --rdg-row-hover-background-color: var(--qs-bg-tertiary);
+    --rdg-row-selected-background-color: var(--qs-accent);
+    --rdg-row-selected-hover-background-color: var(--qs-accent);
+    --rdg-selection-color: var(--qs-accent);
+    max-height: 45vh;
+}
+
+.operations-grid .rdg-cell {
+    padding: 0 8px;
+    overflow: hidden;
+}
+
+.operations-grid .rdg-cell > span {
+    min-width: 0;
+}

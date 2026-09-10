@@ -97,7 +97,7 @@ export const jobToRow = (job: JobDto): OperationRow => {
         files: job.source_paths,
         filesCount: job.source_paths.length,
         target: null,
-sizeBytes: 0,
+        sizeBytes: 0,
         createdAtMs: job.created_at * 1000,
         progress: job.progress,
         error: job.error,
