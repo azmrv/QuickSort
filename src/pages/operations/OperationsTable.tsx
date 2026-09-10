@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { DataGrid, SelectColumn, type Column, type SortColumn } from 'react-data-grid';
+import {
+    DataGrid,
+    SelectColumn,
+    SELECT_COLUMN_KEY,
+    type Column,
+    type SortColumn,
+} from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
 import { invoke } from '../../lib/invoke';
 import { logger } from '../../lib/logger';
 import { useTranslation } from '../../i18n/useTranslation';
+import DetailsPopup from './DetailsPopup';
 import OperationsToolbar from './OperationsToolbar';
+import { getSourceLabel, getStatusLabel, getTypeLabel, SOURCE_COLORS, STATUS_COLORS } from './labels';
 import {
     compareRowsByCreatedAtAsc,
     compareRowsByStateAsc,
@@ -21,25 +29,6 @@ import {
     orderRows,
 } from './rowOrder';
 import type { JobDto, OperationDto, OperationRow } from './types';
-
-const STATUS_COLORS: Record<string, string> = {
-    queued: '#6b7280',
-    pending: '#6b7280',
-    running: '#3b82f6',
-    executing: '#3b82f6',
-    completed: '#22c55e',
-    failed: '#ef4444',
-    canceled: '#9ca3af',
-    undone: '#f59e0b',
-    unknown: '#6b7280',
-};
-
-const SOURCE_COLORS: Record<string, string> = {
-    Search: '#3b82f6',
-    Selector: '#8b5cf6',
-    ContextMenu: '#22c55e',
-    Api: '#6b7280',
-};
 
 const DEFAULT_COLUMN_ORDER = ['status', 'type', 'source', 'objects', 'files', 'size', 'created_at'];
 
@@ -64,6 +53,7 @@ const OperationsTable = () => {
     const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
     const [sortColumns, setSortColumns] = useState<SortColumn[]>([]);
     const [columnOrder, setColumnOrder] = useState<string[]>(DEFAULT_COLUMN_ORDER);
+    const [detailsRow, setDetailsRow] = useState<OperationRow | null>(null);
 
     const loadOperations = useCallback(() => {
         invoke<OperationDto[]>('get_operations')
@@ -143,25 +133,6 @@ const OperationsTable = () => {
         return direction === 'DESC' ? sorted.reverse() : sorted;
     }, [jobs, operations, sortColumns]);
 
-    const getStatusLabel = (row: OperationRow): string => {
-        if (row.kind === 'job') {
-            return t(`queue.status.${row.statusKey}`);
-        }
-        if (row.statusKey === 'completed') {
-            return t('history.state.completed', { count: row.statusCount ?? 0 });
-        }
-        if (row.statusKey === 'failed' && row.error) {
-            return `${t('history.state.failed')} ${row.error}`;
-        }
-        return t(`history.state.${row.statusKey}`);
-    };
-
-    const getSourceLabel = (row: OperationRow): string => {
-        if (!row.source) return '\u2014';
-        const key = row.source === 'ContextMenu' ? 'context_menu' : row.source.toLowerCase();
-        return t(`operations.source.${key}`);
-    };
-
     const columns: Column<OperationRow>[] = useMemo(() => {
         return [
             SelectColumn,
@@ -191,7 +162,7 @@ const OperationsTable = () => {
                                 flexShrink: 0,
                             }} />
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {getStatusLabel(row)}
+                                {getStatusLabel(row, t)}
                             </span>
                             {showProgress && progress !== null && (
                                 <span style={{
@@ -215,7 +186,7 @@ const OperationsTable = () => {
                 resizable: true,
                 draggable: true,
                 renderCell: ({ row }) => (
-                    <span>{t(`history.operation.${row.operationType.toLowerCase()}`)}</span>
+                    <span>{getTypeLabel(row, t)}</span>
                 ),
             },
             {
@@ -237,7 +208,7 @@ const OperationsTable = () => {
                                 background: color,
                                 flexShrink: 0,
                             }} />
-                            <span style={{ color: 'var(--qs-text-secondary)' }}>{getSourceLabel(row)}</span>
+                            <span style={{ color: 'var(--qs-text-secondary)' }}>{getSourceLabel(row, t)}</span>
                         </span>
                     );
                 },
@@ -291,8 +262,7 @@ const OperationsTable = () => {
                 ),
             },
         ];
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [t, getStatusLabel, getSourceLabel]);
+    }, [t]);
 
     const handleColumnsReorder = useCallback((sourceKey: string, targetKey: string) => {
         setColumnOrder((prev) => {
@@ -361,12 +331,19 @@ const OperationsTable = () => {
                         sortColumns={sortColumns}
                         onSortColumnsChange={setSortColumns}
                         onColumnsReorder={handleColumnsReorder}
+                        onCellClick={(args) => {
+                            if (args.column.key !== SELECT_COLUMN_KEY) {
+                                setDetailsRow(args.row);
+                            }
+                        }}
                         onRowsChange={() => {}}
                         className="rdg operations-grid"
                         direction="ltr"
                     />
                 </div>
             )}
+
+            <DetailsPopup row={detailsRow} onClose={() => setDetailsRow(null)} />
         </div>
     );
 };
