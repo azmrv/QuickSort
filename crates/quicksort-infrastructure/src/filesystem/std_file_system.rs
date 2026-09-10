@@ -46,8 +46,8 @@ impl StdFileSystem {
             return raw;
         }
         // UNC path: \\server\share\... → \\?\UNC\server\share\...
-        if s.starts_with(r"\\") {
-            return std::path::PathBuf::from(format!(r"\\?\UNC\{}", &s[2..]));
+        if let Some(stripped) = s.strip_prefix(r"\\") {
+            return std::path::PathBuf::from(format!(r"\\?\UNC\{stripped}"));
         }
         // Drive-absolute path (X:\...): prefix it.
         if s.len() >= 3 && s.as_bytes()[1] == b':' {
@@ -64,6 +64,7 @@ impl StdFileSystem {
 
     /// Recursively computes `(total_size, item_count)` of all regular files
     /// under `path`. Symlinks and junctions are not followed.
+    #[allow(clippy::type_complexity)]
     fn tree_stats<'a>(
         &'a self,
         path: &'a AbsolutePath,

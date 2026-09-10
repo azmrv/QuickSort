@@ -107,7 +107,7 @@ pub enum LogFormat {
 }
 
 /// Logging configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LoggingConfig {
     /// Verbosity level applied when no `RUST_LOG` override is set.
     pub level: LogLevel,
@@ -123,17 +123,6 @@ pub struct LoggingConfig {
     /// Optional limit on how many rotated log files are kept on disk.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_files: Option<u32>,
-}
-
-impl Default for LoggingConfig {
-    fn default() -> Self {
-        Self {
-            level: LogLevel::default(),
-            format: LogFormat::default(),
-            file_path: None,
-            max_files: None,
-        }
-    }
 }
 
 /// User settings entity.

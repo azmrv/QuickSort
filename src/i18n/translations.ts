@@ -10,6 +10,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'tab.queue': 'Queue',
         'tab.settings': 'Settings',
         'tab.about': 'About',
+        // 0.2.6 navigation (Q2): Search / Folders / Operations / Settings / Help / About
+        'tab.search': 'Search',
+        'tab.operations': 'Operations',
+        'tab.help': 'Help',
 
         // Settings - Appearance
         'settings.appearance.title': 'Appearance',
@@ -65,6 +69,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logs.title': 'Logs',
         'settings.logs.description': 'Live event journal from the backend and frontend.',
 
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': 'Plugins',
+        'settings.plugins.description': 'Manage installed Total Commander plugins.',
+
         // Settings - Application
         'settings.application.title': 'Application',
         'settings.application.quit': 'Quit Application',
@@ -73,6 +81,25 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.loading': 'Loading...',
         'settings.saved': 'Settings saved',
         'settings.save_error': 'Failed to save settings',
+
+        // Help (0.2.6)
+        'help.title': 'Help',
+        'help.intro': 'QuickSort is a file manager that integrates into the Windows Explorer context menu and moves or copies files to your favorite folders at a single click.',
+        'help.section.overview': 'Overview',
+        'help.overview.body': 'Select files in Explorer, right-click and pick Stop-queue action to gather files, then choose a folder. The operation runs in the background without opening a window.',
+        'help.section.search': 'Search',
+        'help.search.body': 'Search tab (Ctrl+Shift+Space opens the command palette) searches files across tracked folders. While the query is empty, the dashboard is shown.',
+        'help.section.folders': 'Folders',
+        'help.folders.body': 'Manage your favorite folders: add, rename, delete, toggle favorite and assign a color. Folders are shown in the Explorer context menu and in the selector window.',
+        'help.section.operations': 'Operations',
+        'help.operations.body': 'History and queue are unified in a single Operations table. Recent operations can be undone or repeated; active jobs report progress in real time.',
+        'help.section.settings': 'Settings',
+        'help.settings.body': 'Configure the theme, language, default operation, duplicate handling and logging. Register the COM server to enable the Explorer context menu, manage plugins and create backups.',
+        'help.section.hotkeys': 'Keyboard shortcuts',
+        'help.hotkey.palette': 'Ctrl+Shift+Space — command palette',
+        'help.hotkey.selector': 'Right-click with Shift — select files through the queue',
+        'help.section.context_menu': 'Explorer context menu',
+        'help.context_menu.body': 'Files picked from the context menu are stored in the pending list. The selector window lets you choose the target folder; the actual move/copy is processed by the application queue.',
 
         // Selector
 'selector.title.move_one': 'Queue file for moving:',
@@ -310,6 +337,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logs.title': 'Журнал логов',
         'settings.logs.description': 'Живой журнал событий из бэкенда и фронтенда.',
 
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': 'Плагины',
+        'settings.plugins.description': 'Управление установленными плагинами Total Commander.',
+
         // Settings - Application
         'settings.application.title': 'Приложение',
         'settings.application.quit': 'Выход из приложения',
@@ -318,6 +349,25 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.loading': 'Загрузка...',
         'settings.saved': 'Настройки сохранены',
         'settings.save_error': 'Ошибка сохранения настроек',
+
+        // Help (0.2.6)
+        'help.title': 'Справка',
+        'help.intro': 'QuickSort — файловый менеджер, интегрируемый в контекстное меню Проводника Windows, перемещающий и копирующий файлы в избранные папки в один клик.',
+        'help.section.overview': 'Обзор',
+        'help.overview.body': 'Выберите файлы в Проводнике, нажмите правую кнопку мыши и выберите действие Stop-queue, чтобы собрать файлы, затем выберите папку. Операция выполняется в фоне без открытия окна.',
+        'help.section.search': 'Поиск',
+        'help.search.body': 'Вкладка Поиск (Ctrl+Shift+Space открывает командную палитру) ищет файлы по отслеживаемым папкам. Пока запрос пуст — отображается панель Dashboard.',
+        'help.section.folders': 'Папки',
+        'help.folders.body': 'Управление избранными папками: добавление, переименование, удаление, переключение избранного и назначение цвета. Папки отображаются в контекстном меню Проводника и в окне выбора.',
+        'help.section.operations': 'Операции',
+        'help.operations.body': 'История и очередь объединены в единую таблицу Operations. Завершённые операции можно отменить или повторить; активные задачи показывают прогресс в реальном времени.',
+        'help.section.settings': 'Настройки',
+        'help.settings.body': 'Настройка темы, языка, операции по умолчанию, обработки дубликатов и логирования. Регистрация COM-сервера включает контекстное меню Проводника; здесь же управление плагинами и создание резервных копий.',
+        'help.section.hotkeys': 'Горячие клавиши',
+        'help.hotkey.palette': 'Ctrl+Shift+Space — командная палитра',
+        'help.hotkey.selector': 'Правый клик с Shift — выбор файлов через очередь',
+        'help.section.context_menu': 'Контекстное меню Проводника',
+        'help.context_menu.body': 'Файлы, выбранные из контекстного меню, попадают в список ожидающих. Окно выбора позволяет указать целевую папку; само перемещение/копирование выполняет очередь приложения.',
 
         // Selector
 'selector.title.move_one': 'Поставить файл в очередь на перемещение:',
@@ -499,6 +549,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'tab.queue': 'Warteschlange',
         'tab.settings': 'Einstellungen',
         'tab.about': 'Über',
+        // 0.2.6 navigation (Q2): Search / Folders / Operations / Settings / Help / About
+        'tab.search': 'Suche',
+        'tab.operations': 'Operationen',
+        'tab.help': 'Hilfe',
 
         'settings.appearance.title': 'Erscheinungsbild',
         'settings.appearance.description': 'Wählen Sie Ihr bevorzugtes Thema und Ihre Sprache.',
@@ -548,12 +602,35 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logs.title': 'Protokoll',
         'settings.logs.description': 'Live-Ereignisprotokoll vom Backend und Frontend.',
 
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': 'Plugins',
+        'settings.plugins.description': 'Installierte Total-Commander-Plugins verwalten.',
+
         'settings.application.title': 'Anwendung',
         'settings.application.quit': 'Anwendung beenden',
 
         'settings.loading': 'Laden...',
         'settings.saved': 'Einstellungen gespeichert',
         'settings.save_error': 'Fehler beim Speichern der Einstellungen',
+
+        // Help (0.2.6)
+        'help.title': 'Hilfe',
+        'help.intro': 'QuickSort ist ein Dateimanager, der sich in das Windows-Kontextmenü integriert und Dateien mit einem Klick in Ihre Lieblingsordner verschiebt oder kopiert.',
+        'help.section.overview': 'Übersicht',
+        'help.overview.body': 'Wählen Sie Dateien im Explorer aus, klicken Sie mit der rechten Maustaste und wählen Sie die Stop-Queue-Aktion, um Dateien zu sammeln, dann wählen Sie einen Ordner. Die Operation läuft im Hintergrund ohne Fensteröffnung.',
+        'help.section.search': 'Suche',
+        'help.search.body': 'Der Tab Suche (Ctrl+Shift+Leertaste öffnet die Befehlspalette) durchsucht Dateien über alle verfolgten Ordner. Bei leerer Abfrage wird das Dashboard angezeigt.',
+        'help.section.folders': 'Ordner',
+        'help.folders.body': 'Verwalten Sie Ihre Lieblingsordner: hinzufügen, umbenennen, löschen, Favorit umschalten und Farbe zuweisen. Ordner erscheinen im Explorer-Kontextmenü und im Auswahlfenster.',
+        'help.section.operations': 'Operationen',
+        'help.operations.body': 'Verlauf und Warteschlange sind in einer einzigen Operations-Tabelle vereint. Abgeschlossene Operationen können rückgängig gemacht oder wiederholt werden; aktive Aufträge melden Fortschritt in Echtzeit.',
+        'help.section.settings': 'Einstellungen',
+        'help.settings.body': 'Konfigurieren Sie Thema, Sprache, Standardoperation, Duplikatbehandlung und Protokollierung. Die COM-Server-Registrierung aktiviert das Explorer-Kontextmenü; hier verwalten Sie auch Plugins und Backups.',
+        'help.section.hotkeys': 'Tastaturkürzel',
+        'help.hotkey.palette': 'Ctrl+Shift+Leertaste — Befehlspalette',
+        'help.hotkey.selector': 'Rechtsklick mit Shift — Dateien über die Warteschlange auswählen',
+        'help.section.context_menu': 'Explorer-Kontextmenü',
+        'help.context_menu.body': 'Aus dem Kontextmenü gewählte Dateien landen in der Warteliste. Das Auswahlfenster zeigt den Zielordner an; der eigentliche Verschiebe-/Kopiervorgang läuft über die Anwendungswarteschlange.',
 
 'selector.title.move_one': 'Datei zum Verschieben einreihen:',
     'selector.title.move_many': 'Dateien zum Verschieben einreihen:',
@@ -725,6 +802,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'tab.queue': 'Cola',
         'tab.settings': 'Configuración',
         'tab.about': 'Acerca de',
+        // 0.2.6 navigation (Q2): Search / Folders / Operations / Settings / Help / About
+        'tab.search': 'Búsqueda',
+        'tab.operations': 'Operaciones',
+        'tab.help': 'Ayuda',
 
         'settings.appearance.title': 'Apariencia',
         'settings.appearance.description': 'Elija su tema e idioma preferidos.',
@@ -774,12 +855,35 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logs.title': 'Registro',
         'settings.logs.description': 'Registro de eventos en vivo desde el backend y el frontend.',
 
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': 'Plugins',
+        'settings.plugins.description': 'Administrar los plugins de Total Commander instalados.',
+
         'settings.application.title': 'Aplicación',
         'settings.application.quit': 'Salir de la aplicación',
 
         'settings.loading': 'Cargando...',
         'settings.saved': 'Configuración guardada',
         'settings.save_error': 'Error al guardar la configuración',
+
+        // Help (0.2.6)
+        'help.title': 'Ayuda',
+        'help.intro': 'QuickSort es un administrador de archivos que se integra en el menú contextual de Windows Explorer y mueve o copia archivos a tus carpetas favoritas con un clic.',
+        'help.section.overview': 'Resumen',
+        'help.overview.body': 'Selecciona archivos en el Explorador, haz clic derecho y elige la acción Stop-queue para recopilar archivos, luego elige una carpeta. La operación se ejecuta en segundo plano sin abrir una ventana.',
+        'help.section.search': 'Búsqueda',
+        'help.search.body': 'La pestaña Búsqueda (Ctrl+Shift+Espacio abre la paleta de comandos) busca archivos en las carpetas rastreadas. Con la consulta vacía se muestra el panel dashboard.',
+        'help.section.folders': 'Carpetas',
+        'help.folders.body': 'Administra tus carpetas favoritas: añadir, renombrar, eliminar, alternar favorito y asignar color. Las carpetas aparecen en el menú contextual del Explorador y en la ventana de selección.',
+        'help.section.operations': 'Operaciones',
+        'help.operations.body': 'Historial y cola están unificados en una sola tabla de Operaciones. Las operaciones completadas se pueden deshacer o repetir; los trabajos activos muestran progreso en tiempo real.',
+        'help.section.settings': 'Configuración',
+        'help.settings.body': 'Configura tema, idioma, operación predeterminada, manejo de duplicados y registro. El registro del servidor COM activa el menú contextual del Explorador; aquí también se gestionan plugins y copias de seguridad.',
+        'help.section.hotkeys': 'Atajos de teclado',
+        'help.hotkey.palette': 'Ctrl+Shift+Espacio — paleta de comandos',
+        'help.hotkey.selector': 'Clic derecho con Shift — seleccionar archivos mediante la cola',
+        'help.section.context_menu': 'Menú contextual del Explorador',
+        'help.context_menu.body': 'Los archivos elegidos desde el menú contextual se almacenan en la lista pendiente. La ventana de selección permite escoger la carpeta de destino; el movimiento/copia real lo procesa la cola de la aplicación.',
 
 'selector.title.move_one': 'Poner archivo en cola para mover:',
     'selector.title.move_many': 'Poner archivos en cola para mover:',
@@ -951,6 +1055,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'tab.queue': '队列',
         'tab.settings': '设置',
         'tab.about': '关于',
+        // 0.2.6 navigation (Q2): Search / Folders / Operations / Settings / Help / About
+        'tab.search': '搜索',
+        'tab.operations': '操作',
+        'tab.help': '帮助',
 
         'settings.appearance.title': '外观',
         'settings.appearance.description': '选择您喜欢的主题和语言。',
@@ -1000,12 +1108,35 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logs.title': '日志',
         'settings.logs.description': '来自后端和前端的实时事件日志。',
 
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': '插件',
+        'settings.plugins.description': '管理已安装的 Total Commander 插件。',
+
         'settings.application.title': '应用程序',
         'settings.application.quit': '退出应用',
 
         'settings.loading': '加载中...',
         'settings.saved': '设置已保存',
         'settings.save_error': '保存设置失败',
+
+        // Help (0.2.6)
+        'help.title': '帮助',
+        'help.intro': 'QuickSort 是一款文件管理器，可集成到 Windows 资源管理器右键菜单中，一键将文件移动或复制到您的收藏文件夹。',
+        'help.section.overview': '概览',
+        'help.overview.body': '在资源管理器中选择文件，右键点击并选择 Stop-queue 操作来收集文件，然后选择一个文件夹。操作在后台运行，无需打开窗口。',
+        'help.section.search': '搜索',
+        'help.search.body': '“搜索”选项卡（Ctrl+Shift+空格打开命令面板）在受跟踪的文件夹中搜索文件。查询为空时显示仪表板。',
+        'help.section.folders': '文件夹',
+        'help.folders.body': '管理收藏文件夹：添加、重命名、删除、切换收藏并分配颜色。文件夹会显示在资源管理器右键菜单和选择窗口中。',
+        'help.section.operations': '操作',
+        'help.operations.body': '历史和队列统一为单一操作表。已完成的操作可以撤销或重做；活动任务实时报告进度。',
+        'help.section.settings': '设置',
+        'help.settings.body': '配置主题、语言、默认操作、重复项处理和日志。注册 COM 服务器可启用资源管理器右键菜单；这里还可管理插件和创建备份。',
+        'help.section.hotkeys': '键盘快捷键',
+        'help.hotkey.palette': 'Ctrl+Shift+空格 — 命令面板',
+        'help.hotkey.selector': 'Shift+右键 — 通过队列选择文件',
+        'help.section.context_menu': '资源管理器右键菜单',
+        'help.context_menu.body': '从右键菜单选择的文件会存入待处理列表。选择窗口让您指定目标文件夹；实际的移动/复制由应用程序队列处理。',
 
 'selector.title.move_one': '将文件加入移动队列：',
     'selector.title.move_many': '将多个文件加入移动队列：',
@@ -1177,6 +1308,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'tab.queue': 'キュー',
         'tab.settings': '設定',
         'tab.about': 'バージョン情報',
+        // 0.2.6 navigation (Q2): Search / Folders / Operations / Settings / Help / About
+        'tab.search': '検索',
+        'tab.operations': '操作',
+        'tab.help': 'ヘルプ',
 
         'settings.appearance.title': '外観',
         'settings.appearance.description': 'お気に入りのテーマと言語を選択してください。',
@@ -1226,12 +1361,35 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logs.title': 'ログ',
         'settings.logs.description': 'バックエンドとフロントエンドからのライブイベントログ。',
 
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': 'プラグイン',
+        'settings.plugins.description': 'インストール済みの Total Commander プラグインを管理します。',
+
         'settings.application.title': 'アプリケーション',
         'settings.application.quit': 'アプリを終了',
 
         'settings.loading': '読み込み中...',
         'settings.saved': '設定を保存しました',
         'settings.save_error': '設定の保存に失敗しました',
+
+        // Help (0.2.6)
+        'help.title': 'ヘルプ',
+        'help.intro': 'QuickSort は Windows エクスプローラーのコンテキストメニューに統合され、お気に入りフォルダーへのファイルの移動・コピーをワンクリックで行うファイルマネージャーです。',
+        'help.section.overview': '概要',
+        'help.overview.body': 'エクスプローラーでファイルを選択し、右クリックから Stop-queue 操作を選んでファイルを集め、フォルダーを選択します。操作はウィンドウを開かずバックグラウンドで実行されます。',
+        'help.section.search': '検索',
+        'help.search.body': '「検索」タブ（Ctrl+Shift+Space でコマンドパレット）は追跡中のフォルダーを横断してファイルを検索します。クエリが空の間はダッシュボードが表示されます。',
+        'help.section.folders': 'フォルダー',
+        'help.folders.body': 'お気に入りフォルダーを管理：追加、名前変更、削除、お気に入りの切り替え、色の割り当て。フォルダーはエクスプローラーのコンテキストメニューと選択ウィンドウに表示されます。',
+        'help.section.operations': '操作',
+        'help.operations.body': '履歴とキューは単一の「操作」テーブルに統合されています。完了した操作は取り消し・再実行でき、アクティブなジョブはリアルタイムで進捗を報告します。',
+        'help.section.settings': '設定',
+        'help.settings.body': 'テーマ、言語、デフォルト操作、重複処理、ログを設定します。COMサーバーの登録でエクスプローラーのコンテキストメニューが有効になり、プラグイン管理とバックアップもここで行います。',
+        'help.section.hotkeys': 'キーボードショートカット',
+        'help.hotkey.palette': 'Ctrl+Shift+Space — コマンドパレット',
+        'help.hotkey.selector': 'Shift+右クリック — キュー経由でファイルを選択',
+        'help.section.context_menu': 'エクスプローラーのコンテキストメニュー',
+        'help.context_menu.body': 'コンテキストメニューから選択したファイルは保留リストに保存されます。選択ウィンドウでターゲットフォルダーを指定し、実際の移動・コピーはアプリケーションキューが処理します。',
 
 'selector.title.move_one': 'ファイルを移動キューに追加：',
     'selector.title.move_many': '複数のファイルを移動キューに追加：',

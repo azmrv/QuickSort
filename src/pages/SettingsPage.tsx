@@ -6,6 +6,7 @@ import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
 import { LOCALE_LABELS, type Locale } from '../i18n/translations';
 import LogPage from './LogPage';
+import PluginsPage from './PluginsPage';
 
 // Log levels understood by the backend tracing subscriber (src-tauri/src/logging.rs).
 const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error'] as const;
@@ -429,6 +430,17 @@ const SettingsPage: React.FC = () => {
                 </p>
                 <div className="settings-logs-panel">
                     <LogPage />
+                </div>
+            </div>
+
+            {/* Plugins — moved from the Plugins tab into Settings (0.2.6 feature #17) */}
+            <div>
+                <h3 style={sectionStyle}>{t('settings.plugins.title')}</h3>
+                <p style={labelStyle}>
+                    {t('settings.plugins.description')}
+                </p>
+                <div className="settings-plugins-panel">
+                    <PluginsPage />
                 </div>
             </div>
 

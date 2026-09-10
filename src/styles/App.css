@@ -653,6 +653,11 @@
     height: 420px;
 }
 
+/* Embedded plugins panel inside Settings (0.2.6 feature #17). */
+.settings-plugins-panel {
+    min-height: 160px;
+}
+
 .log-toolbar {
     display: flex;
     gap: var(--qs-space-sm);

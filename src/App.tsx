@@ -8,11 +8,11 @@ import { LanguageProvider, useTranslation } from './i18n/LanguageContext';
 import { LOCALE_LABELS, type Locale } from './i18n/translations';
 import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
-import HistoryPage from './pages/HistoryPage';
-import QueuePage from './pages/QueuePage';
+import SearchPage from './pages/SearchPage';
+import OperationsPage from './pages/OperationsPage';
 import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
-import PluginsPage from './pages/PluginsPage';
+import HelpPage from './pages/HelpPage';
 import CommandPalette from './components/CommandPalette';
 import HeaderStatus from './components/HeaderStatus';
 import './styles/App.css';
@@ -52,7 +52,7 @@ function AppContent() {
         }
         return true;
     });
-    const [activeTab, setActiveTab] = useState('folders');
+    const [activeTab, setActiveTab] = useState('search');
     const [paletteOpen, setPaletteOpen] = useState(false);
     // Full settings snapshot loaded at startup; persistSettings merges into it
     // so header saves (theme/locale) never drop other settings fields.
@@ -155,12 +155,14 @@ function AppContent() {
         document.body.style.color = isDark ? '#e8e8ec' : '#1a1a1d';
     }, [isDark]);
 
+    // 0.2.6 navigation (plan Q2): Search / Folders / Operations / Settings / Help / About.
+    // Log and Plugins left the header and live as sections inside Settings.
     const TABS = [
+        { key: 'search', label: t('tab.search'), content: <SearchPage /> },
         { key: 'folders', label: t('tab.folders'), content: <EditorPage /> },
-        { key: 'history', label: t('tab.history'), content: <HistoryPage /> },
-        { key: 'queue', label: t('tab.queue'), content: <QueuePage /> },
-        { key: 'plugins', label: t('tab.plugins'), content: <PluginsPage /> },
+        { key: 'operations', label: t('tab.operations'), content: <OperationsPage /> },
         { key: 'settings', label: t('tab.settings'), content: <SettingsPage /> },
+        { key: 'help', label: t('tab.help'), content: <HelpPage /> },
         { key: 'about', label: t('tab.about'), content: <AboutPage /> },
     ];
 
