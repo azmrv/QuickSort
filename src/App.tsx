@@ -226,8 +226,10 @@ function AppContent() {
                                 <div className="app-logo-icon">Q</div>
                                 <span className="app-logo-text">QuickSort</span>
                             </div>
-                            <div className="header-right">
+                            <div className="header-center">
                                 <HeaderStatus />
+                            </div>
+                            <div className="header-right">
                                 <button className="theme-toggle" onClick={toggleTheme}>
                                     <span className="theme-toggle-icon">{isDark ? '☀️' : '🌙'}</span>
                                 </button>

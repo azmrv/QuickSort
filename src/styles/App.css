@@ -95,6 +95,12 @@
 /* ================================
    Header Right — Search + Theme
    ================================ */
+.header-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+}
+
 .header-right {
     display: flex;
     align-items: center;
