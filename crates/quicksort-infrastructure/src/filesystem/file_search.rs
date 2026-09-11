@@ -3,7 +3,7 @@
 //! Walks the file system recursively from configured directories,
 //! applies filters from SearchQuery, and returns matching results.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
@@ -65,25 +65,51 @@ impl FileSearchPort for FsFileSearch {
 }
 
 impl FsFileSearch {
-    /// Recursively walk a directory, collecting matching entries.
-    fn walk_directory<'a>(
-        &'a self,
-        dir: &'a Path,
-        query: &'a SearchQuery,
-        results: &'a mut Vec<FileSearchResult>,
+    /// Max tree depth the walk will descend into. A real chain deeper than this
+    /// implies a cycle that the symlink check cannot see (nested real dirs), or
+    /// software-generated runaway nesting. Either way, stop.
+    const MAX_DEPTH: u32 = 512;
+
+    /// Walk a directory tree iteratively, collecting matching entries.
+    ///
+    /// Uses an explicit heap stack instead of recursion: a recursive
+    /// `Box::pin(async move { ... .await })` chain keeps one poll frame per
+    /// level on the thread stack and overflows 1 MiB at ~500 nested directories
+    /// (QA 2026-09-11, 0xc00000fd on a Desktop chain of 541 real folders).
+    /// The future state machine here is O(1) in depth — only leaf ops are awaited.
+    async fn walk_directory(
+        &self,
+        start_dir: &Path,
+        query: &SearchQuery,
+        results: &mut Vec<FileSearchResult>,
         max_results: usize,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
+    ) {
+        // (path, depth) pairs; depth of a child = parent depth + 1
+        let mut stack: Vec<(PathBuf, u32)> = vec![(start_dir.to_path_buf(), 0)];
+
+        while let Some((dir, depth)) = stack.pop() {
             if results.len() >= max_results {
                 return;
             }
 
-            let entries = match fs::read_dir(dir).await {
+            if depth > Self::MAX_DEPTH {
+                tracing::warn!(
+                    "search: tree deeper than {} levels at {:?}; stopping descent \
+                     (possible cycle or runaway directory chain)",
+                    Self::MAX_DEPTH,
+                    dir
+                );
+                continue;
+            }
+
+            let mut entries = match fs::read_dir(&dir).await {
                 Ok(entries) => entries,
-                Err(_) => return,
+                Err(e) => {
+                    tracing::warn!("search: cannot read directory {:?}: {}", dir, e);
+                    continue;
+                }
             };
 
-            let mut entries = entries;
             while let Some(entry) = entries.next_entry().await.unwrap_or(None) {
                 if results.len() >= max_results {
                     return;
@@ -99,15 +125,22 @@ impl FsFileSearch {
                 // resolve the reparse target, so junctions are seen as symlinks.
                 let file_type = match entry.file_type().await {
                     Ok(ft) => ft,
-                    Err(_) => continue,
+                    Err(e) => {
+                        tracing::debug!("search: cannot stat {:?}: {}", path, e);
+                        continue;
+                    }
                 };
                 if file_type.is_symlink() {
+                    tracing::debug!("search: skipping symlink/junction {:?}", path);
                     continue;
                 }
 
                 let metadata = match fs::metadata(&path).await {
                     Ok(m) => m,
-                    Err(_) => continue,
+                    Err(e) => {
+                        tracing::debug!("search: cannot stat {:?}: {}", path, e);
+                        continue;
+                    }
                 };
 
                 let name = match path.file_name() {
@@ -135,11 +168,10 @@ impl FsFileSearch {
                 }
 
                 if is_directory && results.len() < max_results {
-                    self.walk_directory(&path, query, results, max_results)
-                        .await;
+                    stack.push((path, depth + 1));
                 }
             }
-        })
+        }
     }
 
     /// Check if a file/directory matches the parsed search query.
@@ -476,7 +508,7 @@ mod tests {
 
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(5),
-            search.search(&dirs, "123", 100),
+            search.search(&dirs, "123", 10_000),
         )
         .await
         .expect("search did not finish in 5s (junction recursion?)")
@@ -485,5 +517,52 @@ mod tests {
         let mut names: Vec<&str> = result.files.iter().map(|f| f.name.as_str()).collect();
         names.sort_unstable();
         assert_eq!(names, ["a123.txt", "b123.txt"]);
+    }
+
+    /// Regression: a recursive walk overflows the thread stack on deep *real*
+    /// directory chains (no symlinks involved) — QA 2026-09-11, 0xc00000fd on a
+    /// Desktop chain of 541 nested folders. The iterative walk must survive
+    /// deeper chains and enforce MAX_DEPTH.
+    #[tokio::test]
+    async fn test_search_deep_chain_no_overflow() {
+        let base = tempdir().unwrap();
+        // Windows caps non-prefixed paths at 260 chars (MAX_PATH); a chain deep
+        // enough to overflow recursion needs the long-path `\\?\` prefix.
+        let root: PathBuf = if cfg!(windows) {
+            PathBuf::from(format!(r"\\?\{}", base.path().display()))
+        } else {
+            base.path().to_path_buf()
+        };
+
+        // Chain deeper than MAX_DEPTH so the guard is exercised, but derived from
+        // the constant so the fixture stays valid if MAX_DEPTH is bumped.
+        let levels = FsFileSearch::MAX_DEPTH as usize + 100;
+        let mut cur = root.clone();
+        for i in 0..levels {
+            cur = cur.join(format!("d{i}"));
+            fs::create_dir(&cur).await.unwrap();
+        }
+
+        let search = FsFileSearch::new();
+        let dirs = vec![root.to_str().unwrap().to_string()];
+
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            search.search(&dirs, "", 10_000),
+        )
+        .await
+        .expect("search did not finish in 10s (deep chain overflow?)")
+        .unwrap();
+
+        // Empty query matches every directory. Each dir is matched while its
+        // *parent* is being read (root matches d0, then d0..d511 at depths
+        // 1..=512 each match their single child) → 1 + MAX_DEPTH results total.
+        // d512 itself is never read: it is only pushed at depth 513 and killed
+        // by the guard on pop, before its entries are enumerated.
+        assert_eq!(result.files.len(), FsFileSearch::MAX_DEPTH as usize + 1);
+        assert!(!result.truncated);
+
+        // Long-path-safe cleanup; tempdir tolerates the now-missing dir.
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
