@@ -30,7 +30,15 @@ import {
 } from './rowOrder';
 import type { JobDto, OperationDto, OperationRow } from './types';
 
-const DEFAULT_COLUMN_ORDER = ['status', 'type', 'source', 'objects', 'files', 'size', 'created_at'];
+// Payload of the `operation-progress` Tauri event (backend emitter, src-tauri/src/progress.rs).
+interface ProgressPayload {
+    current: number;
+    total: number;
+    phase: string;
+    detail?: string | null;
+}
+
+const DEFAULT_COLUMN_ORDER = [SELECT_COLUMN_KEY, 'status', 'type', 'source', 'objects', 'files', 'size', 'created_at'];
 
 // react-data-grid v7 has no per-column sortComparator (unlike v6, where it
 // lived on Column). Sorting is consumer-driven: the grid only reports
@@ -117,7 +125,23 @@ const OperationsTable = () => {
                 loadOperations();
             }
         });
-        return () => { unlisten.then((fn) => fn()); };
+        // The queue serializes execution, so at most one job is Running at a
+        // time; an `operation-progress` event therefore belongs to the running
+        // job (the payload carries no id). Update its progress in place.
+        const unlistenProgress = listen<ProgressPayload>('operation-progress', (event) => {
+            const { current, total } = event.payload;
+            setJobs((prev) => {
+                const idx = prev.findIndex((j) => j.status === 'Running');
+                if (idx === -1) return prev;
+                const next = [...prev];
+                next[idx] = { ...next[idx], progress: { current, total } };
+                return next;
+            });
+        });
+        return () => {
+            unlisten.then((fn) => fn());
+            unlistenProgress.then((fn) => fn());
+        };
     }, [loadOperations]);
 
     // Display order lives in rowOrder.orderRows (unit-tested); an active sort
