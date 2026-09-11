@@ -5,9 +5,10 @@
 ;                The COM handler is registered by the application itself on
 ;                first launch (see src-tauri main.rs), never by the installer.
 ; PREUNINSTALL - remove COM registry keys before the uninstaller deletes files,
-;                then restart Explorer so the shell-extension DLL is unloaded
-;                from memory and can be deleted. The relaunch waits until the
-;                old shell has fully exited (polling, not a blind sleep).
+;                then kill Explorer so the shell-extension DLL is unloaded from
+;                memory and can be deleted. Windows 10/11 auto-restart the
+;                shell; the macro only waits a fixed 500 ms and never launches
+;                explorer.exe itself (see the macro body for the QA history).
 ; POSTUNINSTALL - delete per-user application settings when the checkbox is
 ;                ticked, plus the publisher-named parent folder and legacy
 ;                per-user install leftovers.
@@ -90,39 +91,18 @@ ${_uniq}_done:
   DetailPrint "Restarting Windows Explorer to unload the shell extension..."
   nsExec::Exec 'taskkill /f /im explorer.exe'
 
-  ; Wait until the old shell has fully exited (up to 5 s, 200 ms steps) —
-  ; spawning the new shell while the old one is shutting down leaves the
-  ; taskbar/Start button missing (QA 06.09.2026, line 84; mirrors
-  ; restart_explorer() in src-tauri src/com.rs). Poll the process list, not
-  ; the Shell_TrayWnd window, which can disappear before the process exits.
-  DetailPrint "Waiting for Windows Explorer to fully exit..."
-  StrCpy $0 0
-qs_explorer_poll:
-  IntOp $0 $0 + 1
-  ${If} $0 > 25
-    Goto qs_explorer_relaunch
-  ${EndIf}
-  Sleep 200
-  ; Same locale pitfall as QuickSortStopRunning: tasklist prints a localized
-  ; "INFO: ..." line when nothing matches, so detect the running shell by
-  ; SEARCHING the output for the image name, not by emptiness. This block runs
-  ; in the uninstaller only, so the un.-variant of the StrFunc function is
-  ; legal here (Call to un.StrLoc inside uninstall sections is allowed).
-  ; Case-insensitive search ("<"): $3 is the loop's result register — $0 is
-  ; the 25-iteration counter and must not be clobbered.
-  nsExec::ExecToStack 'tasklist /fi "imagename eq explorer.exe" /fo csv /nh'
-  Pop $1 ; exit code
-  Pop $2 ; output
-  ${UnStrLoc} $3 "$2" "explorer.exe" "<"
-  ${If} $3 == ""
-    Goto qs_explorer_relaunch
-  ${EndIf}
-  Goto qs_explorer_poll
-qs_explorer_relaunch:
-  ; Real 64-bit shell. nsExec::Exec does not wait for the never-exiting shell
-  ; process and shows no "Running: ..." popup (unlike Exec).
-  nsExec::Exec '"$WINDIR\explorer.exe"'
-  DetailPrint "QuickSort uninstall: Explorer relaunched"
+  ; Wait for the old shell to release the mapped context_menu_dll.dll. Do NOT
+  ; poll or relaunch: since Windows 10, killing explorer.exe via taskkill
+  ; triggers an automatic restart within ~200 ms, so (a) a poll loop would see
+  ; the process never absent and just burn up to 5 s — inside an uninstaller
+  ; that reads as a hang (QA 07.09.2026), and (b) launching explorer.exe again
+  ; while the freshly restarted shell is up would pop a spurious File Explorer
+  ; window on top of the restored desktop. QuickSort targets Windows 10/11
+  ; (WebView2 via Tauri 2), which always auto-restart the shell. A fixed 500 ms
+  ; wait gives the old instance time to release the DLL before the new shell
+  ; starts (mirrors restart_explorer() in src-tauri src/com.rs).
+  Sleep 500
+  DetailPrint "QuickSort uninstall: Explorer killed, Windows will restart it"
 !macroend
 
 ; Runs after files, registry keys, and shortcuts have been removed.
