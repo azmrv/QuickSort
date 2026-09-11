@@ -90,6 +90,21 @@ impl FsFileSearch {
                 }
 
                 let path = entry.path();
+                // Do not follow symlinks/junctions while walking: resolving a
+                // reparse point can escape the scanned tree (e.g. Windows
+                // `AppData\Local\Application Data` → `AppData\Local`) and form
+                // a cycle, which previously caused unbounded recursion and a
+                // silent app crash (QA 2026-09-11, search "123" over AppData).
+                // DirEntry::file_type reads the entry itself and does NOT
+                // resolve the reparse target, so junctions are seen as symlinks.
+                let file_type = match entry.file_type().await {
+                    Ok(ft) => ft,
+                    Err(_) => continue,
+                };
+                if file_type.is_symlink() {
+                    continue;
+                }
+
                 let metadata = match fs::metadata(&path).await {
                     Ok(m) => m,
                     Err(_) => continue,
@@ -427,5 +442,48 @@ mod tests {
         let result = search.search(&dirs, "report*", 100).await.unwrap();
 
         assert_eq!(result.files.len(), 2);
+    }
+
+    /// Regression: walking must skip Windows junctions, which can form cycles
+    /// (e.g. `AppData\Local\Application Data` → `AppData\Local`) and previously
+    /// caused unbounded recursion and a silent app crash (QA 2026-09-11,
+    /// search "123" over the whole AppData folder).
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_search_skips_junction_cycle() {
+        use std::process::Command;
+
+        let base = tempdir().unwrap();
+        let base_path = base.path();
+
+        fs::write(base_path.join("a123.txt"), "").await.unwrap();
+        fs::create_dir(base_path.join("sub")).await.unwrap();
+        fs::write(base_path.join("sub/b123.txt"), "").await.unwrap();
+
+        // `mklink /J` creates a directory junction without admin rights
+        // (unlike symlinks). Point it at the base dir itself → a cycle.
+        let link = base_path.join("loop");
+        let status = Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(base_path)
+            .status()
+            .expect("failed to run mklink");
+        assert!(status.success(), "mklink /J failed: {status:?}");
+
+        let search = FsFileSearch::new();
+        let dirs = vec![base_path.to_str().unwrap().to_string()];
+
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            search.search(&dirs, "123", 100),
+        )
+        .await
+        .expect("search did not finish in 5s (junction recursion?)")
+        .unwrap();
+
+        let mut names: Vec<&str> = result.files.iter().map(|f| f.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(names, ["a123.txt", "b123.txt"]);
     }
 }
