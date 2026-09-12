@@ -313,6 +313,21 @@ mod tests {
         ) -> Result<FolderMetadata, UseCaseError> {
             unimplemented!("not needed by undo tests")
         }
+
+        async fn available_space(
+            &self,
+            _path: &AbsolutePath,
+        ) -> Result<u64, UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
+
+        async fn is_same_volume(
+            &self,
+            _a: &AbsolutePath,
+            _b: &AbsolutePath,
+        ) -> Result<bool, UseCaseError> {
+            unimplemented!("not needed by undo tests")
+        }
     }
 
     fn completed_move_op(source: &[&str], target: &str) -> Operation {

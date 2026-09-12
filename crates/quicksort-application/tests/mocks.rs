@@ -401,6 +401,18 @@ impl FileSystem for MockFileSystem {
             }),
         }
     }
+
+    async fn available_space(&self, _path: &AbsolutePath) -> Result<u64, UseCaseError> {
+        Ok(u64::MAX)
+    }
+
+    async fn is_same_volume(
+        &self,
+        _a: &AbsolutePath,
+        _b: &AbsolutePath,
+    ) -> Result<bool, UseCaseError> {
+        Ok(true)
+    }
 }
 
 // ============================================================================
