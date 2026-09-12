@@ -83,9 +83,8 @@ impl TauriProgressReporter {
     }
 }
 
-#[async_trait::async_trait]
 impl ProgressReporter for TauriProgressReporter {
-    async fn report(&self, progress: ProgressInfo) {
+    fn report(&self, progress: ProgressInfo) {
         let should_emit = {
             let Ok(mut state) = self.state.lock() else {
                 return;

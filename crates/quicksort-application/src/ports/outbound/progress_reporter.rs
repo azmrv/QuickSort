@@ -6,8 +6,6 @@
 //! and the Infrastructure/Adapter Layer provides the concrete implementation
 //! (e.g., emitting Tauri events to the frontend).
 
-use async_trait::async_trait;
-
 /// Progress information for a long-running operation.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProgressInfo {
@@ -25,11 +23,10 @@ pub struct ProgressInfo {
 ///
 /// Implementations should emit progress events to the frontend
 /// (e.g., via Tauri events, WebSocket, or callback).
-#[async_trait]
 pub trait ProgressReporter: Send + Sync {
     /// Report progress for the current phase of an operation.
     ///
     /// Implementations should be non-blocking and best-effort:
     /// if the frontend is not listening, progress events can be dropped.
-    async fn report(&self, progress: ProgressInfo);
+    fn report(&self, progress: ProgressInfo);
 }

@@ -43,16 +43,14 @@ impl ExecuteOperationUseCase {
         self
     }
 
-    async fn report_progress(&self, current: u64, total: u64, phase: &str, detail: Option<String>) {
+    fn report_progress(&self, current: u64, total: u64, phase: &str, detail: Option<String>) {
         if let Some(ref reporter) = self.progress_reporter {
-            reporter
-                .report(ProgressInfo {
-                    current,
-                    total,
-                    phase: phase.to_string(),
-                    detail,
-                })
-                .await;
+            reporter.report(ProgressInfo {
+                current,
+                total,
+                phase: phase.to_string(),
+                detail,
+            });
         }
     }
 }
@@ -104,8 +102,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
         }
 
         for (idx, source) in command.source_paths.iter().enumerate() {
-            self.report_progress(idx as u64, total, "processing", Some(source.to_string()))
-                .await;
+            self.report_progress(idx as u64, total, "processing", Some(source.to_string()));
 
             match self.execute_single(source, &command, &target_folder).await {
                 Ok(bytes) => {
@@ -122,7 +119,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
             }
         }
 
-        self.report_progress(total, total, "complete", None).await;
+        self.report_progress(total, total, "complete", None);
 
         if let Some(error) = last_error {
             let reason = error.to_string();
