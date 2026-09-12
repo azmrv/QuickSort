@@ -103,13 +103,13 @@ impl ProgressReporter for TauriProgressReporter {
             }
         }
         // Log every emitted tick so the LOG tab exposes operation progress
-        // during long copies (re-QA 12.09.2026 D4). The throttle above
-        // already bounds this to at most one line per 500ms.
+        // during long copies (re-QA 12.09.2026 D4). Bounded by the throttle
+        // above; one line per emitted tick.
         tracing::info!(
             current = progress.current,
             total = progress.total,
             phase = %progress.phase,
-            detail = progress.detail.as_deref().unwrap_or(""),
+            detail = ?progress.detail,
             "operation progress"
         );
     }
