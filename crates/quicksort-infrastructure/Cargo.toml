@@ -46,9 +46,9 @@ anyhow = "1.0"
 # SHA-256 hashing for content-based duplicate detection
 sha2 = "0.11"
 
-# Windows API for DLL loading (WCX plugin support)
+# Windows API for DLL loading (WCX plugin support) and volume queries
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["libloaderapi", "winnt", "minwindef"] }
+winapi = { version = "0.3", features = ["libloaderapi", "winnt", "minwindef", "fileapi", "errhandlingapi", "impl-default"] }
 
 # Logging
 tracing = "0.1"

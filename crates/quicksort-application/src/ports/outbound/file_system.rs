@@ -159,4 +159,32 @@ pub trait FileSystem: Send + Sync {
     /// Returns `FileSystemError` if metadata retrieval fails for a reason
     /// other than the path not existing (e.g. permission denied).
     async fn folder_metadata(&self, path: &AbsolutePath) -> Result<FolderMetadata, UseCaseError>;
+
+    /// Returns the free space (in bytes) available on the volume containing
+    /// `path`.
+    ///
+    /// Used as a pre-flight check so an operation fails with a clear message
+    /// BEFORE copying starts instead of hitting ENOSPC halfway through (QA
+    /// 12.09.2026, D3: a 2.6 GB Move failed with "Недостаточно места на
+    /// диске" mid-operation).
+    ///
+    /// # Errors
+    /// Returns `FileSystemError` if the volume query fails (e.g. the path
+    /// does not exist on any mounted volume).
+    async fn available_space(&self, path: &AbsolutePath) -> Result<u64, UseCaseError>;
+
+    /// Reports whether two paths reside on the same volume.
+    ///
+    /// A Move between two paths on the same volume is a metadata rename and
+    /// consumes no additional disk space, so the pre-flight space check can
+    /// be skipped; a cross-volume Move copies first (and needs space for the
+    /// copy). The comparison is case-insensitive on Windows.
+    ///
+    /// # Errors
+    /// Returns `FileSystemError` if the volumes cannot be determined.
+    async fn is_same_volume(
+        &self,
+        a: &AbsolutePath,
+        b: &AbsolutePath,
+    ) -> Result<bool, UseCaseError>;
 }

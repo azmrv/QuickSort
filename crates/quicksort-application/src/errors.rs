@@ -92,6 +92,12 @@ pub enum UseCaseError {
     #[error("File system error: {0}")]
     FileSystemError(String),
 
+    /// The destination volume does not have enough space for the operation.
+    /// `need` is the total size of the sources that must be written,
+    /// `available` is the free space on the target volume at check time.
+    #[error("Not enough disk space on target: {need} bytes needed, {available} bytes available")]
+    InsufficientDiskSpace { need: u64, available: u64 },
+
     // ---- Internal errors ----
     // These errors indicate unexpected states that should never occur
     // under normal operation.

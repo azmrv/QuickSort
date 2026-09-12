@@ -90,6 +90,19 @@ impl ExecuteOperation for ExecuteOperationUseCase {
         let mut total_bytes: u64 = 0;
         let mut last_error: Option<UseCaseError> = None;
 
+        // Pre-flight check: fail BEFORE moving/copying starts when the target
+        // volume lacks the space an operation needs (re-QA 12.09.2026 D3).
+        if let Err(e) = self.check_disk_space(&command, &target_folder).await {
+            operation
+                .fail(e.to_string())
+                .map_err(|err| UseCaseError::Domain(err.to_string()))?;
+            self.operation_repository
+                .save(&operation)
+                .await
+                .map_err(|err| UseCaseError::RepositoryError(err.to_string()))?;
+            return Err(e);
+        }
+
         for (idx, source) in command.source_paths.iter().enumerate() {
             self.report_progress(idx as u32, total, "processing", Some(source.to_string()))
                 .await;
@@ -256,6 +269,54 @@ impl ExecuteOperationUseCase {
                     .await
                     .map(|_| 0u64)
             }
+        }
+    }
+
+    async fn check_disk_space(
+        &self,
+        command: &OperationCommand,
+        target_folder: &Option<AbsolutePath>,
+    ) -> Result<(), UseCaseError> {
+        let target = match target_folder {
+            Some(t) => t,
+            None => {
+                return Ok(());
+            }
+        };
+
+        let mut needed: u64 = 0;
+        for source in &command.source_paths {
+            match command.operation_type {
+                OperationType::Copy => {
+                    needed += self.source_size(source).await?;
+                }
+                OperationType::Move => {
+                    // Cross-volume moves copy first, so they need space for
+                    // the copy; same-volume moves are renames and need none.
+                    if !self.file_system.is_same_volume(source, target).await? {
+                        needed += self.source_size(source).await?;
+                    }
+                }
+                OperationType::Delete | OperationType::Rename => {}
+            }
+        }
+
+        if needed == 0 {
+            return Ok(());
+        }
+
+        let available = self.file_system.available_space(target).await?;
+        if needed > available {
+            return Err(UseCaseError::InsufficientDiskSpace { need: needed, available });
+        }
+        Ok(())
+    }
+
+    async fn source_size(&self, source: &AbsolutePath) -> Result<u64, UseCaseError> {
+        if self.file_system.is_dir(source).await? {
+            Ok(self.file_system.folder_metadata(source).await?.total_size)
+        } else {
+            self.file_system.get_file_size(source).await
         }
     }
 

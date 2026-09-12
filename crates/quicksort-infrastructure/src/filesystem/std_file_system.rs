@@ -62,6 +62,31 @@ impl StdFileSystem {
         path.to_path_buf()
     }
 
+    /// Returns the volume root (`C:\`, `\\server\share\`) that contains
+    /// `path`, or `None` when the path has no resolvable root (relative
+    /// paths, bare file names).
+    #[cfg(target_os = "windows")]
+    fn volume_root(path: &AbsolutePath) -> Option<String> {
+        let s = path.to_path_buf().to_string_lossy().into_owned();
+        // UNC path: \\server\share\... → \\server\share\
+        if let Some(stripped) = s.strip_prefix(r"\\") {
+            // \\server\share → first two path components after the prefix.
+            let parts: Vec<&str> = stripped.split('\\').filter(|p| !p.is_empty()).collect();
+            return (parts.len() >= 2)
+                .then(|| format!(r"\\{}\{}\", parts[0], parts[1]));
+        }
+        // Drive-absolute path: X:\...
+        if s.len() >= 3 && s.as_bytes()[1] == b':' {
+            return Some(s[..3].to_owned());
+        }
+        None
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn volume_root(_path: &AbsolutePath) -> Option<String> {
+        None
+    }
+
     /// Recursively computes `(total_size, item_count)` of all regular files
     /// under `path`. Symlinks and junctions are not followed.
     #[allow(clippy::type_complexity)]
@@ -361,6 +386,77 @@ impl FileSystem for StdFileSystem {
             total_size,
             item_count,
         })
+    }
+
+    async fn available_space(&self, path: &AbsolutePath) -> Result<u64, UseCaseError> {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::ffi::OsStrExt;
+            use winapi::um::winnt::ULARGE_INTEGER;
+            use winapi::um::errhandlingapi::GetLastError;
+            use winapi::um::fileapi::GetDiskFreeSpaceExW;
+
+            let root = Self::volume_root(path)
+                .ok_or_else(|| UseCaseError::FileSystemError("no volume root".to_string()))?;
+            let root_wide: Vec<u16> = std::path::Path::new(&root)
+                .as_os_str()
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
+
+            let mut free_bytes_available = ULARGE_INTEGER::default();
+            let mut total_bytes = ULARGE_INTEGER::default();
+            let mut total_free_bytes = ULARGE_INTEGER::default();
+            // SAFETY: root_wide is a valid null-terminated wide string and the
+            // three output pointers point to writable ULARGE_INTEGER storage.
+            let ok = unsafe {
+                GetDiskFreeSpaceExW(
+                    root_wide.as_ptr(),
+                    &mut free_bytes_available,
+                    &mut total_bytes,
+                    &mut total_free_bytes,
+                )
+            };
+            if ok == 0 {
+                // SAFETY: GetLastError is only read right after a failed call.
+                let code = unsafe { GetLastError() };
+                return Err(UseCaseError::FileSystemError(format!(
+                    "GetDiskFreeSpaceExW({root}) failed: {}",
+                    std::io::Error::from_raw_os_error(code as i32)
+                )));
+            }
+            // SAFETY: QuadPart aliases the union storage as u64, which the
+            // WinAPI contract guarantees after a successful call.
+            Ok(unsafe { *free_bytes_available.QuadPart() })
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = path;
+            Err(UseCaseError::FileSystemError(
+                "available_space is only supported on Windows".to_string(),
+            ))
+        }
+    }
+
+    async fn is_same_volume(
+        &self,
+        a: &AbsolutePath,
+        b: &AbsolutePath,
+    ) -> Result<bool, UseCaseError> {
+        #[cfg(target_os = "windows")]
+        {
+            match (Self::volume_root(a), Self::volume_root(b)) {
+                (Some(r1), Some(r2)) => Ok(r1.eq_ignore_ascii_case(&r2)),
+                _ => Err(UseCaseError::FileSystemError(
+                    "cannot determine volume root".to_string(),
+                )),
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (a, b);
+            Ok(true)
+        }
     }
 }
 
