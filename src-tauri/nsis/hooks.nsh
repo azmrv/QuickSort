@@ -6,9 +6,11 @@
 ;                first launch (see src-tauri main.rs), never by the installer.
 ; PREUNINSTALL - remove COM registry keys before the uninstaller deletes files,
 ;                then kill Explorer so the shell-extension DLL is unloaded from
-;                memory and can be deleted. Windows 10/11 auto-restart the
-;                shell; the macro only waits a fixed 500 ms and never launches
-;                explorer.exe itself (see the macro body for the QA history).
+;                memory and can be deleted. The macro waits a fixed 500 ms (no
+;                poll loop: it reads as a hang - QA 07.09.2026) and then
+;                relaunches explorer.exe ONCE only if the shell did NOT
+;                auto-restart (auto-restart is NOT guaranteed - QA 12.09.2026;
+;                see the macro body for the full QA history).
 ; POSTUNINSTALL - delete per-user application settings when the checkbox is
 ;                ticked, plus the publisher-named parent folder and legacy
 ;                per-user install leftovers.
@@ -91,18 +93,38 @@ ${_uniq}_done:
   DetailPrint "Restarting Windows Explorer to unload the shell extension..."
   nsExec::Exec 'taskkill /f /im explorer.exe'
 
-  ; Wait for the old shell to release the mapped context_menu_dll.dll. Do NOT
-  ; poll or relaunch: since Windows 10, killing explorer.exe via taskkill
-  ; triggers an automatic restart within ~200 ms, so (a) a poll loop would see
-  ; the process never absent and just burn up to 5 s — inside an uninstaller
-  ; that reads as a hang (QA 07.09.2026), and (b) launching explorer.exe again
-  ; while the freshly restarted shell is up would pop a spurious File Explorer
-  ; window on top of the restored desktop. QuickSort targets Windows 10/11
-  ; (WebView2 via Tauri 2), which always auto-restart the shell. A fixed 500 ms
-  ; wait gives the old instance time to release the DLL before the new shell
-  ; starts (mirrors restart_explorer() in src-tauri src/com.rs).
+  ; Wait for the old shell to release the mapped context_menu_dll.dll, then
+  ; probe whether it actually came back. Since Windows 10, killing explorer.exe
+  ; via taskkill USUALLY triggers an automatic restart within ~200 ms, so a
+  ; poll loop would see the process never absent and burn up to 5 s — reads as
+  ; a hang inside an uninstaller (QA 07.09.2026); keep the fixed 500 ms wait
+  ; from that fix. BUT the auto-restart is NOT guaranteed: QA 12.09.2026 showed
+  ; the shell staying dead after uninstall (user had to start it manually), so
+  ; probe the process list ONCE and relaunch the 64-bit shell only when
+  ; explorer.exe is absent. Launching it while the shell is already up would
+  ; pop a spurious File Explorer window on top of the restored desktop — the
+  ; probe guards against that (mirrors the fixed-sleep design of
+  ; restart_explorer() in src-tauri src/com.rs).
   Sleep 500
-  DetailPrint "QuickSort uninstall: Explorer killed, Windows will restart it"
+  ; Same locale pitfall as QuickSortStopRunning: tasklist prints a localized
+  ; "INFO: ..." line to STDOUT when nothing matches, so detect the running
+  ; shell by SEARCHING the output for the image name ("explorer.exe" appears
+  ; in every process row), not by emptiness or text equality. This block runs
+  ; in the uninstaller only, so the un.-variant of the StrFunc function is
+  ; legal here (Call to un.StrLoc inside uninstall sections is allowed).
+  ; Case-insensitive search ("<"); $3 must not clobber any live register.
+  nsExec::ExecToStack 'tasklist /fi "imagename eq explorer.exe" /fo csv /nh'
+  Pop $1 ; exit code
+  Pop $2 ; console output
+  ${UnStrLoc} $3 "$2" "explorer.exe" "<"
+  ${If} $3 == ""
+    ; Real 64-bit shell. nsExec::Exec does not wait for the never-exiting shell
+    ; process and shows no "Running: ..." popup (unlike Exec).
+    nsExec::Exec '"$WINDIR\explorer.exe"'
+    DetailPrint "QuickSort uninstall: Explorer did not auto-restart, relaunched"
+  ${Else}
+    DetailPrint "QuickSort uninstall: Explorer alive (Windows restarted it)"
+  ${EndIf}
 !macroend
 
 ; Runs after files, registry keys, and shortcuts have been removed.
