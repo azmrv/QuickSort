@@ -314,10 +314,7 @@ mod tests {
             unimplemented!("not needed by undo tests")
         }
 
-        async fn available_space(
-            &self,
-            _path: &AbsolutePath,
-        ) -> Result<u64, UseCaseError> {
+        async fn available_space(&self, _path: &AbsolutePath) -> Result<u64, UseCaseError> {
             unimplemented!("not needed by undo tests")
         }
 

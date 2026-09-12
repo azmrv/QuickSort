@@ -307,7 +307,10 @@ impl ExecuteOperationUseCase {
 
         let available = self.file_system.available_space(target).await?;
         if needed > available {
-            return Err(UseCaseError::InsufficientDiskSpace { need: needed, available });
+            return Err(UseCaseError::InsufficientDiskSpace {
+                need: needed,
+                available,
+            });
         }
         Ok(())
     }

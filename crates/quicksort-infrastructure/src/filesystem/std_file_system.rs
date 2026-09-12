@@ -72,8 +72,7 @@ impl StdFileSystem {
         if let Some(stripped) = s.strip_prefix(r"\\") {
             // \\server\share → first two path components after the prefix.
             let parts: Vec<&str> = stripped.split('\\').filter(|p| !p.is_empty()).collect();
-            return (parts.len() >= 2)
-                .then(|| format!(r"\\{}\{}\", parts[0], parts[1]));
+            return (parts.len() >= 2).then(|| format!(r"\\{}\{}\", parts[0], parts[1]));
         }
         // Drive-absolute path: X:\...
         if s.len() >= 3 && s.as_bytes()[1] == b':' {
@@ -392,9 +391,9 @@ impl FileSystem for StdFileSystem {
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::ffi::OsStrExt;
-            use winapi::um::winnt::ULARGE_INTEGER;
             use winapi::um::errhandlingapi::GetLastError;
             use winapi::um::fileapi::GetDiskFreeSpaceExW;
+            use winapi::um::winnt::ULARGE_INTEGER;
 
             let root = Self::volume_root(path)
                 .ok_or_else(|| UseCaseError::FileSystemError("no volume root".to_string()))?;

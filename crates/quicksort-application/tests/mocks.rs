@@ -202,6 +202,10 @@ impl OperationRepository for MockOperationRepository {
 pub struct MockFileSystem {
     /// Simulated file system state: (exists, size_in_bytes)
     files: Arc<Mutex<HashMap<PathBuf, (bool, u64)>>>,
+    /// Override for `available_space`; `None` means "unlimited".
+    available_space: Arc<Mutex<Option<u64>>>,
+    /// Override for `is_same_volume`; `None` means "same volume".
+    is_same_volume: Arc<Mutex<Option<bool>>>,
 }
 
 impl MockFileSystem {
@@ -209,7 +213,19 @@ impl MockFileSystem {
     pub fn new() -> Self {
         Self {
             files: Arc::new(Mutex::new(HashMap::new())),
+            available_space: Arc::new(Mutex::new(None)),
+            is_same_volume: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Sets the value returned by `available_space` for pre-flight checks.
+    pub fn set_available_space(&self, bytes: u64) {
+        *self.available_space.lock().unwrap() = Some(bytes);
+    }
+
+    /// Sets the value returned by `is_same_volume` for pre-flight checks.
+    pub fn set_same_volume(&self, same: bool) {
+        *self.is_same_volume.lock().unwrap() = Some(same);
     }
 
     /// Pre-populates a file entry (used by tests to set up source files).
@@ -403,7 +419,7 @@ impl FileSystem for MockFileSystem {
     }
 
     async fn available_space(&self, _path: &AbsolutePath) -> Result<u64, UseCaseError> {
-        Ok(u64::MAX)
+        Ok(self.available_space.lock().unwrap().unwrap_or(u64::MAX))
     }
 
     async fn is_same_volume(
@@ -411,7 +427,7 @@ impl FileSystem for MockFileSystem {
         _a: &AbsolutePath,
         _b: &AbsolutePath,
     ) -> Result<bool, UseCaseError> {
-        Ok(true)
+        Ok(self.is_same_volume.lock().unwrap().unwrap_or(true))
     }
 }
 
