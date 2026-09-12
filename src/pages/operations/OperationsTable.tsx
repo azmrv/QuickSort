@@ -31,6 +31,7 @@ import {
 import type { JobDto, OperationDto, OperationRow } from './types';
 
 // Payload of the `operation-progress` Tauri event (backend emitter, src-tauri/src/progress.rs).
+// `current`/`total` are u64 from the backend (bytes for copy operations, steps otherwise).
 interface ProgressPayload {
     current: number;
     total: number;

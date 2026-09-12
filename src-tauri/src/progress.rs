@@ -33,7 +33,7 @@ struct ThrottleState {
 impl ThrottleState {
     /// Decide whether the given tick should be emitted. A tick with
     /// `current == 0` starts a new operation and resets the throttle.
-    fn should_emit(&mut self, current: u32, total: u32, now: Instant) -> bool {
+    fn should_emit(&mut self, current: u64, total: u64, now: Instant) -> bool {
         if current == 0 {
             self.last_emit = None;
             self.last_percent = 0.0;

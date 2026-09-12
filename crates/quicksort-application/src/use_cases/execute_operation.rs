@@ -43,7 +43,7 @@ impl ExecuteOperationUseCase {
         self
     }
 
-    async fn report_progress(&self, current: u32, total: u32, phase: &str, detail: Option<String>) {
+    async fn report_progress(&self, current: u64, total: u64, phase: &str, detail: Option<String>) {
         if let Some(ref reporter) = self.progress_reporter {
             reporter
                 .report(ProgressInfo {
@@ -85,7 +85,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
             .start()
             .map_err(|e| UseCaseError::Domain(e.to_string()))?;
 
-        let total = command.source_paths.len() as u32;
+        let total = command.source_paths.len() as u64;
         let mut total_files: u32 = 0;
         let mut total_bytes: u64 = 0;
         let mut last_error: Option<UseCaseError> = None;
@@ -104,7 +104,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
         }
 
         for (idx, source) in command.source_paths.iter().enumerate() {
-            self.report_progress(idx as u32, total, "processing", Some(source.to_string()))
+            self.report_progress(idx as u64, total, "processing", Some(source.to_string()))
                 .await;
 
             match self.execute_single(source, &command, &target_folder).await {

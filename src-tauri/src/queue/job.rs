@@ -47,8 +47,8 @@ pub struct Job {
     #[serde(default)]
     pub correlation_id: Option<Uuid>,
     pub status: JobStatus,
-    pub current: u32,
-    pub total: u32,
+    pub current: u64,
+    pub total: u64,
     pub operation_id: Option<String>,
     pub error: Option<String>,
     pub created_at: u64,
@@ -63,7 +63,7 @@ impl Job {
         correlation_id: Option<Uuid>,
     ) -> Self {
         let now = Utc::now().timestamp().max(0) as u64;
-        let total = data.source_paths.len() as u32;
+        let total = data.source_paths.len() as u64;
         Self {
             id,
             data,
