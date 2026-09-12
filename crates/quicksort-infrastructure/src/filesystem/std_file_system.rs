@@ -163,6 +163,7 @@ impl StdFileSystem {
         &'a self,
         from: &'a AbsolutePath,
         to: &'a AbsolutePath,
+        copied: &'a mut u64,
         on_progress: ProgressCallback<'a>,
     ) -> Pin<Box<dyn Future<Output = Result<u64, UseCaseError>> + Send + 'a>> {
         Box::pin(async move {
@@ -200,9 +201,19 @@ impl StdFileSystem {
                 let child_from = AbsolutePath::from(entry.path());
                 let child_to = to.join(name);
                 if file_type.is_dir() {
-                    total += self.copy_tree_inner(&child_from, &child_to, on_progress).await?;
+                    total += self
+                        .copy_tree_inner(&child_from, &child_to, &mut *copied, on_progress)
+                        .await?;
                 } else {
-                    total += self.copy_file(&child_from, &child_to, on_progress).await?;
+                    // A file inside the tree reports through the outer
+                    // accumulation counter so the callback ticks stay
+                    // monotonic across the whole subtree.
+                    let size = self.copy_file(&child_from, &child_to, None).await?;
+                    *copied += size;
+                    if let Some(cb) = on_progress {
+                        cb(*copied, child_from.file_name().unwrap_or_default());
+                    }
+                    total += size;
                 }
             }
             Ok(total)
@@ -291,7 +302,9 @@ impl FileSystem for StdFileSystem {
         to: &AbsolutePath,
         on_progress: ProgressCallback<'_>,
     ) -> Result<u64, UseCaseError> {
-        self.copy_tree_inner(from, to, on_progress).await
+        let mut copied = 0u64;
+        self.copy_tree_inner(from, to, &mut copied, on_progress)
+            .await
     }
 
     async fn move_tree(

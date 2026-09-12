@@ -160,9 +160,9 @@ impl UndoOperationUseCase {
 
 #[cfg(test)]
 mod tests {
-use super::*;
-use crate::ports::outbound::ProgressCallback;
-use crate::FolderMetadata;
+    use super::*;
+    use crate::ports::outbound::ProgressCallback;
+    use crate::FolderMetadata;
     use chrono::Utc;
     use quicksort_domain::{AbsolutePath, OperationId};
     use std::collections::HashSet;
