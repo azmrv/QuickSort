@@ -32,7 +32,7 @@ pub use configuration_repository::ConfigurationRepository;
 pub use conflict_resolver::ConflictResolver;
 pub use duplicate_detection::DuplicateDetectionPort;
 pub use file_search::{FileSearchPort, FileSearchResult, SearchResult};
-pub use file_system::FileSystem;
+pub use file_system::{FileSystem, ProgressCallback};
 pub use id_generator::IdGenerator;
 pub use operation_repository::OperationRepository;
 pub use progress_reporter::{ProgressInfo, ProgressReporter};

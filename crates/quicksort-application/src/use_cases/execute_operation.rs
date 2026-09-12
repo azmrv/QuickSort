@@ -340,9 +340,9 @@ impl ExecuteOperationUseCase {
         to: &AbsolutePath,
     ) -> Result<u64, UseCaseError> {
         if self.file_system.is_dir(from).await? {
-            self.file_system.move_tree(from, to).await
+            self.file_system.move_tree(from, to, None).await
         } else {
-            self.file_system.move_file(from, to).await
+            self.file_system.move_file(from, to, None).await
         }
     }
 
@@ -352,9 +352,9 @@ impl ExecuteOperationUseCase {
         to: &AbsolutePath,
     ) -> Result<u64, UseCaseError> {
         if self.file_system.is_dir(from).await? {
-            self.file_system.copy_tree(from, to).await
+            self.file_system.copy_tree(from, to, None).await
         } else {
-            self.file_system.copy_file(from, to).await
+            self.file_system.copy_file(from, to, None).await
         }
     }
 

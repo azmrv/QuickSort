@@ -160,8 +160,9 @@ impl UndoOperationUseCase {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::FolderMetadata;
+use super::*;
+use crate::ports::outbound::ProgressCallback;
+use crate::FolderMetadata;
     use chrono::Utc;
     use quicksort_domain::{AbsolutePath, OperationId};
     use std::collections::HashSet;
@@ -264,6 +265,7 @@ mod tests {
             &self,
             _from: &AbsolutePath,
             _to: &AbsolutePath,
+            _on_progress: ProgressCallback<'_>,
         ) -> Result<u64, UseCaseError> {
             unimplemented!("not needed by undo tests")
         }
@@ -272,6 +274,7 @@ mod tests {
             &self,
             _from: &AbsolutePath,
             _to: &AbsolutePath,
+            _on_progress: ProgressCallback<'_>,
         ) -> Result<u64, UseCaseError> {
             unimplemented!("not needed by undo tests")
         }
@@ -288,6 +291,7 @@ mod tests {
             &self,
             _from: &AbsolutePath,
             _to: &AbsolutePath,
+            _on_progress: ProgressCallback<'_>,
         ) -> Result<u64, UseCaseError> {
             unimplemented!("not needed by undo tests")
         }
@@ -296,6 +300,7 @@ mod tests {
             &self,
             _from: &AbsolutePath,
             _to: &AbsolutePath,
+            _on_progress: ProgressCallback<'_>,
         ) -> Result<u64, UseCaseError> {
             unimplemented!("not needed by undo tests")
         }

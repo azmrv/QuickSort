@@ -31,7 +31,7 @@ use std::sync::{Arc, Mutex};
 
 pub use quicksort_application::ports::outbound::{
     Clock, ConfigurationRepository, DuplicateDetectionPort, FileSearchPort, FileSearchResult,
-    FileSystem, IdGenerator, OperationRepository, SearchResult,
+    FileSystem, IdGenerator, OperationRepository, ProgressCallback, SearchResult,
 };
 
 // ============================================================================
@@ -264,7 +264,12 @@ impl FileSystem for MockFileSystem {
         }
     }
 
-    async fn move_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
+    async fn move_file(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        _on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
         let from_path = Self::to_pathbuf(from);
         let to_path = Self::to_pathbuf(to);
         let mut files = self.files.lock().unwrap();
@@ -285,7 +290,12 @@ impl FileSystem for MockFileSystem {
         Ok(size)
     }
 
-    async fn copy_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
+    async fn copy_file(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        _on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
         let from_path = Self::to_pathbuf(from);
         let to_path = Self::to_pathbuf(to);
         let mut files = self.files.lock().unwrap();
@@ -311,12 +321,22 @@ impl FileSystem for MockFileSystem {
         Ok(false)
     }
 
-    async fn copy_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
-        self.copy_file(from, to).await
+    async fn copy_tree(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
+        self.copy_file(from, to, on_progress).await
     }
 
-    async fn move_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
-        self.move_file(from, to).await
+    async fn move_tree(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
+        self.move_file(from, to, on_progress).await
     }
 
     async fn delete_file(&self, path: &AbsolutePath) -> Result<(), UseCaseError> {

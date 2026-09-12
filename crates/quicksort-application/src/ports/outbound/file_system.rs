@@ -14,6 +14,13 @@ use crate::errors::UseCaseError;
 use async_trait::async_trait;
 use quicksort_domain::AbsolutePath;
 
+/// Optional progress callback invoked right after a file has been copied.
+///
+/// Arguments are `(byte_count, file_name)`. The callback is synchronous and
+/// must be cheap; it is invoked outside any filesystem lock. Pass `None` to
+/// disable reporting (e.g. for same-volume renames inside a Move).
+pub type ProgressCallback<'a> = Option<&'a (dyn Fn(u64, &str) + Send + Sync)>;
+
 /// Port for performing file operations on the local file system.
 ///
 /// All methods are asynchronous and return `UseCaseError` to isolate
@@ -43,6 +50,10 @@ pub trait FileSystem: Send + Sync {
     /// # Returns
     /// The size of the moved file in bytes.
     ///
+    /// # Progress
+    /// Invokes `on_progress(byte_count, file_name)` only when the move falls
+    /// back to a cross-volume copy; a same-volume rename reports nothing.
+    ///
     /// # Implementation Notes
     /// For cross-volume moves (EXDEV error), the implementation should
     /// fall back to copy + delete. This is handled by the infrastructure
@@ -53,17 +64,31 @@ pub trait FileSystem: Send + Sync {
     /// Returns `PermissionDenied` if access is restricted.
     /// Returns `Conflict` if the destination exists and the operation
     /// is not configured to overwrite.
-    async fn move_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
+    async fn move_file(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError>;
 
     /// Copies a file from `from` to `to`, returning the file size in bytes.
     ///
     /// # Returns
     /// The size of the copied file in bytes.
     ///
+    /// # Progress
+    /// Invokes `on_progress(byte_count, file_name)` once after the copy
+    /// finishes.
+    ///
     /// # Errors
     /// Returns `FileNotFound` if the source does not exist.
     /// Returns `FileSystemError` on I/O failure (disk full, etc.).
-    async fn copy_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
+    async fn copy_file(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError>;
 
     /// Deletes a file at the given path.
     ///
@@ -103,10 +128,19 @@ pub trait FileSystem: Send + Sync {
     /// # Returns
     /// The total size in bytes of all copied files.
     ///
+    /// # Progress
+    /// Invokes `on_progress(byte_count, file_name)` after every individual
+    /// file copied inside the tree.
+    ///
     /// # Errors
     /// Returns `FileNotFound` if the source does not exist.
     /// Returns `FileSystemError` on I/O failure (access denied, disk full).
-    async fn copy_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
+    async fn copy_tree(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError>;
 
     /// Moves a directory tree from `from` to `to`.
     ///
@@ -119,10 +153,19 @@ pub trait FileSystem: Send + Sync {
     /// The total size in bytes of the moved contents (measured before the
     /// move, for history accounting).
     ///
+    /// # Progress
+    /// Reports through `on_progress` only when the move falls back to
+    /// copying (cross-volume); a same-volume rename is silent.
+    ///
     /// # Errors
     /// Returns `FileNotFound` if the source does not exist.
     /// Returns `FileSystemError` on I/O failure.
-    async fn move_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
+    async fn move_tree(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError>;
 
     /// Renames a file or directory from `from` to `to`.
     ///

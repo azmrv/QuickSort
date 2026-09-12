@@ -8,7 +8,7 @@ use tokio::fs as tokio_fs;
 
 use quicksort_application::dtos::FolderMetadata;
 use quicksort_application::errors::UseCaseError;
-use quicksort_application::ports::outbound::FileSystem;
+use quicksort_application::ports::outbound::{FileSystem, ProgressCallback};
 use quicksort_domain::AbsolutePath;
 
 /// Real file system implementation backed by tokio.
@@ -163,6 +163,7 @@ impl StdFileSystem {
         &'a self,
         from: &'a AbsolutePath,
         to: &'a AbsolutePath,
+        on_progress: ProgressCallback<'a>,
     ) -> Pin<Box<dyn Future<Output = Result<u64, UseCaseError>> + Send + 'a>> {
         Box::pin(async move {
             let metadata = match tokio_fs::symlink_metadata(Self::extended_path(from)).await {
@@ -171,7 +172,7 @@ impl StdFileSystem {
             };
 
             if !metadata.is_dir() {
-                return self.copy_file(from, to).await;
+                return self.copy_file(from, to, on_progress).await;
             }
 
             tokio_fs::create_dir_all(Self::extended_path(to))
@@ -199,9 +200,9 @@ impl StdFileSystem {
                 let child_from = AbsolutePath::from(entry.path());
                 let child_to = to.join(name);
                 if file_type.is_dir() {
-                    total += self.copy_tree_inner(&child_from, &child_to).await?;
+                    total += self.copy_tree_inner(&child_from, &child_to, on_progress).await?;
                 } else {
-                    total += self.copy_file(&child_from, &child_to).await?;
+                    total += self.copy_file(&child_from, &child_to, on_progress).await?;
                 }
             }
             Ok(total)
@@ -223,7 +224,12 @@ impl FileSystem for StdFileSystem {
         Ok(metadata.len())
     }
 
-    async fn move_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
+    async fn move_file(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
         let metadata = tokio_fs::metadata(Self::extended_path(from))
             .await
             .map_err(|e| UseCaseError::FileNotFound(e.to_string()))?;
@@ -233,10 +239,14 @@ impl FileSystem for StdFileSystem {
         match tokio_fs::rename(Self::extended_path(from), Self::extended_path(to)).await {
             Ok(()) => Ok(size),
             Err(_) => {
-                // Cross-drive move: copy + delete
+                // Cross-drive move: copy + delete. Progress is reported only
+                // for the actual copy leg (see FileSystem::move_file docs).
                 tokio_fs::copy(Self::extended_path(from), Self::extended_path(to))
                     .await
                     .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+                if let Some(cb) = on_progress {
+                    cb(size, from.file_name().unwrap_or_default());
+                }
                 tokio_fs::remove_file(Self::extended_path(from))
                     .await
                     .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
@@ -245,7 +255,12 @@ impl FileSystem for StdFileSystem {
         }
     }
 
-    async fn copy_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
+    async fn copy_file(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
         let metadata = tokio_fs::metadata(Self::extended_path(from))
             .await
             .map_err(|e| UseCaseError::FileNotFound(e.to_string()))?;
@@ -254,6 +269,9 @@ impl FileSystem for StdFileSystem {
         tokio_fs::copy(Self::extended_path(from), Self::extended_path(to))
             .await
             .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+        if let Some(cb) = on_progress {
+            cb(size, from.file_name().unwrap_or_default());
+        }
         Ok(size)
     }
 
@@ -267,21 +285,31 @@ impl FileSystem for StdFileSystem {
         }
     }
 
-    async fn copy_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
-        self.copy_tree_inner(from, to).await
+    async fn copy_tree(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
+        self.copy_tree_inner(from, to, on_progress).await
     }
 
-    async fn move_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
+    async fn move_tree(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
         // Files and symlinks use the simple single-item path.
         if !self.is_dir(from).await? {
-            return self.move_file(from, to).await;
+            return self.move_file(from, to, on_progress).await;
         }
 
         // Measure the size before moving: after a successful rename the
         // source no longer exists and the history record would be lost.
         let size = self.tree_size(from).await?;
 
-        // Fast path: same-volume rename.
+        // Fast path: same-volume rename (silent - no bytes are copied).
         if tokio_fs::rename(Self::extended_path(from), Self::extended_path(to))
             .await
             .is_ok()
@@ -290,7 +318,8 @@ impl FileSystem for StdFileSystem {
         }
 
         // Cross-drive (or otherwise unsupported) rename: copy then delete.
-        self.copy_tree(from, to).await?;
+        // Per-file progress ticks come from the copy leg.
+        self.copy_tree(from, to, on_progress).await?;
         tokio_fs::remove_dir_all(Self::extended_path(from))
             .await
             .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
@@ -531,7 +560,7 @@ mod tests {
         let from = AbsolutePath::new(src.to_str().unwrap()).unwrap();
         let to = AbsolutePath::new(dir.path().join("dst").to_str().unwrap()).unwrap();
 
-        let size = fs.copy_tree(&from, &to).await.unwrap();
+        let size = fs.copy_tree(&from, &to, None).await.unwrap();
         assert_eq!(size, 9); // "aaa" (3) + "bbbbbb" (6)
 
         assert!(to.join("a.txt").to_path_buf().exists());
@@ -550,7 +579,7 @@ mod tests {
         let from = AbsolutePath::new(src.to_str().unwrap()).unwrap();
         let to = AbsolutePath::new(dir.path().join("copy.txt").to_str().unwrap()).unwrap();
 
-        let size = fs.copy_tree(&from, &to).await.unwrap();
+        let size = fs.copy_tree(&from, &to, None).await.unwrap();
         assert_eq!(size, 5);
         assert!(from.to_path_buf().exists());
         assert!(to.to_path_buf().exists());
@@ -568,7 +597,7 @@ mod tests {
         let from = AbsolutePath::new(src.to_str().unwrap()).unwrap();
         let to = AbsolutePath::new(dir.path().join("dst").to_str().unwrap()).unwrap();
 
-        let size = fs.move_tree(&from, &to).await.unwrap();
+        let size = fs.move_tree(&from, &to, None).await.unwrap();
         assert_eq!(size, 8);
         assert!(!from.to_path_buf().exists());
         assert!(to.join("a.txt").to_path_buf().exists());
@@ -593,7 +622,7 @@ mod tests {
         let from = AbsolutePath::new(src.to_str().unwrap()).unwrap();
         let to = AbsolutePath::new(dst.to_str().unwrap()).unwrap();
 
-        let size = fs.move_tree(&from, &to).await.unwrap();
+        let size = fs.move_tree(&from, &to, None).await.unwrap();
         assert_eq!(size, 4); // "data"
         assert!(!from.to_path_buf().exists());
 
