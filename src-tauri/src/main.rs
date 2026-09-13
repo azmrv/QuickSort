@@ -343,6 +343,7 @@ fn start_tauri() {
             commands::get_folders_v2,
             commands::get_folders_with_metadata,
             commands::add_folder_v2,
+            commands::add_folders_from_paths,
             commands::remove_folder_v2,
             commands::toggle_favorite_v2,
             commands::set_folder_color_v2,

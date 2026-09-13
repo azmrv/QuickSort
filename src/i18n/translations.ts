@@ -136,6 +136,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': 'Error updating favorite',
     'editor.color_error': 'Error saving color',
     'editor.remove_error': 'Remove error:',
+        'editor.drop_hint': 'Drop folders here',
+        'editor.drop_added': 'Added: {added}',
+        'editor.drop_skipped': 'Skipped: {skipped}',
+        'editor.drop_error': 'Drop error:',
 
         // History
         'history.title': 'Operation History',
@@ -457,6 +461,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': 'Ошибка обновления избранного',
     'editor.color_error': 'Ошибка сохранения цвета',
     'editor.remove_error': 'Ошибка удаления:',
+        'editor.drop_hint': 'Перетащите папки сюда',
+        'editor.drop_added': 'Добавлено: {added}',
+        'editor.drop_skipped': 'Пропущено: {skipped}',
+        'editor.drop_error': 'Ошибка добавления:',
 
         // History
         'history.title': 'История операций',
@@ -767,6 +775,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': 'Fehler beim Aktualisieren der Favoriten',
     'editor.color_error': 'Fehler beim Speichern der Farbe',
     'editor.remove_error': 'Entfernungsfehler:',
+        'editor.drop_hint': 'Ordner hierher ziehen',
+        'editor.drop_added': 'Hinzugefügt: {added}',
+        'editor.drop_skipped': 'Übersprungen: {skipped}',
+        'editor.drop_error': 'Hinzufügen fehlgeschlagen:',
 
         'history.title': 'Operationsverlauf',
         'history.loading': 'Laden...',
@@ -1069,6 +1081,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': 'Error al actualizar favorito',
     'editor.color_error': 'Error al guardar color',
     'editor.remove_error': 'Error al eliminar:',
+        'editor.drop_hint': 'Suelta las carpetas aquí',
+        'editor.drop_added': 'Agregadas: {added}',
+        'editor.drop_skipped': 'Omitidas: {skipped}',
+        'editor.drop_error': 'Error al agregar:',
 
         'history.title': 'Historial de operaciones',
         'history.loading': 'Cargando...',
@@ -1371,6 +1387,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': '更新收藏失败',
     'editor.color_error': '保存颜色失败',
     'editor.remove_error': '删除错误：',
+        'editor.drop_hint': '将文件夹拖放到此处',
+        'editor.drop_added': '已添加：{added}',
+        'editor.drop_skipped': '已跳过：{skipped}',
+        'editor.drop_error': '添加错误：',
 
         'history.title': '操作历史',
         'history.loading': '加载中...',
@@ -1673,6 +1693,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': 'お気に入りの更新に失敗しました',
     'editor.color_error': '色の保存に失敗しました',
     'editor.remove_error': '削除エラー：',
+        'editor.drop_hint': 'フォルダーをここにドロップ',
+        'editor.drop_added': '追加済み：{added}',
+        'editor.drop_skipped': 'スキップ：{skipped}',
+        'editor.drop_error': '追加エラー：',
 
         'history.title': '操作履歴',
         'history.loading': '読み込み中...',

@@ -11,6 +11,13 @@ export interface Folder {
     };
 }
 
+export interface AddFoldersFromPathsResult {
+    /** Number of folders successfully added. */
+    added: number;
+    /** Human-readable reasons for paths that were not added (per path). */
+    skipped: string[];
+}
+
 export type OperationSource = 'Search' | 'Selector' | 'ContextMenu' | 'Api';
 
 export interface OperationCommand {

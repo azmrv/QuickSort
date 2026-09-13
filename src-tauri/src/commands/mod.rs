@@ -17,6 +17,16 @@ pub struct FolderWithMetadata {
     pub metadata: FolderMetadata,
 }
 
+/// Outcome of adding folders by dropping them onto the Folder tab.
+/// `skipped` holds per-path human-readable reasons (invalid path,
+/// not a directory, duplicate, invalid name).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AddFoldersFromPathsResult {
+    pub added: usize,
+    pub skipped: Vec<String>,
+}
+
 #[tauri::command]
 pub async fn get_folders_v2(state: State<'_, AppState>) -> Result<Vec<Folder>, String> {
     tracing::info!(command = "get_folders_v2", "handling");
@@ -78,6 +88,80 @@ pub async fn add_folder_v2(
         Err(e) => tracing::error!(command = "add_folder_v2", error = %e, "FAIL"),
     }
     result
+}
+
+/// Add several folders by absolute path in one call.
+///
+/// Used by the Folder tab drag-and-drop: the frontend receives the raw
+/// dropped paths from Explorer and sends them here verbatim. Only existing
+/// directories are added; every other path (file, invalid path, duplicate,
+/// invalid name) is reported in `skipped` instead of failing the whole batch.
+#[tauri::command]
+pub async fn add_folders_from_paths(
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+) -> Result<AddFoldersFromPathsResult, String> {
+    tracing::info!(
+        command = "add_folders_from_paths",
+        count = paths.len(),
+        "handling"
+    );
+
+    let mut added = 0usize;
+    let mut skipped: Vec<String> = Vec::new();
+
+    for raw_path in paths {
+        let windows_path = match AbsolutePath::new(&raw_path) {
+            Ok(path) => path,
+            Err(e) => {
+                skipped.push(format!("{}: {}", raw_path, e));
+                continue;
+            }
+        };
+
+        match state.fs.is_dir(&windows_path).await {
+            Ok(true) => {}
+            Ok(false) => {
+                skipped.push(format!("{}: not a directory", raw_path));
+                continue;
+            }
+            Err(e) => {
+                skipped.push(format!("{}: {}", raw_path, e));
+                continue;
+            }
+        }
+
+        let name = match windows_path.file_name() {
+            Some(name) => name.to_string(),
+            None => {
+                skipped.push(format!("{}: no folder name", raw_path));
+                continue;
+            }
+        };
+
+        let folder = match Folder::new(&name, windows_path) {
+            Ok(folder) => folder,
+            Err(e) => {
+                skipped.push(format!("{}: {}", raw_path, e));
+                continue;
+            }
+        };
+
+        match state.facade.add_folder(folder).await {
+            Ok(()) => added += 1,
+            Err(e) => {
+                skipped.push(format!("{}: {}", raw_path, e));
+            }
+        }
+    }
+
+    tracing::info!(
+        command = "add_folders_from_paths",
+        added = added,
+        skipped = skipped.len(),
+        "OK"
+    );
+    Ok(AddFoldersFromPathsResult { added, skipped })
 }
 
 #[tauri::command]

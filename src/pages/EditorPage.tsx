@@ -3,9 +3,10 @@ import { App } from 'antd';
 import { invoke } from '../lib/invoke';
 import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import FolderList from '../components/FolderList';
 import AddFolderButton from '../components/AddFolderButton';
-import { Folder } from '../types';
+import { AddFoldersFromPathsResult, Folder } from '../types';
 
 const AUTO_COLORS = [
     '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
@@ -28,6 +29,7 @@ function assignAutoColors(folders: Folder[]): Folder[] {
 const EditorPage: React.FC = () => {
     const { t } = useTranslation();
     const [folders, setFolders] = useState<Folder[]>([]);
+    const [isDragOver, setIsDragOver] = useState(false);
     const { message } = App.useApp();
 
     useEffect(() => {
@@ -60,7 +62,52 @@ const EditorPage: React.FC = () => {
                 logger.error('EditorPage', 'failed to load folders', err);
                 message.error(`${t('editor.load_error')} ${err}`);
             });
+
+        // Drag-and-drop of folders from Explorer: the drop event carries raw
+        // paths (files and folders alike); the backend filters to directories.
+        let dropUnlisten: (() => void) | undefined;
+        getCurrentWebview()
+            .onDragDropEvent((event) => {
+                if (event.payload.type === 'enter' || event.payload.type === 'over') {
+                    setIsDragOver(true);
+                } else if (event.payload.type === 'drop') {
+                    setIsDragOver(false);
+                    handleDropPaths(event.payload.paths);
+                } else if (event.payload.type === 'leave') {
+                    setIsDragOver(false);
+                }
+            })
+            .then((unlisten) => {
+                dropUnlisten = unlisten;
+            })
+            .catch(err => {
+                logger.error('EditorPage', 'failed to subscribe to drag-drop', err);
+            });
+
+        return () => {
+            dropUnlisten?.();
+        };
     }, []);
+
+    const handleDropPaths = async (paths: string[]) => {
+        logger.action('EditorPage', `drop ${paths.length} path(s)`);
+        try {
+            const result = await invoke<AddFoldersFromPathsResult>('add_folders_from_paths', { paths });
+            logger.info('EditorPage', `drop: added ${result.added}, skipped ${result.skipped.length}`);
+            const folders = await invoke<Folder[]>('get_folders_v2');
+            setFolders(folders);
+            if (result.skipped.length > 0) {
+                message.warning(
+                    `${t('editor.drop_added', { added: result.added })} ${t('editor.drop_skipped', { skipped: result.skipped.length })}`
+                );
+            } else {
+                message.success(t('editor.drop_added', { added: result.added }));
+            }
+        } catch (err) {
+            logger.error('EditorPage', 'drop folders failed', err);
+            message.error(`${t('editor.drop_error')} ${err}`);
+        }
+    };
 
     const handleAddFolder = (name: string, path: string) => {
         logger.action('EditorPage', `add folder: ${name} → ${path}`);
@@ -131,7 +178,7 @@ const EditorPage: React.FC = () => {
     };
 
     return (
-        <div>
+        <div className="editor-page">
             <AddFolderButton onFolderAdded={handleAddFolder} />
             <FolderList
                 folders={folders}
@@ -140,6 +187,11 @@ const EditorPage: React.FC = () => {
                 onSetColor={handleSetColor}
                 onRemove={handleRemove}
             />
+            {isDragOver && (
+                <div className="folder-drop-overlay">
+                    <span className="folder-drop-hint">{t('editor.drop_hint')}</span>
+                </div>
+            )}
         </div>
     );
 };
