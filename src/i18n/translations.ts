@@ -150,6 +150,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'history.repeat': 'Repeat',
         'history.undo_success': 'Operation undone',
         'history.undo_error': 'Undo error:',
+        'history.undo_retry': 'File is busy, please retry',
         'history.repeat_success': 'Operation repeated',
         'history.repeat_error': 'Repeat error:',
         'history.action_unavailable': 'Action is not available because the files no longer exist',
@@ -242,6 +243,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'operations.selected_count': '{{count}} selected',
         'operations.batch.success': '{{count}} done',
         'operations.batch.partial': '{{success}} ok, {{failed}} errors',
+        'operations.undo_retry': 'File is busy, please retry',
 
         // About
         'about.loading': 'Loading...',
@@ -475,6 +477,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'history.repeat': 'Повторить',
         'history.undo_success': 'Операция отменена',
         'history.undo_error': 'Ошибка отмены:',
+        'history.undo_retry': 'Файл занят, повторите попытку',
         'history.repeat_success': 'Операция повторена',
         'history.repeat_error': 'Ошибка повтора:',
         'history.action_unavailable': 'Действие недоступно, так как файлов больше не существует',
@@ -567,6 +570,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'operations.selected_count': 'Выбрано: {{count}}',
         'operations.batch.success': 'Выполнено: {{count}}',
         'operations.batch.partial': 'Успешно: {{success}}, ошибок: {{failed}}',
+        'operations.undo_retry': 'Файл занят, повторите попытку',
 
         // About
         'about.loading': 'Загрузка...',
@@ -788,6 +792,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'history.repeat': 'Wiederholen',
         'history.undo_success': 'Operation rückgängig gemacht',
         'history.undo_error': 'Fehler beim Rückgängig:',
+        'history.undo_retry': 'Datei ist belegt, bitte erneut versuchen',
         'history.repeat_success': 'Operation wiederholt',
         'history.repeat_error': 'Fehler beim Wiederholen:',
         'history.action_unavailable': 'Aktion nicht verfügbar, da die Dateien nicht mehr existieren',
@@ -879,6 +884,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'operations.selected_count': '{{count}} ausgewählt',
         'operations.batch.success': '{{count}} erledigt',
         'operations.batch.partial': '{{success}} ok, {{failed}} Fehler',
+        'operations.undo_retry': 'Datei ist belegt, bitte erneut versuchen',
 
         'about.loading': 'Laden...',
         'about.link_copied': 'Link kopiert',

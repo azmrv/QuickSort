@@ -1,5 +1,7 @@
+import { useRef, useState } from 'react';
 import { App } from 'antd';
 import { invoke } from '../../lib/invoke';
+import { classifyUndoError, getOperationErrorMessage } from '../../lib/operationErrors';
 import { logger } from '../../lib/logger';
 import { useTranslation } from '../../i18n/useTranslation';
 import { computeToolbarState } from './toolbarState';
@@ -55,35 +57,56 @@ const OperationsToolbar = ({
     const { t } = useTranslation();
     const { message, modal } = App.useApp();
 
-    const state = computeToolbarState(selectedKeys, rows);
+    // Row keys whose Undo/Repeat the backend rejected as permanent (files no
+    // longer exist etc.). Their buttons stay disabled — retrying would only
+    // reproduce the same error. Mirrors HistoryPage's `unavailable` set.
+    const [unavailable, setUnavailable] = useState<ReadonlySet<string>>(() => new Set());
+
+    const state = computeToolbarState(selectedKeys, rows, unavailable);
 
     // Sequential batch runner: never parallel so a flood of in-flight
     // requests cannot happen. Ends with one aggregate toast per action.
+    // `handleError` returns true when the failure was already dealt with
+    // (permanent/transient undo errors); such items do not count as failed.
+    const busyRef = useRef(false);
+    const [busy, setBusy] = useState(false);
     const runBatch = async (
         action: string,
         ids: string[],
         invokeFn: (id: string) => Promise<unknown>,
         errorKey: string,
+        handleError?: (id: string, err: unknown) => boolean,
     ): Promise<void> => {
+        if (busyRef.current) return;
+        busyRef.current = true;
+        setBusy(true);
         let success = 0;
         let failed = 0;
         let firstError: unknown = null;
-        for (const id of ids) {
-            try {
-                await invokeFn(id);
-                success += 1;
-            } catch (err) {
-                failed += 1;
-                if (firstError === null) firstError = err;
-                logger.error('OperationsToolbar', `${action} ${id} failed`, err);
+        try {
+            for (const id of ids) {
+                try {
+                    await invokeFn(id);
+                    success += 1;
+                } catch (err) {
+                    const handled = handleError ? handleError(id, err) : false;
+                    if (!handled) {
+                        failed += 1;
+                        if (firstError === null) firstError = err;
+                    }
+                    logger.error('OperationsToolbar', `${action} ${id} failed`, err);
+                }
             }
-        }
-        if (failed > 0 && success > 0) {
-            message.warning(t('operations.batch.partial', { success, failed }));
-        } else if (failed > 0) {
-            message.error(`${t(errorKey)} ${firstError ?? ''}`);
-        } else if (success > 0) {
-            message.success(t('operations.batch.success', { count: success }));
+            if (failed > 0 && success > 0) {
+                message.warning(t('operations.batch.partial', { success, failed }));
+            } else if (failed > 0) {
+                message.error(`${t(errorKey)} ${getOperationErrorMessage(firstError)}`);
+            } else if (success > 0) {
+                message.success(t('operations.batch.success', { count: success }));
+            }
+        } finally {
+            busyRef.current = false;
+            setBusy(false);
         }
         onChanged();
     };
@@ -91,10 +114,33 @@ const OperationsToolbar = ({
     const selectedOps = () => rows.filter((r) => r.kind === 'operation');
 
     const handleUndo = () => {
-        const ids = selectedOps()
-            .filter((r) => r.undoable)
-            .map((r) => String(r.operationId));
-        void runBatch('undo', ids, (id) => invoke('undo_operation_v2', { operationId: id }), 'history.undo_error');
+        const targets = selectedOps().filter((r) => r.undoable && !unavailable.has(r.key));
+        const ids = targets.map((r) => String(r.operationId));
+        // operationId → row.key so a permanent failure can disable exactly
+        // the row it came from (unavailable is keyed the same as selection).
+        const keyById = new Map(targets.map((r) => [String(r.operationId), r.key]));
+        void runBatch(
+            'undo',
+            ids,
+            (id) => invoke('undo_operation_v2', { operationId: id }),
+            'history.undo_error',
+            (id, err) => {
+                const kind = classifyUndoError(err);
+                if (kind === 'permanent') {
+                    const key = keyById.get(id);
+                    if (key) {
+                        setUnavailable((prev) => new Set(prev).add(key));
+                        message.info(t('history.action_unavailable'));
+                    }
+                    return true;
+                }
+                if (kind === 'transient') {
+                    message.warning(t('operations.undo_retry'));
+                    return true;
+                }
+                return false;
+            },
+        );
     };
 
     const handleRepeat = () => {
@@ -169,21 +215,21 @@ const OperationsToolbar = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <button
                     onClick={onRefresh}
-                    disabled={loading}
+                    disabled={loading || busy}
                     style={{
                         ...toolbarButtonStyle,
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        opacity: loading ? 0.7 : 1,
+                        cursor: loading || busy ? 'not-allowed' : 'pointer',
+                        opacity: loading || busy ? 0.7 : 1,
                     }}
                 >
                     {loading ? t('operations.loading') : t('operations.refresh')}
                 </button>
                 <button
                     onClick={handleClear}
-                    disabled={!hasOperations}
+                    disabled={!hasOperations || busy}
                     style={{
                         ...toolbarButtonStyle,
-                        ...(hasOperations ? {} : disabledStyle),
+                        ...(hasOperations && !busy ? {} : disabledStyle),
                     }}
                 >
                     {t('operations.clear')}
@@ -202,34 +248,34 @@ const OperationsToolbar = ({
 
                 <button
                     onClick={handleUndo}
-                    disabled={!state.canUndo}
-                    style={{ ...actionButtonStyle, ...(state.canUndo ? {} : disabledStyle) }}
+                    disabled={busy || !state.canUndo}
+                    style={{ ...actionButtonStyle, ...(state.canUndo && !busy ? {} : disabledStyle) }}
                 >
                     {t('operations.undo')}
                 </button>
                 <button
                     onClick={handleRepeat}
-                    disabled={!state.canRepeat}
-                    style={{ ...actionButtonStyle, ...(state.canRepeat ? {} : disabledStyle) }}
+                    disabled={busy || !state.canRepeat}
+                    style={{ ...actionButtonStyle, ...(state.canRepeat && !busy ? {} : disabledStyle) }}
                 >
                     {t('operations.repeat')}
                 </button>
                 <button
                     onClick={handleDelete}
-                    disabled={!state.canDelete}
+                    disabled={busy || !state.canDelete}
                     style={{
                         ...actionButtonStyle,
                         color: 'var(--qs-danger, #ef4444)',
                         borderColor: 'var(--qs-danger, #ef4444)',
-                        ...(state.canDelete ? {} : disabledStyle),
+                        ...(state.canDelete && !busy ? {} : disabledStyle),
                     }}
                 >
                     {t('operations.delete')}
                 </button>
                 <button
                     onClick={handleCancel}
-                    disabled={!state.canCancel}
-                    style={{ ...actionButtonStyle, ...(state.canCancel ? {} : disabledStyle) }}
+                    disabled={busy || !state.canCancel}
+                    style={{ ...actionButtonStyle, ...(state.canCancel && !busy ? {} : disabledStyle) }}
                 >
                     {t('operations.cancel')}
                 </button>

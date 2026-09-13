@@ -24,14 +24,23 @@ export interface ToolbarState {
  * Actions are always enabled when at least one applicable row is selected;
  * a mixed/partially-valid selection is not blocked, inapplicable rows are
  * skipped at execution time (files-manager behaviour).
+ *
+ * `unavailable` holds row keys whose Undo/Repeat the backend rejected as
+ * permanent (e.g. target files no longer exist); they are treated as not
+ * undoable so the button stays disabled instead of re-raising on every click.
  */
 export const computeToolbarState = (
     selectedKeys: ReadonlySet<string>,
     rows: OperationRow[],
+    unavailable: ReadonlySet<string> = new Set(),
 ): ToolbarState => {
     const selected = rows.filter((row) => selectedKeys.has(row.key));
-    const undoable = selected.filter((row) => row.kind === 'operation' && row.undoable);
-    const repeatable = selected.filter((row) => row.kind === 'operation' && row.repeatable);
+    const undoable = selected.filter(
+        (row) => row.kind === 'operation' && row.undoable && !unavailable.has(row.key),
+    );
+    const repeatable = selected.filter(
+        (row) => row.kind === 'operation' && row.repeatable && !unavailable.has(row.key),
+    );
     const deletable = selected.filter((row) => row.kind === 'operation');
     const cancellable = selected.filter((row) => row.kind === 'job' && row.cancellable);
     return {

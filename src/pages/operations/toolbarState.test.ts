@@ -118,4 +118,28 @@ describe('computeToolbarState', () => {
         expect(state.undoCount).toBe(1);
         expect(state.canDelete).toBe(true);
     });
+
+    it('excludes rows marked unavailable from undo/repeat but keeps delete', () => {
+        const gone = op({ operationId: 'op-gone', undoable: true, repeatable: true });
+        const ok = op({ operationId: 'op-ok', undoable: true, repeatable: false });
+        const unavailable = new Set([gone.key]);
+        const rows = [gone, ok];
+        const state = computeToolbarState(keys(...rows), rows, unavailable);
+        expect(state.selectionCount).toBe(2);
+        expect(state.canUndo).toBe(true);
+        expect(state.undoCount).toBe(1);
+        expect(state.repeatCount).toBe(0);
+        expect(state.canRepeat).toBe(false);
+        expect(state.canDelete).toBe(true);
+        expect(state.deleteCount).toBe(2);
+    });
+
+    it('undo/repeat stay disabled when every selected row is unavailable', () => {
+        const gone = op({ operationId: 'op-gone', undoable: true, repeatable: true });
+        const unavailable = new Set([gone.key]);
+        const state = computeToolbarState(keys(gone), [gone], unavailable);
+        expect(state.canUndo).toBe(false);
+        expect(state.canRepeat).toBe(false);
+        expect(state.canDelete).toBe(true);
+    });
 });
