@@ -352,6 +352,7 @@ fn start_tauri() {
             commands::get_pending_files,
             commands::check_menu_status,
             commands::get_logs,
+            commands::set_log_level,
             commands::register_com_server,
             commands::unregister_com_server,
             commands::get_app_version,

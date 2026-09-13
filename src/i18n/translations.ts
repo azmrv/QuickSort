@@ -64,6 +64,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logging.format': 'Format',
         'settings.logging.format.text': 'Text',
         'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': 'Failed to apply log level',
 
         // Settings - Logs panel
         'settings.logs.title': 'Logs',
@@ -391,6 +392,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logging.format': 'Формат',
         'settings.logging.format.text': 'Текст',
         'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': 'Не удалось применить уровень логирования',
 
         // Settings - Logs panel
         'settings.logs.title': 'Журнал логов',
@@ -711,6 +713,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logging.format': 'Format',
         'settings.logging.format.text': 'Text',
         'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': 'Protokollebene konnte nicht angewendet werden',
 
         // Settings - Logs panel
         'settings.logs.title': 'Protokoll',
@@ -1019,6 +1022,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logging.format': 'Formato',
         'settings.logging.format.text': 'Texto',
         'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': 'No se pudo aplicar el nivel de registro',
 
         // Settings - Logs panel
         'settings.logs.title': 'Registro',
@@ -1325,6 +1329,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logging.format': '格式',
         'settings.logging.format.text': '文本',
         'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': '无法应用日志级别',
 
         // Settings - Logs panel
         'settings.logs.title': '日志',
@@ -1631,6 +1636,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.logging.format': '形式',
         'settings.logging.format.text': 'テキスト',
         'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': 'ログレベルを適用できませんでした',
 
         // Settings - Logs panel
         'settings.logs.title': 'ログ',

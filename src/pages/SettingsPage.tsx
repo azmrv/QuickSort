@@ -379,14 +379,22 @@ const SettingsPage: React.FC = () => {
                         <select
                             value={settings.logging.level}
                             onChange={(e) => {
+                                const level = e.target.value as LogLevel;
                                 const newSettings = {
                                     ...settings,
                                     logging: {
                                         ...settings.logging,
-                                        level: e.target.value as LogLevel,
+                                        level,
                                     },
                                 };
                                 saveSettings(newSettings);
+                                // Apply immediately so the current session's
+                                // backend logs follow the new level without
+                                // an app restart.
+                                invoke('set_log_level', { level }).catch((err) => {
+                                    logger.error('SettingsPage', 'Failed to apply log level', err);
+                                    message.error(t('settings.logging.level_error'));
+                                });
                             }}
                             style={selectStyle}
                         >

@@ -3,10 +3,13 @@ use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 use tauri::Emitter;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::registry::Registry;
+use tracing_subscriber::reload;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use quicksort_application::{LogFormat, LoggingConfig};
+use quicksort_application::{LogFormat, LogLevel, LoggingConfig};
 
 static APP_HANDLE: OnceLock<Mutex<Option<tauri::AppHandle>>> = OnceLock::new();
 
@@ -18,6 +21,10 @@ static LOG_BUFFER: Mutex<VecDeque<serde_json::Value>> = Mutex::new(VecDeque::new
 const MAX_BUFFERED_LOGS: usize = 500;
 
 static _FILE_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> = OnceLock::new();
+
+// Runtime handle for switching the active log level without restarting the
+// app (P1-6b). Populated during `init()`; used by the `set_log_level` command.
+static RELOAD_HANDLE: OnceLock<reload::Handle<EnvFilter, Registry>> = OnceLock::new();
 
 struct FrontendLayer;
 
@@ -133,16 +140,21 @@ fn load_logging_config() -> LoggingConfig {
         .unwrap_or_default()
 }
 
-fn level_filter(config: &LoggingConfig) -> tracing_subscriber::filter::EnvFilter {
-    let fallback = match config.level {
-        quicksort_application::LogLevel::Trace => "trace",
-        quicksort_application::LogLevel::Debug => "debug",
-        quicksort_application::LogLevel::Info => "info",
-        quicksort_application::LogLevel::Warn => "warn",
-        quicksort_application::LogLevel::Error => "error",
-    };
-    tracing_subscriber::filter::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::filter::EnvFilter::new(fallback))
+/// Maps a `LogLevel` to the `EnvFilter` directive used both as the startup
+/// fallback and for the runtime level switch in `set_log_level`.
+fn log_level_directive(level: &LogLevel) -> &'static str {
+    match level {
+        LogLevel::Trace => "trace",
+        LogLevel::Debug => "debug",
+        LogLevel::Info => "info",
+        LogLevel::Warn => "warn",
+        LogLevel::Error => "error",
+    }
+}
+
+fn level_filter(config: &LoggingConfig) -> EnvFilter {
+    EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(log_level_directive(&config.level)))
 }
 
 fn resolve_log_prefix(config: &LoggingConfig) -> String {
@@ -173,7 +185,8 @@ fn resolve_format(config: &LoggingConfig) -> LogFormat {
 
 pub fn init() {
     let config = load_logging_config();
-    let env_filter = level_filter(&config);
+    let (env_filter, reload_handle) = reload::Layer::new(level_filter(&config));
+    let _ = RELOAD_HANDLE.set(reload_handle);
 
     let log_dir = crate::platform::paths::config_dir().join("logs");
     let _ = std::fs::create_dir_all(&log_dir);
@@ -223,6 +236,39 @@ pub fn init() {
     }
 }
 
+/// Applies a new log level immediately, without an app restart. For the rest
+/// of the session it overrides the `RUST_LOG`-based filter.
+pub fn set_log_level(level: LogLevel) -> Result<(), String> {
+    let handle = RELOAD_HANDLE
+        .get()
+        .ok_or_else(|| "logging not initialized".to_string())?;
+    handle
+        .reload(EnvFilter::new(log_level_directive(&level)))
+        .map_err(|e| e.to_string())
+}
+
 pub fn set_app_handle(handle: tauri::AppHandle) {
     let _ = APP_HANDLE.set(Mutex::new(Some(handle)));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quicksort_application::LogLevel;
+
+    #[test]
+    fn log_level_directive_maps_each_level() {
+        assert_eq!(log_level_directive(&LogLevel::Trace), "trace");
+        assert_eq!(log_level_directive(&LogLevel::Debug), "debug");
+        assert_eq!(log_level_directive(&LogLevel::Info), "info");
+        assert_eq!(log_level_directive(&LogLevel::Warn), "warn");
+        assert_eq!(log_level_directive(&LogLevel::Error), "error");
+    }
+
+    #[test]
+    fn set_log_level_fails_before_init() {
+        // The reload handle is only populated by `init()`, which never runs in
+        // the test binary, so this exercises the "not initialized" path.
+        assert!(set_log_level(LogLevel::Debug).is_err());
+    }
 }

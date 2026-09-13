@@ -1,8 +1,9 @@
 use crate::state::{AppState, SystemInfoSample};
 use quicksort_application::{
     AbsolutePath, ExecuteOperation, Folder, FolderId, FolderMetadata, GetFolders,
-    GetOperationHistory, LoadSettings, ManageFolders, OperationErrorDto, OperationId, PluginConfig,
-    PluginInfoDto, PluginManager, SaveSettings, Settings, UndoErrorKind, UndoOperation,
+    GetOperationHistory, LoadSettings, LogLevel, ManageFolders, OperationErrorDto, OperationId,
+    PluginConfig, PluginInfoDto, PluginManager, SaveSettings, Settings, UndoErrorKind,
+    UndoOperation,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -448,6 +449,17 @@ pub fn check_menu_status() -> bool {
 #[tauri::command]
 pub fn get_logs() -> Vec<serde_json::Value> {
     crate::logging::get_recent_logs()
+}
+
+#[tauri::command]
+pub fn set_log_level(level: LogLevel) -> Result<(), String> {
+    tracing::info!(command = "set_log_level", level = ?level, "handling");
+    let result = crate::logging::set_log_level(level);
+    match &result {
+        Ok(()) => tracing::info!(command = "set_log_level", "OK"),
+        Err(e) => tracing::error!(command = "set_log_level", error = %e, "FAIL"),
+    }
+    result
 }
 
 #[tauri::command]
