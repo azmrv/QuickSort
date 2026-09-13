@@ -46,7 +46,9 @@ pub mod use_cases;
 // ---------------------------------------------------------------------------
 
 // Error type – all Use Case operations return this error.
-pub use errors::UseCaseError;
+// The undo/repeat DTO and its kind are re-exported because adapters
+// (Tauri commands) route failures to the UI using `kind` (P1-5).
+pub use errors::{OperationErrorDto, UndoErrorKind, UseCaseError};
 
 // DTOs – used by adapters to send commands and receive results.
 pub use dtos::{FolderMetadata, OperationCommand, OperationResult, OverwritePolicy};

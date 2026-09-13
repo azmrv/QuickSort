@@ -1,8 +1,8 @@
 use crate::state::{AppState, SystemInfoSample};
 use quicksort_application::{
     AbsolutePath, ExecuteOperation, Folder, FolderId, FolderMetadata, GetFolders,
-    GetOperationHistory, LoadSettings, ManageFolders, OperationId, PluginConfig, PluginInfoDto,
-    PluginManager, SaveSettings, Settings, UndoOperation,
+    GetOperationHistory, LoadSettings, ManageFolders, OperationErrorDto, OperationId, PluginConfig,
+    PluginInfoDto, PluginManager, SaveSettings, Settings, UndoErrorKind, UndoOperation,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -285,16 +285,28 @@ pub fn log_user_select(
 pub async fn undo_operation_v2(
     state: State<'_, AppState>,
     operation_id: String,
-) -> Result<quicksort_application::OperationResult, String> {
+) -> Result<quicksort_application::OperationResult, OperationErrorDto> {
     tracing::info!(command = "undo_operation_v2", operation_id = %operation_id, "handling");
     let id = OperationId::from_string(&operation_id).map_err(|e| {
         tracing::error!(command = "undo_operation_v2", error = %e, "invalid operation ID");
-        format!("Invalid operation ID: {}", e)
+        OperationErrorDto {
+            kind: UndoErrorKind::Unknown,
+            message: format!("Invalid operation ID: {e}"),
+        }
     })?;
-    let result = state.facade.undo(id).await.map_err(|e| e.to_string());
+    let result = state
+        .facade
+        .undo(id)
+        .await
+        .map_err(|e| e.to_operation_error());
     match &result {
         Ok(r) => tracing::info!(command = "undo_operation_v2", state = ?r.state, "OK"),
-        Err(e) => tracing::error!(command = "undo_operation_v2", error = %e, "FAIL"),
+        Err(e) => tracing::error!(
+            command = "undo_operation_v2",
+            kind = ?e.kind,
+            message = %e.message,
+            "FAIL"
+        ),
     }
     result
 }
@@ -308,11 +320,14 @@ pub async fn undo_operation_v2(
 pub async fn repeat_operation_v2(
     state: State<'_, AppState>,
     operation_id: String,
-) -> Result<quicksort_application::OperationResult, String> {
+) -> Result<quicksort_application::OperationResult, OperationErrorDto> {
     tracing::info!(command = "repeat_operation_v2", operation_id = %operation_id, "handling");
     let id = OperationId::from_string(&operation_id).map_err(|e| {
         tracing::error!(command = "repeat_operation_v2", error = %e, "invalid operation ID");
-        format!("Invalid operation ID: {}", e)
+        OperationErrorDto {
+            kind: UndoErrorKind::Unknown,
+            message: format!("Invalid operation ID: {e}"),
+        }
     })?;
 
     // Find the original operation in the in-memory history.
@@ -320,12 +335,15 @@ pub async fn repeat_operation_v2(
         .facade
         .get_all_operations()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_operation_error())?;
     let original = match operations.iter().find(|op| op.id == id) {
         Some(op) => op.clone(),
         None => {
             tracing::error!(command = "repeat_operation_v2", "operation not found");
-            return Err(format!("Operation not found: {}", operation_id));
+            return Err(OperationErrorDto {
+                kind: UndoErrorKind::Unknown,
+                message: format!("Operation not found: {}", operation_id),
+            });
         }
     };
 
@@ -333,7 +351,11 @@ pub async fn repeat_operation_v2(
     // Not required for Delete/Rename, which carry no target folder.
     let target_folder_id = match &original.target_folder_path {
         Some(target_path) => {
-            let folders = state.facade.get_all().await.map_err(|e| e.to_string())?;
+            let folders = state
+                .facade
+                .get_all()
+                .await
+                .map_err(|e| e.to_operation_error())?;
             match folders.iter().find(|f| &f.path == target_path) {
                 Some(folder) => Some(folder.id),
                 None => {
@@ -342,7 +364,10 @@ pub async fn repeat_operation_v2(
                         path = %target_path,
                         "target folder not found"
                     );
-                    return Err(format!("Target folder not found: {}", target_path));
+                    return Err(OperationErrorDto {
+                        kind: UndoErrorKind::Unknown,
+                        message: format!("Target folder not found: {}", target_path),
+                    });
                 }
             }
         }
@@ -367,7 +392,7 @@ pub async fn repeat_operation_v2(
         .facade
         .execute(command)
         .await
-        .map_err(|e| e.to_string());
+        .map_err(|e| e.to_operation_error());
     match &result {
         Ok(r) => tracing::info!(
             command = "repeat_operation_v2",
@@ -375,7 +400,12 @@ pub async fn repeat_operation_v2(
             files = r.processed_files,
             "OK"
         ),
-        Err(e) => tracing::error!(command = "repeat_operation_v2", error = %e, "FAIL"),
+        Err(e) => tracing::error!(
+            command = "repeat_operation_v2",
+            kind = ?e.kind,
+            message = %e.message,
+            "FAIL"
+        ),
     }
     result
 }

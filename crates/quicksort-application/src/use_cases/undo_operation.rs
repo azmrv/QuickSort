@@ -1,5 +1,5 @@
 use crate::dtos::OperationResult;
-use crate::errors::UseCaseError;
+use crate::errors::{OperationErrorDto, UndoErrorKind, UseCaseError};
 use crate::ports::inbound::UndoOperation;
 use crate::ports::outbound::{FileSystem, OperationRepository};
 use async_trait::async_trait;
@@ -63,6 +63,17 @@ impl UndoOperation for UndoOperationUseCase {
 }
 
 impl UndoOperationUseCase {
+    /// Wraps a file-system failure that occurred *after* the `exists()`
+    /// pre-check passed. The existence check guarantees the file was
+    /// present a moment before, so the failure is a lock/permission race
+    /// and retrying may succeed — classify as `Transient` (P1-5).
+    fn transient_fs_error(e: UseCaseError) -> UseCaseError {
+        UseCaseError::UndoFailed(OperationErrorDto {
+            kind: UndoErrorKind::Transient,
+            message: format!("File system error: {e}"),
+        })
+    }
+
     async fn undo_move(&self, op: &mut Operation) -> Result<(), UseCaseError> {
         let target_folder = op.target_folder_path.as_ref().ok_or_else(|| {
             UseCaseError::UndoNotPossible("No target folder for Move".to_string())
@@ -90,7 +101,7 @@ impl UndoOperationUseCase {
             self.file_system
                 .rename_file(&target_path, source_path)
                 .await
-                .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+                .map_err(Self::transient_fs_error)?;
         }
 
         Ok(())
@@ -117,7 +128,7 @@ impl UndoOperationUseCase {
                 self.file_system
                     .delete_file(&target_path)
                     .await
-                    .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+                    .map_err(Self::transient_fs_error)?;
             }
         }
 
@@ -151,7 +162,7 @@ impl UndoOperationUseCase {
             self.file_system
                 .rename_file(new_path, old_path)
                 .await
-                .map_err(|e| UseCaseError::FileSystemError(e.to_string()))?;
+                .map_err(Self::transient_fs_error)?;
         }
 
         Ok(())
@@ -216,6 +227,8 @@ mod tests {
     struct MockFileSystem {
         existing: Arc<Mutex<HashSet<PathBuf>>>,
         renamed: Arc<Mutex<Vec<(PathBuf, PathBuf)>>>,
+        fail_delete: Arc<Mutex<bool>>,
+        fail_rename: Arc<Mutex<bool>>,
     }
 
     impl MockFileSystem {
@@ -223,6 +236,8 @@ mod tests {
             Self {
                 existing: Arc::new(Mutex::new(existing.into_iter().collect())),
                 renamed: Arc::new(Mutex::new(Vec::new())),
+                fail_delete: Arc::new(Mutex::new(false)),
+                fail_rename: Arc::new(Mutex::new(false)),
             }
         }
 
@@ -250,6 +265,11 @@ mod tests {
             from: &AbsolutePath,
             to: &AbsolutePath,
         ) -> Result<(), UseCaseError> {
+            if *self.fail_rename.lock().unwrap() {
+                return Err(UseCaseError::FileSystemError(
+                    "rename failed (mock)".to_string(),
+                ));
+            }
             self.renamed
                 .lock()
                 .unwrap()
@@ -279,8 +299,17 @@ mod tests {
             unimplemented!("not needed by undo tests")
         }
 
-        async fn delete_file(&self, _path: &AbsolutePath) -> Result<(), UseCaseError> {
-            unimplemented!("not needed by undo tests")
+        async fn delete_file(&self, path: &AbsolutePath) -> Result<(), UseCaseError> {
+            if *self.fail_delete.lock().unwrap() {
+                return Err(UseCaseError::FileSystemError(
+                    "delete failed (mock)".to_string(),
+                ));
+            }
+            self.existing
+                .lock()
+                .unwrap()
+                .remove(&Self::to_pathbuf(path));
+            Ok(())
         }
 
         async fn is_dir(&self, _path: &AbsolutePath) -> Result<bool, UseCaseError> {
@@ -349,6 +378,23 @@ mod tests {
         op
     }
 
+    fn completed_copy_op(source: &[&str], target: &str) -> Operation {
+        let root = if cfg!(target_os = "windows") {
+            "C:\\"
+        } else {
+            "/"
+        };
+        let src: Vec<AbsolutePath> = source
+            .iter()
+            .map(|s| AbsolutePath::new(&format!("{root}{s}")).unwrap())
+            .collect();
+        let tgt = AbsolutePath::new(&format!("{root}{target}")).unwrap();
+        let mut op = Operation::new_copy(src, tgt, Utc::now());
+        op.start().unwrap();
+        op.complete(source.len() as u32, 0).unwrap();
+        op
+    }
+
     #[tokio::test]
     async fn undo_move_restores_existing_file() {
         let op = completed_move_op(&["src/a.txt"], "dst");
@@ -380,5 +426,51 @@ mod tests {
 
         assert_eq!(result.state, OperationState::Undone);
         assert_eq!(fs_check.renamed_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn undo_move_rename_failure_is_transient() {
+        let op = completed_move_op(&["src/a.txt"], "dst");
+        let target = op.target_folder_path.clone().unwrap();
+        let file_name = op.source_paths[0].file_name().unwrap();
+        let existing = target.join(file_name);
+
+        let repo = MockOperationRepository::new(op.clone());
+        let fs = MockFileSystem::new(vec![PathBuf::from(existing.to_string_lossy().as_ref())]);
+        *fs.fail_rename.lock().unwrap() = true;
+        let use_case = UndoOperationUseCase::new(Box::new(repo), Box::new(fs));
+
+        let err = use_case.undo(op.id.clone()).await.unwrap_err();
+
+        match err {
+            UseCaseError::UndoFailed(dto) => {
+                assert_eq!(dto.kind, UndoErrorKind::Transient);
+                assert!(dto.message.contains("File system error"));
+            }
+            other => panic!("expected UndoFailed(Transient), got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn undo_copy_delete_failure_is_transient() {
+        let op = completed_copy_op(&["src/a.txt"], "dst");
+        let target = op.target_folder_path.clone().unwrap();
+        let file_name = op.source_paths[0].file_name().unwrap();
+        let existing = target.join(file_name);
+
+        let repo = MockOperationRepository::new(op.clone());
+        let fs = MockFileSystem::new(vec![PathBuf::from(existing.to_string_lossy().as_ref())]);
+        *fs.fail_delete.lock().unwrap() = true;
+        let use_case = UndoOperationUseCase::new(Box::new(repo), Box::new(fs));
+
+        let err = use_case.undo(op.id.clone()).await.unwrap_err();
+
+        match err {
+            UseCaseError::UndoFailed(dto) => {
+                assert_eq!(dto.kind, UndoErrorKind::Transient);
+                assert!(dto.message.contains("File system error"));
+            }
+            other => panic!("expected UndoFailed(Transient), got {:?}", other),
+        }
     }
 }
