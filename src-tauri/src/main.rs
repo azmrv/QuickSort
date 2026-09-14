@@ -335,6 +335,10 @@ fn start_tauri() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::execute_operation_v2,

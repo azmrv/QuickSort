@@ -86,6 +86,11 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.backup.created': 'Backup created',
         'settings.backup.restored': 'Settings and folders restored',
 
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': 'Startup',
+        'settings.autostart.description': 'Launch QuickSort automatically when you sign in to Windows.',
+        'settings.autostart.toggle': 'Launch at startup',
+
         // Settings - Common
         'settings.loading': 'Loading...',
         'settings.saved': 'Settings saved',
@@ -422,6 +427,11 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.backup.created': 'Копия создана',
         'settings.backup.restored': 'Настройки и папки восстановлены',
 
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': 'Автозагрузка',
+        'settings.autostart.description': 'Запускать QuickSort автоматически при входе в Windows.',
+        'settings.autostart.toggle': 'Запуск при старте системы',
+
         // Settings - Common
         'settings.loading': 'Загрузка...',
         'settings.saved': 'Настройки сохранены',
@@ -750,6 +760,11 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.backup.created': 'Backup erstellt',
         'settings.backup.restored': 'Settings und Ordner wiederhergestellt',
 
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': 'Autostart',
+        'settings.autostart.description': 'QuickSort beim Windows-Anmelden automatisch starten.',
+        'settings.autostart.toggle': 'Beim Start ausführen',
+
         'settings.loading': 'Laden...',
         'settings.saved': 'Einstellungen gespeichert',
         'settings.save_error': 'Fehler beim Speichern der Einstellungen',
@@ -1067,6 +1082,11 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.backup.created': 'Copia creada',
         'settings.backup.restored': 'Ajustes y carpetas restaurados',
 
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': 'Inicio automático',
+        'settings.autostart.description': 'Iniciar QuickSort automáticamente al iniciar sesión en Windows.',
+        'settings.autostart.toggle': 'Iniciar al arrancar',
+
         'settings.loading': 'Cargando...',
         'settings.saved': 'Configuración guardada',
         'settings.save_error': 'Error al guardar la configuración',
@@ -1382,6 +1402,11 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.backup.created': '备份已创建',
         'settings.backup.restored': '设置和文件夹已恢复',
 
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': '开机启动',
+        'settings.autostart.description': '登录 Windows 时自动启动 QuickSort。',
+        'settings.autostart.toggle': '开机时启动',
+
         'settings.loading': '加载中...',
         'settings.saved': '设置已保存',
         'settings.save_error': '保存设置失败',
@@ -1696,6 +1721,11 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.backup.restore': '復元',
         'settings.backup.created': 'バックアップを作成しました',
         'settings.backup.restored': '設定とフォルダーを復元しました',
+
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': '自動起動',
+        'settings.autostart.description': 'Windows サインイン時に QuickSort を自動的に起動します。',
+        'settings.autostart.toggle': '起動時に実行',
 
         'settings.loading': '読み込み中...',
         'settings.saved': '設定を保存しました',

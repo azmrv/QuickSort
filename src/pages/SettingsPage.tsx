@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { invoke } from '../lib/invoke';
 import { emit } from '@tauri-apps/api/event';
 import { save, open } from '@tauri-apps/plugin-dialog';
+import { isEnabled, enable, disable } from '@tauri-apps/plugin-autostart';
 import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
 import { LOCALE_LABELS, type Locale } from '../i18n/translations';
@@ -49,8 +50,33 @@ const DEFAULT_SETTINGS: Settings = {
 const SettingsPage: React.FC = () => {
     const { t } = useTranslation();
     const { message } = App.useApp();
-    const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-    const [loading, setLoading] = useState(true);
+const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+const [loading, setLoading] = useState(true);
+const [autostartEnabled, setAutostartEnabled] = useState(false);
+
+useEffect(() => {
+    // Current OS autostart state (Windows registry) is independent of settings.json,
+    // so it is loaded separately from the plugin.
+    isEnabled().then(setAutostartEnabled).catch((err) => {
+        logger.error('SettingsPage', 'Failed to read autostart state', err);
+    });
+}, []);
+
+const toggleAutostart = async () => {
+    const next = !autostartEnabled;
+    logger.action('SettingsPage', next ? 'enable autostart' : 'disable autostart');
+    try {
+        if (next) {
+            await enable();
+        } else {
+            await disable();
+        }
+        setAutostartEnabled(next);
+    } catch (err) {
+        logger.error('SettingsPage', 'Failed to change autostart state', err);
+        message.error(`Error: ${err}`);
+    }
+};
 
     useEffect(() => {
         invoke<Partial<Settings>>('get_settings')
@@ -263,6 +289,25 @@ const SettingsPage: React.FC = () => {
                         }}
                     >
                         {t('settings.com_server.unregister')}
+                    </button>
+                </div>
+            </div>
+
+            {/* Autostart (0.2.6 feature #23 / plan Q6) */}
+            <div>
+                <h3 style={sectionStyle}>{t('settings.autostart.title')}</h3>
+                <p style={labelStyle}>
+                    {t('settings.autostart.description')}
+                </p>
+                <div style={toggleContainerStyle}>
+                    <span style={{ color: 'var(--qs-text-secondary)', fontSize: '14px' }}>
+                        {t('settings.autostart.toggle')}
+                    </span>
+                    <button
+                        style={toggleStyle(autostartEnabled)}
+                        onClick={toggleAutostart}
+                    >
+                        <div style={toggleDotStyle(autostartEnabled)} />
                     </button>
                 </div>
             </div>
