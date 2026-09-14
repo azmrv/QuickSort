@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { App } from 'antd';
 import { invoke } from '../lib/invoke';
 import { emit } from '@tauri-apps/api/event';
+import { save, open } from '@tauri-apps/plugin-dialog';
 import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
 import { LOCALE_LABELS, type Locale } from '../i18n/translations';
@@ -449,6 +450,89 @@ const SettingsPage: React.FC = () => {
                 </p>
                 <div className="settings-plugins-panel">
                     <PluginsPage />
+                </div>
+            </div>
+
+            {/* Backup (0.2.6 feature #20 / plan Q7) */}
+            <div>
+                <h3 style={sectionStyle}>{t('settings.backup.title')}</h3>
+                <p style={labelStyle}>
+                    {t('settings.backup.description')}
+                </p>
+                <div style={{ display: 'flex', gap: 'var(--qs-space-sm)' }}>
+                    <button
+                        onClick={async () => {
+                            logger.action('SettingsPage', 'create backup');
+                            try {
+                                const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+                                const target = await save({
+                                    title: t('settings.backup.create'),
+                                    defaultPath: `quicksort-backup-${stamp}.zip`,
+                                    filters: [{ name: 'ZIP', extensions: ['zip'] }],
+                                });
+                                if (!target) return;
+                                await invoke('backup_data', { targetPath: target });
+                                logger.info('SettingsPage', 'Backup created');
+                                message.success(t('settings.backup.created'));
+                            } catch (err) {
+                                logger.error('SettingsPage', 'Backup failed', err);
+                                message.error(`Error: ${err}`);
+                            }
+                        }}
+                        style={{
+                            flex: 1,
+                            padding: 'var(--qs-space-md)',
+                            background: 'var(--qs-accent)',
+                            border: 'none',
+                            borderRadius: 'var(--qs-radius-md)',
+                            color: 'var(--qs-bg-primary)',
+                            fontFamily: 'var(--qs-font-body)',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        {t('settings.backup.create')}
+                    </button>
+                    <button
+                        onClick={async () => {
+                            logger.action('SettingsPage', 'restore backup');
+                            try {
+                                const selected = await open({
+                                    title: t('settings.backup.restore'),
+                                    filters: [{ name: 'ZIP', extensions: ['zip'] }],
+                                    multiple: false,
+                                });
+                                if (!selected || typeof selected !== 'string') return;
+                                await invoke('restore_data', { backupPath: selected });
+                                logger.info('SettingsPage', 'Backup restored');
+                                message.success(t('settings.backup.restored'));
+                                const loaded = await invoke<Partial<Settings>>('get_settings');
+                                setSettings({
+                                    ...DEFAULT_SETTINGS,
+                                    ...loaded,
+                                    logging: { ...DEFAULT_LOGGING, ...(loaded.logging ?? {}) },
+                                });
+                            } catch (err) {
+                                logger.error('SettingsPage', 'Restore failed', err);
+                                message.error(`Error: ${err}`);
+                            }
+                        }}
+                        style={{
+                            flex: 1,
+                            padding: 'var(--qs-space-md)',
+                            background: 'var(--qs-danger-muted)',
+                            border: '1px solid transparent',
+                            borderRadius: 'var(--qs-radius-md)',
+                            color: 'var(--qs-danger)',
+                            fontFamily: 'var(--qs-font-body)',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        {t('settings.backup.restore')}
+                    </button>
                 </div>
             </div>
 

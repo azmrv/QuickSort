@@ -2,6 +2,7 @@
 
 #[cfg(target_os = "windows")]
 mod com;
+mod backup;
 mod commands;
 mod ipc;
 mod logging;
@@ -377,6 +378,9 @@ fn start_tauri() {
             commands::get_jobs,
             commands::cancel_job,
             commands::get_system_info,
+            commands::backup_data,
+            commands::restore_data,
+            commands::auto_backup_now,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());

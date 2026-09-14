@@ -78,6 +78,14 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.application.title': 'Application',
         'settings.application.quit': 'Quit Application',
 
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': 'Backup',
+        'settings.backup.description': 'Create a ZIP archive of your settings and folders, or restore them from a previous backup.',
+        'settings.backup.create': 'Create Backup',
+        'settings.backup.restore': 'Restore',
+        'settings.backup.created': 'Backup created',
+        'settings.backup.restored': 'Settings and folders restored',
+
         // Settings - Common
         'settings.loading': 'Loading...',
         'settings.saved': 'Settings saved',
@@ -406,6 +414,14 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.application.title': 'Приложение',
         'settings.application.quit': 'Выход из приложения',
 
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': 'Резервная копия',
+        'settings.backup.description': 'Создайте ZIP-архив настроек и папок или восстановите их из ранее созданной копии.',
+        'settings.backup.create': 'Создать копию',
+        'settings.backup.restore': 'Восстановить',
+        'settings.backup.created': 'Копия создана',
+        'settings.backup.restored': 'Настройки и папки восстановлены',
+
         // Settings - Common
         'settings.loading': 'Загрузка...',
         'settings.saved': 'Настройки сохранены',
@@ -726,6 +742,14 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.application.title': 'Anwendung',
         'settings.application.quit': 'Anwendung beenden',
 
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': 'Backup',
+        'settings.backup.description': 'Erstellen Sie ein ZIP-Archiv Ihres Settings und Ihrer Ordner oder stellen Sie sie aus einem früheren Backup wieder her.',
+        'settings.backup.create': 'Backup erstellen',
+        'settings.backup.restore': 'Wiederherstellen',
+        'settings.backup.created': 'Backup erstellt',
+        'settings.backup.restored': 'Settings und Ordner wiederhergestellt',
+
         'settings.loading': 'Laden...',
         'settings.saved': 'Einstellungen gespeichert',
         'settings.save_error': 'Fehler beim Speichern der Einstellungen',
@@ -1035,6 +1059,14 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.application.title': 'Aplicación',
         'settings.application.quit': 'Salir de la aplicación',
 
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': 'Copia de seguridad',
+        'settings.backup.description': 'Cree un archivo ZIP de sus ajustes y carpetas, o restáurelos desde una copia anterior.',
+        'settings.backup.create': 'Crear copia',
+        'settings.backup.restore': 'Restaurar',
+        'settings.backup.created': 'Copia creada',
+        'settings.backup.restored': 'Ajustes y carpetas restaurados',
+
         'settings.loading': 'Cargando...',
         'settings.saved': 'Configuración guardada',
         'settings.save_error': 'Error al guardar la configuración',
@@ -1342,6 +1374,14 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.application.title': '应用程序',
         'settings.application.quit': '退出应用',
 
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': '备份',
+        'settings.backup.description': '将设置和文件夹创建为 ZIP 压缩包，或从之前的备份中恢复。',
+        'settings.backup.create': '创建备份',
+        'settings.backup.restore': '恢复',
+        'settings.backup.created': '备份已创建',
+        'settings.backup.restored': '设置和文件夹已恢复',
+
         'settings.loading': '加载中...',
         'settings.saved': '设置已保存',
         'settings.save_error': '保存设置失败',
@@ -1648,6 +1688,14 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         'settings.application.title': 'アプリケーション',
         'settings.application.quit': 'アプリを終了',
+
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': 'バックアップ',
+        'settings.backup.description': '設定とフォルダーの ZIP アーカイブを作成するか、以前のバックアップから復元します。',
+        'settings.backup.create': 'バックアップを作成',
+        'settings.backup.restore': '復元',
+        'settings.backup.created': 'バックアップを作成しました',
+        'settings.backup.restored': '設定とフォルダーを復元しました',
 
         'settings.loading': '読み込み中...',
         'settings.saved': '設定を保存しました',

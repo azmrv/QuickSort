@@ -85,7 +85,10 @@ pub async fn add_folder_v2(
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(()) => tracing::info!(command = "add_folder_v2", "OK"),
+        Ok(()) => {
+            tracing::info!(command = "add_folder_v2", "OK");
+            auto_backup_after_change();
+        }
         Err(e) => tracing::error!(command = "add_folder_v2", error = %e, "FAIL"),
     }
     result
@@ -156,6 +159,9 @@ pub async fn add_folders_from_paths(
         }
     }
 
+    if added > 0 {
+        auto_backup_after_change();
+    }
     tracing::info!(
         command = "add_folders_from_paths",
         added = added,
@@ -178,7 +184,10 @@ pub async fn remove_folder_v2(state: State<'_, AppState>, id: String) -> Result<
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(()) => tracing::info!(command = "remove_folder_v2", "OK"),
+        Ok(()) => {
+            tracing::info!(command = "remove_folder_v2", "OK");
+            auto_backup_after_change();
+        }
         Err(e) => tracing::error!(command = "remove_folder_v2", error = %e, "FAIL"),
     }
     result
@@ -202,7 +211,10 @@ pub async fn toggle_favorite_v2(
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(()) => tracing::info!(command = "toggle_favorite_v2", "OK"),
+        Ok(()) => {
+            tracing::info!(command = "toggle_favorite_v2", "OK");
+            auto_backup_after_change();
+        }
         Err(e) => tracing::error!(command = "toggle_favorite_v2", error = %e, "FAIL"),
     }
     result
@@ -225,7 +237,10 @@ pub async fn set_folder_color_v2(
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(()) => tracing::info!(command = "set_folder_color_v2", "OK"),
+        Ok(()) => {
+            tracing::info!(command = "set_folder_color_v2", "OK");
+            auto_backup_after_change();
+        }
         Err(e) => tracing::error!(command = "set_folder_color_v2", error = %e, "FAIL"),
     }
     result
@@ -528,7 +543,10 @@ pub async fn save_settings(state: State<'_, AppState>, settings: Settings) -> Re
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(()) => tracing::info!(command = "save_settings", "OK"),
+        Ok(()) => {
+            tracing::info!(command = "save_settings", "OK");
+            auto_backup_after_change();
+        }
         Err(e) => tracing::error!(command = "save_settings", error = %e, "FAIL"),
     }
     result
@@ -1069,4 +1087,66 @@ pub async fn get_system_info(state: State<'_, AppState>) -> Result<SystemInfoDto
         "OK"
     );
     Ok(dto)
+}
+
+// ---------------------------------------------------------------------------
+// Backup commands (0.2.6 feature #20 / plan Q7)
+// ---------------------------------------------------------------------------
+
+/// Create a ZIP archive of settings.json + folders.json at the given path
+/// chosen via a save dialog on the frontend.
+#[tauri::command]
+pub fn backup_data(target_path: String) -> Result<String, String> {
+    tracing::info!(command = "backup_data", target = %target_path, "handling");
+    match crate::backup::create_backup(std::path::Path::new(&target_path)) {
+        Ok(path) => {
+            tracing::info!(command = "backup_data", "OK — {}", path.display());
+            Ok(path.display().to_string())
+        }
+        Err(e) => {
+            tracing::error!(command = "backup_data", error = %e, "FAIL");
+            Err(e)
+        }
+    }
+}
+
+/// Restore settings.json + folders.json from a user-selected ZIP archive.
+#[tauri::command]
+pub fn restore_data(backup_path: String) -> Result<String, String> {
+    tracing::info!(command = "restore_data", backup = %backup_path, "handling");
+    match crate::backup::restore_backup(std::path::Path::new(&backup_path)) {
+        Ok(count) => {
+            tracing::info!(command = "restore_data", restored = count, "OK");
+            Ok(format!("Restored {count} file(s) from backup"))
+        }
+        Err(e) => {
+            tracing::error!(command = "restore_data", error = %e, "FAIL");
+            Err(e)
+        }
+    }
+}
+
+/// Best-effort automatic backup after a successful config change (plan Q7).
+/// Failures are only logged so the originating command keeps working.
+fn auto_backup_after_change() {
+    match crate::backup::auto_backup() {
+        Ok(path) => tracing::debug!(backup = %path.display(), "auto-backup created"),
+        Err(e) => tracing::warn!(error = %e, "auto-backup failed"),
+    }
+}
+
+/// Create an automatic backup in the data dir, pruning the oldest archives.
+#[tauri::command]
+pub fn auto_backup_now() -> Result<String, String> {
+    tracing::info!(command = "auto_backup_now", "handling");
+    match crate::backup::auto_backup() {
+        Ok(path) => {
+            tracing::info!(command = "auto_backup_now", "OK — {}", path.display());
+            Ok(path.display().to_string())
+        }
+        Err(e) => {
+            tracing::error!(command = "auto_backup_now", error = %e, "FAIL");
+            Err(e)
+        }
+    }
 }
