@@ -82,6 +82,7 @@ impl StdFileSystem {
     }
 
     #[cfg(not(target_os = "windows"))]
+    #[allow(dead_code)] // Callers are cfg(windows)-only; stub kept for cross-platform shape
     fn volume_root(_path: &AbsolutePath) -> Option<String> {
         None
     }
