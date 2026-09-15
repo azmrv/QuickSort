@@ -17,9 +17,8 @@ const MAX_AUTO_BACKUPS: usize = 10;
 
 /// Write a ZIP archive with the given entries (archive name → source file).
 fn write_archive(target: &Path, entries: &[(&str, &Path)]) -> Result<(), String> {
-    let file = File::create(target).map_err(|e| {
-        format!("Failed to create backup file {}: {e}", target.display())
-    })?;
+    let file = File::create(target)
+        .map_err(|e| format!("Failed to create backup file {}: {e}", target.display()))?;
     let mut zip = ZipWriter::new(file);
     let options = SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
@@ -163,7 +162,10 @@ mod tests {
         std::fs::create_dir_all(&out).unwrap();
         let restored = read_archive(&archive, &out).unwrap();
         assert_eq!(restored, 2);
-        assert_eq!(std::fs::read(out.join("settings.json")).unwrap(), br#"{"theme_mode":"dark"}"#);
+        assert_eq!(
+            std::fs::read(out.join("settings.json")).unwrap(),
+            br#"{"theme_mode":"dark"}"#
+        );
         assert_eq!(std::fs::read(out.join("folders.json")).unwrap(), br#"[]"#);
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -212,7 +214,11 @@ mod tests {
     fn prune_old_keeps_only_latest() {
         let dir = std::env::temp_dir().join(format!("qs-backup-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
-        for name in ["auto-20260101-000000.zip", "auto-20260102-000000.zip", "auto-20260103-000000.zip"] {
+        for name in [
+            "auto-20260101-000000.zip",
+            "auto-20260102-000000.zip",
+            "auto-20260103-000000.zip",
+        ] {
             std::fs::write(dir.join(name), b"x").unwrap();
         }
         prune_old(&dir, 2);
