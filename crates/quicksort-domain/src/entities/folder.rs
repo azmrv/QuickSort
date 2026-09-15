@@ -53,6 +53,10 @@ pub struct Folder {
     /// Usage statistics (not persisted if not needed, but available for analytics).
     #[serde(default)]
     pub stats: FolderStats,
+    /// Optional parent folder ID for tree nesting (depth ≤ 10).
+    /// Old folders.json entries without this field deserialize as `None` (root).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<FolderId>,
     // When this folder was first created.
     pub created_at: DateTime<Utc>,
     // When this folder was last modified.
@@ -81,6 +85,7 @@ impl Folder {
             order: 0,
             color: None,
             stats: Default::default(),
+            parent_id: None,
             created_at: now,
             updated_at: now,
         })
@@ -97,6 +102,7 @@ impl Folder {
             order: 0,
             color: None,
             stats: Default::default(),
+            parent_id: None,
             created_at: now,
             updated_at: now,
         }
@@ -162,6 +168,22 @@ impl Folder {
     pub fn toggle_favorite(&mut self) {
         self.favorite = !self.favorite;
         self.updated_at = Utc::now();
+    }
+
+    /// Sets or clears the parent folder.
+    ///
+    /// Only validates that the folder is not its own parent (self-cycle).
+    /// Depth and descendant-cycle checks are performed by the use case
+    /// layer where the full folder list is available.
+    pub fn set_parent(&mut self, parent_id: Option<FolderId>) -> Result<(), DomainError> {
+        if let Some(ref parent) = parent_id {
+            if *parent == self.id {
+                return Err(DomainError::FolderCycle);
+            }
+        }
+        self.parent_id = parent_id;
+        self.updated_at = Utc::now();
+        Ok(())
     }
 
     /// Records that this folder was used for an operation.
@@ -314,6 +336,49 @@ mod tests {
                 c
             );
         }
+    }
+
+    #[test]
+    fn test_parent_id_defaults_to_none() {
+        let f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
+        assert!(f.parent_id.is_none());
+    }
+
+    #[test]
+    fn test_serde_old_json_without_parent_id() {
+        let json = r#"{"id":"00000000-0000-0000-0000-000000000001","name":"Docs","path":"C:\\Docs","favorite":false,"order":0,"stats":{"use_count":0},"created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:00:00Z"}"#;
+        let f: Folder = serde_json::from_str(json).unwrap();
+        assert!(f.parent_id.is_none());
+    }
+
+    #[test]
+    fn test_serde_roundtrip_with_parent_id() {
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
+        let parent = FolderId::from_string("00000000-0000-0000-0000-0000000000aa").unwrap();
+        f.set_parent(Some(parent)).unwrap();
+        let json = serde_json::to_string(&f).unwrap();
+        let f2: Folder = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            f2.parent_id.unwrap().to_string(),
+            "00000000-0000-0000-0000-0000000000aa"
+        );
+    }
+
+    #[test]
+    fn test_set_parent_self_cycle_fails() {
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
+        let result = f.set_parent(Some(f.id.clone()));
+        assert!(matches!(result, Err(DomainError::FolderCycle)));
+    }
+
+    #[test]
+    fn test_set_parent_clear() {
+        let mut f = Folder::new("Docs", test_path("C:\\Docs")).unwrap();
+        let parent = FolderId::from_string("00000000-0000-0000-0000-0000000000bb").unwrap();
+        f.set_parent(Some(parent)).unwrap();
+        assert!(f.parent_id.is_some());
+        f.set_parent(None).unwrap();
+        assert!(f.parent_id.is_none());
     }
 
     #[test]

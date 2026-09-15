@@ -28,6 +28,8 @@ struct FolderData {
     order: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    parent_id: Option<String>,
     #[serde(default)]
     stats: Option<serde_json::Value>,
 }
@@ -81,6 +83,13 @@ impl JsonConfigurationRepository {
             }
             folder.order = f.order;
             folder.color = f.color;
+            if let Some(p) = &f.parent_id {
+                let parent = FolderId::from_string(p)
+                    .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+                folder
+                    .set_parent(Some(parent))
+                    .map_err(|e| UseCaseError::RepositoryError(e.to_string()))?;
+            }
             folders.push(folder);
         }
 
@@ -103,6 +112,7 @@ impl JsonConfigurationRepository {
                     favorite: f.favorite,
                     order: f.order,
                     color: f.color.clone(),
+                    parent_id: f.parent_id.map(|id| id.to_string()),
                     stats: None,
                 })
                 .collect(),
@@ -207,6 +217,7 @@ mod tests {
                 favorite: false,
                 order: 0,
                 color: None,
+                parent_id: None,
                 stats: None,
             })
             .collect();
@@ -313,5 +324,40 @@ mod tests {
         let folders = repo.load_all().await.unwrap();
         assert_eq!(folders.len(), 1);
         assert_eq!(folders[0].name, "Music");
+    }
+
+    #[tokio::test]
+    async fn test_save_load_preserves_parent_id() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("folders.json");
+        let repo = JsonConfigurationRepository::new(path.clone());
+
+        let parent = Folder::with_id(
+            FolderId::from_string("33333333-3333-3333-3333-333333333333").unwrap(),
+            "Parent",
+            test_path("C:\\Parent"),
+        );
+        let child = Folder::with_id(
+            FolderId::from_string("44444444-4444-4444-4444-444444444444").unwrap(),
+            "Child",
+            test_path("C:\\Parent\\Child"),
+        );
+        let mut child = child;
+        child
+            .set_parent(Some(parent.id))
+            .expect("parent set must succeed");
+
+        repo.add(parent).await.unwrap();
+        repo.add(child).await.unwrap();
+
+        let folders = repo.load_all().await.unwrap();
+        let loaded_child = folders
+            .iter()
+            .find(|f| f.name == "Child")
+            .expect("child must be loaded");
+        assert_eq!(
+            loaded_child.parent_id.unwrap().to_string(),
+            "33333333-3333-3333-3333-333333333333"
+        );
     }
 }

@@ -27,6 +27,7 @@ pub fn test_folder() -> Folder {
         order: 0,
         color: None,
         stats: Default::default(),
+        parent_id: None,
         created_at: now,
         updated_at: now,
     }
@@ -35,3 +36,4 @@ pub fn test_folder() -> Folder {
 pub mod execute_operation;
 pub mod file_system;
 pub mod logging;
+pub mod manage_folders;

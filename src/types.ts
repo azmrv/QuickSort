@@ -5,6 +5,8 @@ export interface Folder {
     favorite: boolean;
     order: number;
     color?: string | null;
+    /** Parent folder id for tree view (0.2.6 feature 4f). Null/absent = root folder. */
+    parent_id?: string | null;
     stats: {
         use_count: number;
         last_used: string | null;

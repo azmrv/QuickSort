@@ -466,6 +466,18 @@
 /* ================================
    Add Folder Button
    ================================ */
+.editor-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--qs-space-md);
+    margin-bottom: var(--qs-space-lg);
+}
+
+.editor-toolbar .add-folder-btn {
+    margin-bottom: 0;
+}
+
 .add-folder-btn {
     display: flex;
     align-items: center;

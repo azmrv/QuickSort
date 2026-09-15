@@ -4,6 +4,7 @@
 //! It communicates with the main Tauri app via Named Pipe.
 
 use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::ffi::{c_void, CStr, OsString};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::PathBuf;
@@ -33,8 +34,8 @@ use windows::Win32::UI::Shell::{
     CMINVOKECOMMANDINFO, DROPFILES, GCS_VALIDATEA, GCS_VALIDATEW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreatePopupMenu, InsertMenuItemW, HMENU, MENUITEMINFOW, MFS_ENABLED, MFT_SEPARATOR,
-    MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
+    CreatePopupMenu, DestroyMenu, InsertMenuItemW, HMENU, MENUITEMINFOW, MFS_ENABLED,
+    MFT_SEPARATOR, MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
 };
 
 use crate::icon;
@@ -113,6 +114,7 @@ struct MenuFolder {
     path: String,
     is_favorite: bool,
     color: Option<String>, // e.g. "#FF5733"
+    parent_id: Option<String>,
 }
 
 #[implement(IShellExtInit, IContextMenu)]
@@ -326,6 +328,143 @@ fn make_separator(id: u32) -> MENUITEMINFOW {
     }
 }
 
+// ============================================================================
+// Favorite folder tree (parent_id cascading submenus)
+// ============================================================================
+
+/// Max nesting depth for the cascading folder submenus. Must stay in sync
+/// with MAX_FOLDER_DEPTH in the domain layer (root = level 1).
+const MAX_MENU_DEPTH: usize = 10;
+
+/// A favorite folder with its favorite children, used to render the
+/// cascading context menu tree.
+struct MenuNode<'a> {
+    folder: &'a MenuFolder,
+    children: Vec<MenuNode<'a>>,
+}
+
+/// Builds the favorite-folder tree: a favorite folder is nested under its
+/// favorite parent when parent_id refers to one; otherwise it becomes a
+/// root. Cycles are cut by a visited set, depth is capped by MAX_MENU_DEPTH.
+fn build_menu_tree(folders: &[MenuFolder]) -> Vec<MenuNode<'_>> {
+    let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
+    let by_id: HashSet<&str> = favorites.iter().map(|f| f.id.as_str()).collect();
+
+    let mut child_map: HashMap<&str, Vec<&MenuFolder>> = HashMap::new();
+    for f in &favorites {
+        if let Some(pid) = f.parent_id.as_deref() {
+            // Keep the folder file order among siblings.
+            if by_id.contains(pid) {
+                child_map.entry(pid).or_default().push(f);
+            }
+        }
+    }
+
+    fn build_node<'a>(
+        folder: &'a MenuFolder,
+        child_map: &HashMap<&str, Vec<&'a MenuFolder>>,
+        visited: &mut HashSet<&'a str>,
+        depth: usize,
+    ) -> Option<MenuNode<'a>> {
+        if depth > MAX_MENU_DEPTH || !visited.insert(folder.id.as_str()) {
+            return None;
+        }
+        let mut node = MenuNode {
+            folder,
+            children: Vec::new(),
+        };
+        if let Some(kids) = child_map.get(folder.id.as_str()) {
+            for kid in kids {
+                if let Some(child) = build_node(kid, child_map, visited, depth + 1) {
+                    node.children.push(child);
+                }
+            }
+        }
+        Some(node)
+    }
+
+    let mut visited: HashSet<&str> = HashSet::new();
+    let mut roots: Vec<MenuNode<'_>> = Vec::new();
+    // Roots: favorites without a parent, or whose parent is not a favorite.
+    for f in &favorites {
+        let is_root = match f.parent_id.as_deref() {
+            None => true,
+            Some(pid) => !by_id.contains(pid),
+        };
+        if is_root {
+            if let Some(node) = build_node(f, &child_map, &mut visited, 1) {
+                roots.push(node);
+            }
+        }
+    }
+    // Cycle safety net: any favorite not reached by a root walk.
+    for f in &favorites {
+        if !visited.contains(f.id.as_str()) {
+            if let Some(node) = build_node(f, &child_map, &mut visited, 1) {
+                roots.push(node);
+            }
+        }
+    }
+    roots
+}
+
+/// Flattens the tree into DFS pre-order (parent before its children).
+/// QueryContextMenu assigns command slots in exactly this order, so
+/// InvokeCommand can map a slot back to a folder by index.
+fn flatten_menu_tree<'a>(roots: &[MenuNode<'a>]) -> Vec<&'a MenuFolder> {
+    fn visit<'a>(node: &MenuNode<'a>, out: &mut Vec<&'a MenuFolder>) {
+        out.push(node.folder);
+        for child in &node.children {
+            visit(child, out);
+        }
+    }
+    let mut out = Vec::new();
+    for root in roots {
+        visit(root, &mut out);
+    }
+    out
+}
+
+/// Inserts a folder item and, when it has children and slots remain, a
+/// nested submenu populated recursively. `limit` is the exclusive upper
+/// bound for command ids reserved for folder items; `current_id` is the
+/// id of this item. Returns the next free command id.
+fn insert_menu_node(hmenu: HMENU, node: &MenuNode<'_>, current_id: u32, limit: u32) -> u32 {
+    if current_id >= limit {
+        return current_id;
+    }
+    let label = format!("\u{2605} {}", node.folder.name);
+    let wide: Vec<u16> = OsString::from(&label)
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let mut item = make_colored_menu_item(current_id, &wide, node.folder.color.as_deref());
+    let mut next_id = current_id + 1;
+
+    if !node.children.is_empty() && next_id < limit {
+        unsafe {
+            let h_sub = CreatePopupMenu().unwrap();
+            let mut inserted_any = false;
+            for child in &node.children {
+                let before = next_id;
+                next_id = insert_menu_node(h_sub, child, next_id, limit);
+                inserted_any |= next_id > before;
+            }
+            if inserted_any {
+                item.fMask |= MIIM_SUBMENU;
+                item.hSubMenu = h_sub;
+            } else {
+                let _ = DestroyMenu(h_sub);
+            }
+        }
+    }
+
+    unsafe {
+        let _ = InsertMenuItemW(hmenu, 0xFFFFFFFF, true, &item);
+    }
+    next_id
+}
+
 impl IContextMenu_Impl for QuickSortShellExt_Impl {
     fn QueryContextMenu(
         &self,
@@ -400,9 +539,12 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
 
         *self.this.folders.lock() = folders.clone();
 
-        let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
-        let all_folders: Vec<&MenuFolder> = folders.iter().collect();
-        let has_all_folders_entry = !all_folders.is_empty();
+        // Favorite folders in DFS pre-order (parents before children). The
+        // same order assigns command slots, so InvokeCommand can map a slot
+        // back to a folder by index.
+        let menu_tree = build_menu_tree(&folders);
+        let menu_order = flatten_menu_tree(&menu_tree);
+        let has_all_folders_entry = !folders.is_empty();
 
         let mut used = 0u32;
         // Reserve slots: separator + "Все папки..." (conditional) + "Выбрать путь..." (always)
@@ -410,7 +552,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
         let available = max_cmd_id.saturating_sub(min_cmd_id) + 1;
 
         let max_fav = std::cmp::min(
-            favorites.len() as u32,
+            menu_order.len() as u32,
             available.saturating_sub(bottom_items),
         );
 
@@ -429,25 +571,18 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             let h_submenu = CreatePopupMenu().unwrap();
             let mut current_id = min_cmd_id;
 
-            // Submenu items: favorites with colored circles
-            for folder in favorites.iter().take(max_fav as usize) {
-                let label = format!("\u{2605} {}", folder.name);
-                let wide: Vec<u16> = OsString::from(&label)
-                    .encode_wide()
-                    .chain(Some(0))
-                    .collect();
-                let _ = InsertMenuItemW(
-                    h_submenu,
-                    0xFFFFFFFF,
-                    true,
-                    &make_colored_menu_item(current_id, &wide, folder.color.as_deref()),
-                );
-                current_id += 1;
-                used += 1;
+            // Submenu items: favorite folders with colored circles, nested
+            // into cascade submenus via insert_menu_node. Slots fill in the
+            // same DFS pre-order as menu_order (see build_menu_tree/slot
+            // contract above).
+            let slot_limit = min_cmd_id.saturating_add(max_fav);
+            for root in &menu_tree {
+                current_id = insert_menu_node(h_submenu, root, current_id, slot_limit);
             }
+            used += current_id.saturating_sub(min_cmd_id);
 
-            // Separator — only when we have favorites and at least one bottom item
-            if !favorites.is_empty() && (has_all_folders_entry || true) && used < available {
+            // Separator — only when we have folder items and room remains
+            if !menu_order.is_empty() && used < available {
                 let _ = InsertMenuItemW(h_submenu, 0xFFFFFFFF, true, &make_separator(current_id));
                 current_id += 1;
                 used += 1;
@@ -533,14 +668,17 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
             return E_FAIL.ok();
         }
         // Low word is already the slot index used inside QueryContextMenu
-        // (0.. favorites / separator / "Все папки..." / "Выбрать путь...").
+        // (0.. menu_order / separator / "Все папки..." / "Выбрать путь...").
         // Do NOT compare it against min_cmd_id: slots are small numbers and
         // every real click (verb=1,4,5 in the field) was wrongly rejected.
         let command = (ici.lpVerb.0 as usize) & 0xFFFF;
 
         let folders = self.this.folders.lock();
-        let favorites: Vec<&MenuFolder> = folders.iter().filter(|f| f.is_favorite).collect();
-        let max_fav = favorites.len();
+        // Same tree/order as QueryContextMenu: slot i must map to the folder
+        // inserted at slot i, otherwise clicks move files into the wrong folder.
+        let menu_tree = build_menu_tree(&folders);
+        let menu_order = flatten_menu_tree(&menu_tree);
+        let max_fav = menu_order.len();
 
         let sources: Vec<String> = self
             .this
@@ -564,7 +702,7 @@ impl IContextMenu_Impl for QuickSortShellExt_Impl {
 
         // Slot 0..max_fav-1 → favorite folder (mirrors QueryContextMenu)
         if command < max_fav {
-            let target = favorites[command];
+            let target = menu_order[command];
             log::info!("Moving to: {} ({})", target.name, target.id);
 
             let target_id = target.id.clone();
@@ -739,6 +877,10 @@ fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
         #[serde(alias = "sort_order")]
         order: i32,
         color: Option<String>,
+        // Newer configs may carry a parent folder id (tree nesting); older
+        // files have no such field, so deserialization must default to None.
+        #[serde(default)]
+        parent_id: Option<String>,
     }
 
     let config: ConfigFile =
@@ -753,6 +895,7 @@ fn load_folders_from_json() -> Result<Vec<MenuFolder>, String> {
             path: f.path,
             is_favorite: f.favorite,
             color: f.color,
+            parent_id: f.parent_id,
         })
         .collect();
 

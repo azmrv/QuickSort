@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod backup;
 #[cfg(target_os = "windows")]
 mod com;
-mod backup;
 mod commands;
 mod ipc;
 mod logging;
@@ -352,6 +352,7 @@ fn start_tauri() {
             commands::remove_folder_v2,
             commands::toggle_favorite_v2,
             commands::set_folder_color_v2,
+            commands::set_folder_parent_v2,
             commands::get_mode,
             commands::get_pending_file,
             commands::get_pending_files,

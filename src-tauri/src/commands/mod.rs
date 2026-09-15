@@ -69,16 +69,27 @@ pub async fn add_folder_v2(
     state: State<'_, AppState>,
     name: String,
     path: String,
+    parent_id: Option<String>,
 ) -> Result<(), String> {
-    tracing::info!(command = "add_folder_v2", name = %name, path = %path, "handling");
+    tracing::info!(command = "add_folder_v2", name = %name, path = %path, parent_id = ?parent_id, "handling");
     let windows_path = AbsolutePath::new(&path).map_err(|e| {
         tracing::error!(command = "add_folder_v2", error = %e, "invalid path");
         format!("Invalid path: {}", e)
     })?;
-    let folder = Folder::new(&name, windows_path).map_err(|e| {
+    let mut folder = Folder::new(&name, windows_path).map_err(|e| {
         tracing::error!(command = "add_folder_v2", error = %e, "invalid folder");
         format!("Invalid folder: {}", e)
     })?;
+    if let Some(ref pid) = parent_id {
+        let parent = FolderId::from_string(pid).map_err(|e| {
+            tracing::error!(command = "add_folder_v2", error = %e, "invalid parent_id");
+            format!("Invalid parent_id: {}", e)
+        })?;
+        folder.set_parent(Some(parent)).map_err(|e| {
+            tracing::error!(command = "add_folder_v2", error = %e, "invalid parent");
+            format!("Invalid parent: {}", e)
+        })?;
+    }
     let result = state
         .facade
         .add_folder(folder)
@@ -242,6 +253,39 @@ pub async fn set_folder_color_v2(
             auto_backup_after_change();
         }
         Err(e) => tracing::error!(command = "set_folder_color_v2", error = %e, "FAIL"),
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn set_folder_parent_v2(
+    state: State<'_, AppState>,
+    id: String,
+    parent_id: Option<String>,
+) -> Result<(), String> {
+    tracing::info!(command = "set_folder_parent_v2", id = %id, parent_id = ?parent_id, "handling");
+    let folder_id = FolderId::from_string(&id).map_err(|e| {
+        tracing::error!(command = "set_folder_parent_v2", error = %e, "invalid folder ID");
+        format!("Invalid folder ID: {}", e)
+    })?;
+    let parent = match parent_id.as_deref() {
+        Some(pid) => Some(FolderId::from_string(pid).map_err(|e| {
+            tracing::error!(command = "set_folder_parent_v2", error = %e, "invalid parent ID");
+            format!("Invalid parent ID: {}", e)
+        })?),
+        None => None,
+    };
+    let result = state
+        .facade
+        .set_folder_parent(folder_id, parent)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => {
+            tracing::info!(command = "set_folder_parent_v2", "OK");
+            auto_backup_after_change();
+        }
+        Err(e) => tracing::error!(command = "set_folder_parent_v2", error = %e, "FAIL"),
     }
     result
 }

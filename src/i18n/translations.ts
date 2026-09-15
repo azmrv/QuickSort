@@ -325,6 +325,23 @@ export const translations: Record<Locale, Record<string, string>> = {
         // Add Folder Button
         'add_folder_button': 'Add folder',
 
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': 'List',
+        'editor.view.tree': 'Tree',
+        'folder_tree.col.name': 'Name',
+        'folder_tree.col.path': 'Path',
+        'folder_tree.col.last_used': 'Last used',
+        'folder_tree.col.order': 'Order',
+        'folder_tree.col.color': 'Color',
+        'folder_tree.last_used_never': 'Never',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': 'Add folder',
+        'add_folder.parent': 'Parent folder',
+        'add_folder.parent_none': 'None (root)',
+        'add_folder.confirm': 'Add',
+        'add_folder.cancel': 'Cancel',
+
         // Dashboard (0.2.6 feature #19 / plan Q4)
         'dashboard.title': 'System',
         'dashboard.cpu': 'CPU',
@@ -666,6 +683,23 @@ export const translations: Record<Locale, Record<string, string>> = {
         // Add Folder Button
         'add_folder_button': 'Добавить папку',
 
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': 'Список',
+        'editor.view.tree': 'Дерево',
+        'folder_tree.col.name': 'Имя',
+        'folder_tree.col.path': 'Путь',
+        'folder_tree.col.last_used': 'Последнее использование',
+        'folder_tree.col.order': 'Порядок',
+        'folder_tree.col.color': 'Цвет',
+        'folder_tree.last_used_never': 'Никогда',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': 'Добавить папку',
+        'add_folder.parent': 'Родительская папка',
+        'add_folder.parent_none': 'Нет (корневая)',
+        'add_folder.confirm': 'Добавить',
+        'add_folder.cancel': 'Отмена',
+
         // Dashboard (0.2.6 feature #19 / plan Q4)
         'dashboard.title': 'Система',
         'dashboard.cpu': 'ЦП',
@@ -988,6 +1022,23 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         'add_folder_button': 'Ordner hinzufügen',
 
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': 'Liste',
+        'editor.view.tree': 'Baumansicht',
+        'folder_tree.col.name': 'Name',
+        'folder_tree.col.path': 'Pfad',
+        'folder_tree.col.last_used': 'Zuletzt benutzt',
+        'folder_tree.col.order': 'Reihenfolge',
+        'folder_tree.col.color': 'Farbe',
+        'folder_tree.last_used_never': 'Nie',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': 'Ordner hinzufügen',
+        'add_folder.parent': 'Übergeordneter Ordner',
+        'add_folder.parent_none': 'Keine (Stamm)',
+        'add_folder.confirm': 'Hinzufügen',
+        'add_folder.cancel': 'Abbrechen',
+
         // Dashboard (0.2.6 feature #19 / plan Q4)
         'dashboard.title': 'System',
         'dashboard.cpu': 'CPU',
@@ -1307,6 +1358,23 @@ export const translations: Record<Locale, Record<string, string>> = {
         'folder_list.delete': 'Eliminar',
 
         'add_folder_button': 'Agregar carpeta',
+
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': 'Lista',
+        'editor.view.tree': 'Árbol',
+        'folder_tree.col.name': 'Nombre',
+        'folder_tree.col.path': 'Ruta',
+        'folder_tree.col.last_used': 'Último uso',
+        'folder_tree.col.order': 'Orden',
+        'folder_tree.col.color': 'Color',
+        'folder_tree.last_used_never': 'Nunca',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': 'Agregar carpeta',
+        'add_folder.parent': 'Carpeta principal',
+        'add_folder.parent_none': 'Ninguna (raíz)',
+        'add_folder.confirm': 'Agregar',
+        'add_folder.cancel': 'Cancelar',
 
         // Dashboard (0.2.6 feature #19 / plan Q4)
         'dashboard.title': 'Sistema',
@@ -1628,6 +1696,23 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         'add_folder_button': '添加文件夹',
 
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': '列表',
+        'editor.view.tree': '树形',
+        'folder_tree.col.name': '名称',
+        'folder_tree.col.path': '路径',
+        'folder_tree.col.last_used': '最近使用',
+        'folder_tree.col.order': '排序',
+        'folder_tree.col.color': '颜色',
+        'folder_tree.last_used_never': '从未使用',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': '添加文件夹',
+        'add_folder.parent': '父文件夹',
+        'add_folder.parent_none': '无（根目录）',
+        'add_folder.confirm': '添加',
+        'add_folder.cancel': '取消',
+
         // Dashboard (0.2.6 feature #19 / plan Q4)
         'dashboard.title': '系统',
         'dashboard.cpu': 'CPU',
@@ -1947,6 +2032,23 @@ export const translations: Record<Locale, Record<string, string>> = {
         'folder_list.delete': '削除',
 
         'add_folder_button': 'フォルダを追加',
+
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': 'リスト',
+        'editor.view.tree': 'ツリー',
+        'folder_tree.col.name': '名前',
+        'folder_tree.col.path': 'パス',
+        'folder_tree.col.last_used': '最終使用',
+        'folder_tree.col.order': '並び順',
+        'folder_tree.col.color': '色',
+        'folder_tree.last_used_never': '未使用',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': 'フォルダを追加',
+        'add_folder.parent': '親フォルダ',
+        'add_folder.parent_none': 'なし（ルート）',
+        'add_folder.confirm': '追加',
+        'add_folder.cancel': 'キャンセル',
 
         // Dashboard (0.2.6 feature #19 / plan Q4)
         'dashboard.title': 'システム',

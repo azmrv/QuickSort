@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { App } from 'antd';
+import { App, Button, Space } from 'antd';
 import { invoke } from '../lib/invoke';
 import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import FolderList from '../components/FolderList';
+import FolderTree from '../components/FolderTree';
 import AddFolderButton from '../components/AddFolderButton';
 import { AddFoldersFromPathsResult, Folder } from '../types';
 
@@ -30,6 +31,7 @@ const EditorPage: React.FC = () => {
     const { t } = useTranslation();
     const [folders, setFolders] = useState<Folder[]>([]);
     const [isDragOver, setIsDragOver] = useState(false);
+    const [viewMode, setViewMode] = useState<'list' | 'tree'>('list');
     const { message } = App.useApp();
 
     useEffect(() => {
@@ -109,9 +111,9 @@ const EditorPage: React.FC = () => {
         }
     };
 
-    const handleAddFolder = (name: string, path: string) => {
-        logger.action('EditorPage', `add folder: ${name} → ${path}`);
-        invoke('add_folder_v2', { name, path })
+    const handleAddFolder = (name: string, path: string, parentId: string | null) => {
+        logger.action('EditorPage', `add folder: ${name} → ${path} (parent=${parentId ?? 'root'})`);
+        invoke('add_folder_v2', { name, path, parent_id: parentId ?? null })
             .then(() => {
                 logger.info('EditorPage', 'folder added, reloading list');
                 return invoke<Folder[]>('get_folders_v2');
@@ -179,14 +181,34 @@ const EditorPage: React.FC = () => {
 
     return (
         <div className="editor-page">
-            <AddFolderButton onFolderAdded={handleAddFolder} />
-            <FolderList
-                folders={folders}
-                onRename={handleRename}
-                onToggleFavorite={handleToggleFavorite}
-                onSetColor={handleSetColor}
-                onRemove={handleRemove}
-            />
+            <div className="editor-toolbar">
+                <AddFolderButton folders={folders} onFolderAdded={handleAddFolder} />
+                <Space.Compact>
+                    <Button
+                        type={viewMode === 'list' ? 'primary' : 'default'}
+                        onClick={() => setViewMode('list')}
+                    >
+                        {t('editor.view.list')}
+                    </Button>
+                    <Button
+                        type={viewMode === 'tree' ? 'primary' : 'default'}
+                        onClick={() => setViewMode('tree')}
+                    >
+                        {t('editor.view.tree')}
+                    </Button>
+                </Space.Compact>
+            </div>
+            {viewMode === 'tree' ? (
+                <FolderTree folders={folders} />
+            ) : (
+                <FolderList
+                    folders={folders}
+                    onRename={handleRename}
+                    onToggleFavorite={handleToggleFavorite}
+                    onSetColor={handleSetColor}
+                    onRemove={handleRemove}
+                />
+            )}
             {isDragOver && (
                 <div className="folder-drop-overlay">
                     <span className="folder-drop-hint">{t('editor.drop_hint')}</span>

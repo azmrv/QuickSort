@@ -66,4 +66,16 @@ pub trait ManageFolders: Send + Sync {
         id: FolderId,
         color: Option<String>,
     ) -> Result<(), UseCaseError>;
+
+    /// Sets or clears the parent folder for tree nesting.
+    ///
+    /// `parent_id` of `None` moves the folder to the root level. The use
+    /// case validates that the parent exists, no cycles are formed, and
+    /// the resulting nesting depth does not exceed the maximum allowed
+    /// depth (10 levels).
+    async fn set_folder_parent(
+        &self,
+        id: FolderId,
+        parent_id: Option<FolderId>,
+    ) -> Result<(), UseCaseError>;
 }
