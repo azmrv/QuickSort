@@ -1,7 +1,9 @@
 //! Job model for the persistent operation queue.
 
 use chrono::Utc;
+use quicksort_application::OperationSource;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use quicksort_ipc_contract::{ExecuteOperationData, JobProgressDto, JobStatusDto};
 
@@ -31,13 +33,22 @@ impl JobStatus {
 ///
 /// The raw `ExecuteOperationData` is stored so a job can be replayed after
 /// an app restart without depending on a live `OperationCommand` in memory.
+///
+/// `source`/`correlation_id` live on the *job*, not on the wire contract:
+/// the IPC contract is exclusively used by the context-menu DLL (source is
+/// always `ContextMenu` there), while frontend enqueues go through Tauri
+/// commands and must keep their origin across replay (spec #15, 0.2.6).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
     pub id: String,
     pub data: ExecuteOperationData,
+    #[serde(default)]
+    pub source: OperationSource,
+    #[serde(default)]
+    pub correlation_id: Option<Uuid>,
     pub status: JobStatus,
-    pub current: u32,
-    pub total: u32,
+    pub current: u64,
+    pub total: u64,
     pub operation_id: Option<String>,
     pub error: Option<String>,
     pub created_at: u64,
@@ -45,12 +56,19 @@ pub struct Job {
 }
 
 impl Job {
-    pub fn new(id: String, data: ExecuteOperationData) -> Self {
+    pub fn new(
+        id: String,
+        data: ExecuteOperationData,
+        source: OperationSource,
+        correlation_id: Option<Uuid>,
+    ) -> Self {
         let now = Utc::now().timestamp().max(0) as u64;
-        let total = data.source_paths.len() as u32;
+        let total = data.source_paths.len() as u64;
         Self {
             id,
             data,
+            source,
+            correlation_id,
             status: JobStatus::Queued,
             current: 0,
             total,

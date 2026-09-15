@@ -68,6 +68,7 @@ async fn delete_single_file() {
         overwrite_policy: OverwritePolicy::Skip, // not relevant for Delete
         target_paths: None,
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     // ---- When ----
@@ -126,6 +127,7 @@ async fn delete_nonexistent_file() {
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: None,
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     // ---- When ----

@@ -1,11 +1,32 @@
-use crate::state::AppState;
+use crate::state::{AppState, SystemInfoSample};
 use quicksort_application::{
-    AbsolutePath, ExecuteOperation, Folder, FolderId, GetFolders, GetOperationHistory,
-    LoadSettings, ManageFolders, OperationId, PluginConfig, PluginInfoDto, PluginManager,
-    SaveSettings, Settings, UndoOperation,
+    AbsolutePath, ExecuteOperation, Folder, FolderId, FolderMetadata, GetFolders,
+    GetOperationHistory, LoadSettings, LogLevel, ManageFolders, OperationErrorDto, OperationId,
+    PluginConfig, PluginInfoDto, PluginManager, SaveSettings, Settings, UndoErrorKind,
+    UndoOperation,
 };
+use serde::Serialize;
 use std::path::PathBuf;
+use sysinfo::{Components, DiskRefreshKind, Disks, Networks, System};
 use tauri::{AppHandle, State};
+
+/// A folder paired with live file-system metadata for the UI.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FolderWithMetadata {
+    pub folder: Folder,
+    pub metadata: FolderMetadata,
+}
+
+/// Outcome of adding folders by dropping them onto the Folder tab.
+/// `skipped` holds per-path human-readable reasons (invalid path,
+/// not a directory, duplicate, invalid name).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AddFoldersFromPathsResult {
+    pub added: usize,
+    pub skipped: Vec<String>,
+}
 
 #[tauri::command]
 pub async fn get_folders_v2(state: State<'_, AppState>) -> Result<Vec<Folder>, String> {
@@ -19,30 +40,146 @@ pub async fn get_folders_v2(state: State<'_, AppState>) -> Result<Vec<Folder>, S
 }
 
 #[tauri::command]
+pub async fn get_folders_with_metadata(
+    state: State<'_, AppState>,
+) -> Result<Vec<FolderWithMetadata>, String> {
+    tracing::info!(command = "get_folders_with_metadata", "handling");
+    let folders = state.facade.get_all().await.map_err(|e| e.to_string())?;
+
+    let mut result = Vec::with_capacity(folders.len());
+    for folder in folders {
+        let metadata = state
+            .fs
+            .folder_metadata(&folder.path)
+            .await
+            .map_err(|e| e.to_string())?;
+        result.push(FolderWithMetadata { folder, metadata });
+    }
+
+    tracing::info!(
+        command = "get_folders_with_metadata",
+        count = result.len(),
+        "OK"
+    );
+    Ok(result)
+}
+
+#[tauri::command]
 pub async fn add_folder_v2(
     state: State<'_, AppState>,
     name: String,
     path: String,
+    parent_id: Option<String>,
 ) -> Result<(), String> {
-    tracing::info!(command = "add_folder_v2", name = %name, path = %path, "handling");
+    tracing::info!(command = "add_folder_v2", name = %name, path = %path, parent_id = ?parent_id, "handling");
     let windows_path = AbsolutePath::new(&path).map_err(|e| {
         tracing::error!(command = "add_folder_v2", error = %e, "invalid path");
         format!("Invalid path: {}", e)
     })?;
-    let folder = Folder::new(&name, windows_path).map_err(|e| {
+    let mut folder = Folder::new(&name, windows_path).map_err(|e| {
         tracing::error!(command = "add_folder_v2", error = %e, "invalid folder");
         format!("Invalid folder: {}", e)
     })?;
+    if let Some(ref pid) = parent_id {
+        let parent = FolderId::from_string(pid).map_err(|e| {
+            tracing::error!(command = "add_folder_v2", error = %e, "invalid parent_id");
+            format!("Invalid parent_id: {}", e)
+        })?;
+        folder.set_parent(Some(parent)).map_err(|e| {
+            tracing::error!(command = "add_folder_v2", error = %e, "invalid parent");
+            format!("Invalid parent: {}", e)
+        })?;
+    }
     let result = state
         .facade
         .add_folder(folder)
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(()) => tracing::info!(command = "add_folder_v2", "OK"),
+        Ok(()) => {
+            tracing::info!(command = "add_folder_v2", "OK");
+            auto_backup_after_change();
+        }
         Err(e) => tracing::error!(command = "add_folder_v2", error = %e, "FAIL"),
     }
     result
+}
+
+/// Add several folders by absolute path in one call.
+///
+/// Used by the Folder tab drag-and-drop: the frontend receives the raw
+/// dropped paths from Explorer and sends them here verbatim. Only existing
+/// directories are added; every other path (file, invalid path, duplicate,
+/// invalid name) is reported in `skipped` instead of failing the whole batch.
+#[tauri::command]
+pub async fn add_folders_from_paths(
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+) -> Result<AddFoldersFromPathsResult, String> {
+    tracing::info!(
+        command = "add_folders_from_paths",
+        count = paths.len(),
+        "handling"
+    );
+
+    let mut added = 0usize;
+    let mut skipped: Vec<String> = Vec::new();
+
+    for raw_path in paths {
+        let windows_path = match AbsolutePath::new(&raw_path) {
+            Ok(path) => path,
+            Err(e) => {
+                skipped.push(format!("{}: {}", raw_path, e));
+                continue;
+            }
+        };
+
+        match state.fs.is_dir(&windows_path).await {
+            Ok(true) => {}
+            Ok(false) => {
+                skipped.push(format!("{}: not a directory", raw_path));
+                continue;
+            }
+            Err(e) => {
+                skipped.push(format!("{}: {}", raw_path, e));
+                continue;
+            }
+        }
+
+        let name = match windows_path.file_name() {
+            Some(name) => name.to_string(),
+            None => {
+                skipped.push(format!("{}: no folder name", raw_path));
+                continue;
+            }
+        };
+
+        let folder = match Folder::new(&name, windows_path) {
+            Ok(folder) => folder,
+            Err(e) => {
+                skipped.push(format!("{}: {}", raw_path, e));
+                continue;
+            }
+        };
+
+        match state.facade.add_folder(folder).await {
+            Ok(()) => added += 1,
+            Err(e) => {
+                skipped.push(format!("{}: {}", raw_path, e));
+            }
+        }
+    }
+
+    if added > 0 {
+        auto_backup_after_change();
+    }
+    tracing::info!(
+        command = "add_folders_from_paths",
+        added = added,
+        skipped = skipped.len(),
+        "OK"
+    );
+    Ok(AddFoldersFromPathsResult { added, skipped })
 }
 
 #[tauri::command]
@@ -58,7 +195,10 @@ pub async fn remove_folder_v2(state: State<'_, AppState>, id: String) -> Result<
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(()) => tracing::info!(command = "remove_folder_v2", "OK"),
+        Ok(()) => {
+            tracing::info!(command = "remove_folder_v2", "OK");
+            auto_backup_after_change();
+        }
         Err(e) => tracing::error!(command = "remove_folder_v2", error = %e, "FAIL"),
     }
     result
@@ -82,7 +222,10 @@ pub async fn toggle_favorite_v2(
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(()) => tracing::info!(command = "toggle_favorite_v2", "OK"),
+        Ok(()) => {
+            tracing::info!(command = "toggle_favorite_v2", "OK");
+            auto_backup_after_change();
+        }
         Err(e) => tracing::error!(command = "toggle_favorite_v2", error = %e, "FAIL"),
     }
     result
@@ -105,8 +248,44 @@ pub async fn set_folder_color_v2(
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(()) => tracing::info!(command = "set_folder_color_v2", "OK"),
+        Ok(()) => {
+            tracing::info!(command = "set_folder_color_v2", "OK");
+            auto_backup_after_change();
+        }
         Err(e) => tracing::error!(command = "set_folder_color_v2", error = %e, "FAIL"),
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn set_folder_parent_v2(
+    state: State<'_, AppState>,
+    id: String,
+    parent_id: Option<String>,
+) -> Result<(), String> {
+    tracing::info!(command = "set_folder_parent_v2", id = %id, parent_id = ?parent_id, "handling");
+    let folder_id = FolderId::from_string(&id).map_err(|e| {
+        tracing::error!(command = "set_folder_parent_v2", error = %e, "invalid folder ID");
+        format!("Invalid folder ID: {}", e)
+    })?;
+    let parent = match parent_id.as_deref() {
+        Some(pid) => Some(FolderId::from_string(pid).map_err(|e| {
+            tracing::error!(command = "set_folder_parent_v2", error = %e, "invalid parent ID");
+            format!("Invalid parent ID: {}", e)
+        })?),
+        None => None,
+    };
+    let result = state
+        .facade
+        .set_folder_parent(folder_id, parent)
+        .await
+        .map_err(|e| e.to_string());
+    match &result {
+        Ok(()) => {
+            tracing::info!(command = "set_folder_parent_v2", "OK");
+            auto_backup_after_change();
+        }
+        Err(e) => tracing::error!(command = "set_folder_parent_v2", error = %e, "FAIL"),
     }
     result
 }
@@ -131,20 +310,63 @@ pub async fn execute_operation_v2(
     result
 }
 
+/// Records a user intent (file selection) for audit logging.
+///
+/// Called by the frontend Search/Selector pages when the user picks files
+/// or a target folder. Generates a `correlation_id` when the caller does
+/// not provide one and returns it, so the caller can attach the same id to
+/// the subsequently enqueued operation (spec #15, release 0.2.6).
+#[tauri::command]
+pub fn log_user_select(
+    source: String,
+    paths: Vec<String>,
+    correlation_id: Option<String>,
+) -> Result<String, String> {
+    let correlation_id = correlation_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let src = correlation_id.clone();
+    let source_map = match source.as_str() {
+        "Search" => "search",
+        "Selector" => "selector",
+        "ContextMenu" => "context_menu",
+        _ => "api",
+    };
+    tracing::info!(
+        event = "user-select",
+        source = source_map,
+        file_count = paths.len(),
+        correlation_id = %src,
+        paths = ?paths,
+        "user intent recorded"
+    );
+    Ok(correlation_id)
+}
+
 #[tauri::command]
 pub async fn undo_operation_v2(
     state: State<'_, AppState>,
     operation_id: String,
-) -> Result<quicksort_application::OperationResult, String> {
+) -> Result<quicksort_application::OperationResult, OperationErrorDto> {
     tracing::info!(command = "undo_operation_v2", operation_id = %operation_id, "handling");
     let id = OperationId::from_string(&operation_id).map_err(|e| {
         tracing::error!(command = "undo_operation_v2", error = %e, "invalid operation ID");
-        format!("Invalid operation ID: {}", e)
+        OperationErrorDto {
+            kind: UndoErrorKind::Unknown,
+            message: format!("Invalid operation ID: {e}"),
+        }
     })?;
-    let result = state.facade.undo(id).await.map_err(|e| e.to_string());
+    let result = state
+        .facade
+        .undo(id)
+        .await
+        .map_err(|e| e.to_operation_error());
     match &result {
         Ok(r) => tracing::info!(command = "undo_operation_v2", state = ?r.state, "OK"),
-        Err(e) => tracing::error!(command = "undo_operation_v2", error = %e, "FAIL"),
+        Err(e) => tracing::error!(
+            command = "undo_operation_v2",
+            kind = ?e.kind,
+            message = %e.message,
+            "FAIL"
+        ),
     }
     result
 }
@@ -158,11 +380,14 @@ pub async fn undo_operation_v2(
 pub async fn repeat_operation_v2(
     state: State<'_, AppState>,
     operation_id: String,
-) -> Result<quicksort_application::OperationResult, String> {
+) -> Result<quicksort_application::OperationResult, OperationErrorDto> {
     tracing::info!(command = "repeat_operation_v2", operation_id = %operation_id, "handling");
     let id = OperationId::from_string(&operation_id).map_err(|e| {
         tracing::error!(command = "repeat_operation_v2", error = %e, "invalid operation ID");
-        format!("Invalid operation ID: {}", e)
+        OperationErrorDto {
+            kind: UndoErrorKind::Unknown,
+            message: format!("Invalid operation ID: {e}"),
+        }
     })?;
 
     // Find the original operation in the in-memory history.
@@ -170,12 +395,15 @@ pub async fn repeat_operation_v2(
         .facade
         .get_all_operations()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_operation_error())?;
     let original = match operations.iter().find(|op| op.id == id) {
         Some(op) => op.clone(),
         None => {
             tracing::error!(command = "repeat_operation_v2", "operation not found");
-            return Err(format!("Operation not found: {}", operation_id));
+            return Err(OperationErrorDto {
+                kind: UndoErrorKind::Unknown,
+                message: format!("Operation not found: {}", operation_id),
+            });
         }
     };
 
@@ -183,7 +411,11 @@ pub async fn repeat_operation_v2(
     // Not required for Delete/Rename, which carry no target folder.
     let target_folder_id = match &original.target_folder_path {
         Some(target_path) => {
-            let folders = state.facade.get_all().await.map_err(|e| e.to_string())?;
+            let folders = state
+                .facade
+                .get_all()
+                .await
+                .map_err(|e| e.to_operation_error())?;
             match folders.iter().find(|f| &f.path == target_path) {
                 Some(folder) => Some(folder.id),
                 None => {
@@ -192,14 +424,19 @@ pub async fn repeat_operation_v2(
                         path = %target_path,
                         "target folder not found"
                     );
-                    return Err(format!("Target folder not found: {}", target_path));
+                    return Err(OperationErrorDto {
+                        kind: UndoErrorKind::Unknown,
+                        message: format!("Target folder not found: {}", target_path),
+                    });
                 }
             }
         }
         None => None,
     };
 
-    // Rebuild the original command and execute it again.
+    // Rebuild the original command and execute it again. The source is
+    // inherited so the Operations UI keeps labelling repeats correctly;
+    // a fresh correlation_id is generated for the new intent (spec #15).
     let command = quicksort_application::OperationCommand {
         operation_type: original.operation_type,
         source_paths: original.source_paths,
@@ -207,13 +444,15 @@ pub async fn repeat_operation_v2(
         target_paths: original.target_paths,
         overwrite_policy: quicksort_application::OverwritePolicy::Skip,
         duplicate_check_mode: quicksort_application::DuplicateCheckMode::default(),
+        source: original.source,
+        correlation_id: uuid::Uuid::new_v4(),
     };
 
     let result = state
         .facade
         .execute(command)
         .await
-        .map_err(|e| e.to_string());
+        .map_err(|e| e.to_operation_error());
     match &result {
         Ok(r) => tracing::info!(
             command = "repeat_operation_v2",
@@ -221,7 +460,12 @@ pub async fn repeat_operation_v2(
             files = r.processed_files,
             "OK"
         ),
-        Err(e) => tracing::error!(command = "repeat_operation_v2", error = %e, "FAIL"),
+        Err(e) => tracing::error!(
+            command = "repeat_operation_v2",
+            kind = ?e.kind,
+            message = %e.message,
+            "FAIL"
+        ),
     }
     result
 }
@@ -264,6 +508,17 @@ pub fn check_menu_status() -> bool {
 #[tauri::command]
 pub fn get_logs() -> Vec<serde_json::Value> {
     crate::logging::get_recent_logs()
+}
+
+#[tauri::command]
+pub fn set_log_level(level: LogLevel) -> Result<(), String> {
+    tracing::info!(command = "set_log_level", level = ?level, "handling");
+    let result = crate::logging::set_log_level(level);
+    match &result {
+        Ok(()) => tracing::info!(command = "set_log_level", "OK"),
+        Err(e) => tracing::error!(command = "set_log_level", error = %e, "FAIL"),
+    }
+    result
 }
 
 #[tauri::command]
@@ -332,7 +587,10 @@ pub async fn save_settings(state: State<'_, AppState>, settings: Settings) -> Re
         .await
         .map_err(|e| e.to_string());
     match &result {
-        Ok(()) => tracing::info!(command = "save_settings", "OK"),
+        Ok(()) => {
+            tracing::info!(command = "save_settings", "OK");
+            auto_backup_after_change();
+        }
         Err(e) => tracing::error!(command = "save_settings", error = %e, "FAIL"),
     }
     result
@@ -654,10 +912,20 @@ pub async fn enqueue_operation(
     command: quicksort_ipc_contract::ExecuteOperationData,
 ) -> Result<String, String> {
     tracing::info!(command = "enqueue_operation", "handling");
-    let job_id = state.queue.enqueue(command).map_err(|e| {
-        tracing::error!(command = "enqueue_operation", error = %e, "FAIL");
-        e
-    })?;
+    // Raw ExecuteOperationData — served by the legacy path and the DLL pipe;
+    // the channel is the context menu, any correlation_id is generated by the
+    // worker (spec #15).
+    let job_id = state
+        .queue
+        .enqueue(
+            command,
+            quicksort_application::OperationSource::ContextMenu,
+            None,
+        )
+        .map_err(|e| {
+            tracing::error!(command = "enqueue_operation", error = %e, "FAIL");
+            e
+        })?;
     tracing::info!(command = "enqueue_operation", job_id = %job_id.id, "OK");
     Ok(job_id.id)
 }
@@ -671,10 +939,15 @@ pub async fn enqueue_operation_v2(
 ) -> Result<String, String> {
     tracing::info!(command = "enqueue_operation_v2", op_type = ?command.operation_type, sources = ?command.source_paths, "handling");
     let data = crate::queue::command_to_execute_data(&command);
-    let job_id = state.queue.enqueue(data).map_err(|e| {
-        tracing::error!(command = "enqueue_operation_v2", error = %e, "FAIL");
-        e
-    })?;
+    // Frontend enqueues carry their origin on the job so replay keeps
+    // source/correlation_id intact (spec #15, release 0.2.6).
+    let job_id = state
+        .queue
+        .enqueue(data, command.source, Some(command.correlation_id))
+        .map_err(|e| {
+            tracing::error!(command = "enqueue_operation_v2", error = %e, "FAIL");
+            e
+        })?;
     tracing::info!(command = "enqueue_operation_v2", job_id = %job_id.id, "OK");
     Ok(job_id.id)
 }
@@ -700,4 +973,224 @@ pub async fn cancel_job(state: State<'_, AppState>, job_id: String) -> Result<()
         Err(e) => tracing::error!(command = "cancel_job", error = %e, "FAIL"),
     }
     result
+}
+
+// ---------------------------------------------------------------------------
+// System information (Dashboard, 0.2.6 feature #19 / plan Q4)
+// ---------------------------------------------------------------------------
+
+/// Snapshot of system resource metrics returned to the frontend Dashboard.
+/// CPU usage is the average across all cores; temperature is read from
+/// platform-specific hardware sensors when available.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SystemInfoDto {
+    /// Average CPU utilization across all cores (0.0 – 100.0).
+    pub cpu_usage: f32,
+    /// Number of logical CPU cores.
+    pub cpu_cores: usize,
+    /// Current CPU frequency in MHz (0 if unavailable).
+    pub cpu_frequency_mhz: u64,
+    /// CPU die temperature in °C, if the platform exposes sensor data.
+    pub cpu_temperature: Option<f32>,
+    /// Used RAM in bytes.
+    pub ram_used_bytes: u64,
+    /// Total physical RAM in bytes.
+    pub ram_total_bytes: u64,
+    /// Used disk space across all fixed drives in bytes.
+    pub disk_used_bytes: u64,
+    /// Total disk space across all fixed drives in bytes.
+    pub disk_total_bytes: u64,
+    /// Disk read throughput in bytes/sec since the previous poll.
+    pub disk_read_bytes_per_sec: u64,
+    /// Disk write throughput in bytes/sec since the previous poll.
+    pub disk_write_bytes_per_sec: u64,
+    /// Network receive throughput in bytes/sec since the previous poll.
+    pub network_rx_bytes_per_sec: u64,
+    /// Network transmit throughput in bytes/sec since the previous poll.
+    pub network_tx_bytes_per_sec: u64,
+}
+
+/// Returns a snapshot of current system resource metrics for the Dashboard.
+///
+/// Disk/network throughput fields are computed as per-second deltas between
+/// the previous and current poll using `AppState::system_sample`. On the
+/// first call they are zero.
+#[tauri::command]
+pub async fn get_system_info(state: State<'_, AppState>) -> Result<SystemInfoDto, String> {
+    let mut sys = System::new();
+    sys.refresh_memory();
+    // First CPU refresh — needed by sysinfo to establish a baseline.
+    sys.refresh_cpu_all();
+    // Small sleep so the next refresh yields a meaningful utilization value.
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    sys.refresh_cpu_all();
+
+    // CPU temperature — best-effort, not available on all platforms.
+    let cpu_temperature = Components::new_with_refreshed_list()
+        .into_iter()
+        .find(|c| {
+            let label = c.label().to_lowercase();
+            label.contains("cpu") || label.contains("core") || label.contains("processor")
+        })
+        .and_then(|c| c.temperature());
+
+    // Aggregate disk stats. `everything()` refreshes Kind + Storage + IoUsage,
+    // and `usage()` exposes cumulative read/written totals.
+    let mut disk_read: u64 = 0;
+    let mut disk_write: u64 = 0;
+    let mut disk_used: u64 = 0;
+    let mut disk_total: u64 = 0;
+    for disk in Disks::new_with_refreshed_list_specifics(DiskRefreshKind::everything()).list() {
+        let total = disk.total_space();
+        let available = disk.available_space();
+        disk_total += total;
+        disk_used += total - available;
+        disk_read += disk.usage().total_read_bytes;
+        disk_write += disk.usage().total_written_bytes;
+    }
+
+    // Aggregate network stats (cumulative totals since boot).
+    let mut network_rx: u64 = 0;
+    let mut network_tx: u64 = 0;
+    for data in Networks::new_with_refreshed_list().list().values() {
+        network_rx += data.total_received();
+        network_tx += data.total_transmitted();
+    }
+
+    // Compute per-second throughput deltas against the previous sample.
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64);
+
+    let mut sample = state.system_sample.lock();
+    let (disk_read_bps, disk_write_bps, network_rx_bps, network_tx_bps) =
+        if sample.timestamp_ms == 0 {
+            // First poll — store the baseline and report zero throughput.
+            *sample = SystemInfoSample {
+                disk_read,
+                disk_write,
+                network_rx,
+                network_tx,
+                timestamp_ms: now_ms,
+            };
+            (0, 0, 0, 0)
+        } else {
+            let dt_ms = now_ms.saturating_sub(sample.timestamp_ms);
+            let dt_secs = (dt_ms as f64) / 1000.0;
+            let bps = |cur: u64, prev: u64| {
+                if dt_secs > 0.0 && cur >= prev {
+                    ((cur - prev) as f64 / dt_secs) as u64
+                } else {
+                    0
+                }
+            };
+            let speeds = (
+                bps(disk_read, sample.disk_read),
+                bps(disk_write, sample.disk_write),
+                bps(network_rx, sample.network_rx),
+                bps(network_tx, sample.network_tx),
+            );
+            *sample = SystemInfoSample {
+                disk_read,
+                disk_write,
+                network_rx,
+                network_tx,
+                timestamp_ms: now_ms,
+            };
+            speeds
+        };
+    drop(sample);
+
+    let ram_total = sys.total_memory();
+    let ram_used = sys.used_memory();
+
+    let dto = SystemInfoDto {
+        cpu_usage: sys.global_cpu_usage(),
+        cpu_cores: sys.cpus().len(),
+        cpu_frequency_mhz: sys.cpus().first().map_or(0, |c| c.frequency()),
+        cpu_temperature,
+        ram_used_bytes: ram_used,
+        ram_total_bytes: ram_total,
+        disk_used_bytes: disk_used,
+        disk_total_bytes: disk_total,
+        disk_read_bytes_per_sec: disk_read_bps,
+        disk_write_bytes_per_sec: disk_write_bps,
+        network_rx_bytes_per_sec: network_rx_bps,
+        network_tx_bytes_per_sec: network_tx_bps,
+    };
+
+    tracing::debug!(
+        command = "get_system_info",
+        cpu = dto.cpu_usage,
+        ram_pct = if ram_total > 0 {
+            (ram_used as f64 / ram_total as f64 * 100.0) as f32
+        } else {
+            0.0
+        },
+        "OK"
+    );
+    Ok(dto)
+}
+
+// ---------------------------------------------------------------------------
+// Backup commands (0.2.6 feature #20 / plan Q7)
+// ---------------------------------------------------------------------------
+
+/// Create a ZIP archive of settings.json + folders.json at the given path
+/// chosen via a save dialog on the frontend.
+#[tauri::command]
+pub fn backup_data(target_path: String) -> Result<String, String> {
+    tracing::info!(command = "backup_data", target = %target_path, "handling");
+    match crate::backup::create_backup(std::path::Path::new(&target_path)) {
+        Ok(path) => {
+            tracing::info!(command = "backup_data", "OK — {}", path.display());
+            Ok(path.display().to_string())
+        }
+        Err(e) => {
+            tracing::error!(command = "backup_data", error = %e, "FAIL");
+            Err(e)
+        }
+    }
+}
+
+/// Restore settings.json + folders.json from a user-selected ZIP archive.
+#[tauri::command]
+pub fn restore_data(backup_path: String) -> Result<String, String> {
+    tracing::info!(command = "restore_data", backup = %backup_path, "handling");
+    match crate::backup::restore_backup(std::path::Path::new(&backup_path)) {
+        Ok(count) => {
+            tracing::info!(command = "restore_data", restored = count, "OK");
+            Ok(format!("Restored {count} file(s) from backup"))
+        }
+        Err(e) => {
+            tracing::error!(command = "restore_data", error = %e, "FAIL");
+            Err(e)
+        }
+    }
+}
+
+/// Best-effort automatic backup after a successful config change (plan Q7).
+/// Failures are only logged so the originating command keeps working.
+fn auto_backup_after_change() {
+    match crate::backup::auto_backup() {
+        Ok(path) => tracing::debug!(backup = %path.display(), "auto-backup created"),
+        Err(e) => tracing::warn!(error = %e, "auto-backup failed"),
+    }
+}
+
+/// Create an automatic backup in the data dir, pruning the oldest archives.
+#[tauri::command]
+pub fn auto_backup_now() -> Result<String, String> {
+    tracing::info!(command = "auto_backup_now", "handling");
+    match crate::backup::auto_backup() {
+        Ok(path) => {
+            tracing::info!(command = "auto_backup_now", "OK — {}", path.display());
+            Ok(path.display().to_string())
+        }
+        Err(e) => {
+            tracing::error!(command = "auto_backup_now", error = %e, "FAIL");
+            Err(e)
+        }
+    }
 }

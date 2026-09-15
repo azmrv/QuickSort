@@ -2,11 +2,22 @@ import { useState, useEffect } from 'react';
 import { App } from 'antd';
 import { invoke } from '../lib/invoke';
 import { emit } from '@tauri-apps/api/event';
+import { save, open } from '@tauri-apps/plugin-dialog';
+import { isEnabled, enable, disable } from '@tauri-apps/plugin-autostart';
 import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
 import { LOCALE_LABELS, type Locale } from '../i18n/translations';
+import LogPage from './LogPage';
+import PluginsPage from './PluginsPage';
 
-const LOG_LEVELS = ['info', 'debug', 'warn', 'error'];
+// Log levels understood by the backend tracing subscriber (src-tauri/src/logging.rs).
+const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error'] as const;
+type LogLevel = (typeof LOG_LEVELS)[number];
+
+interface LoggingConfig {
+    level: LogLevel;
+    format: 'text' | 'json';
+}
 
 interface Settings {
     default_operation: 'Move' | 'Copy';
@@ -17,27 +28,69 @@ interface Settings {
     };
     theme_mode: 'system' | 'light' | 'dark';
     locale: Locale;
+    logging: LoggingConfig;
 }
+
+// Defaults for the logging config so the page works even when the field
+// is absent from an older settings.json on disk.
+const DEFAULT_LOGGING: LoggingConfig = { level: 'info', format: 'text' };
+
+const DEFAULT_SETTINGS: Settings = {
+    default_operation: 'Move',
+    default_overwrite_policy: 'Skip',
+    duplicate_check: {
+        enabled: true,
+        mode: 'name',
+    },
+    theme_mode: 'system',
+    locale: 'en',
+    logging: DEFAULT_LOGGING,
+};
 
 const SettingsPage: React.FC = () => {
     const { t } = useTranslation();
     const { message } = App.useApp();
-    const [logLevel, setLogLevel] = useState('info');
-    const [settings, setSettings] = useState<Settings>({
-        default_operation: 'Move',
-        default_overwrite_policy: 'Skip',
-        duplicate_check: {
-            enabled: true,
-            mode: 'name',
-        },
-        theme_mode: 'system',
-        locale: 'en',
+const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+const [loading, setLoading] = useState(true);
+const [autostartEnabled, setAutostartEnabled] = useState(false);
+
+useEffect(() => {
+    // Current OS autostart state (Windows registry) is independent of settings.json,
+    // so it is loaded separately from the plugin.
+    isEnabled().then(setAutostartEnabled).catch((err) => {
+        logger.error('SettingsPage', 'Failed to read autostart state', err);
     });
-    const [loading, setLoading] = useState(true);
+}, []);
+
+const toggleAutostart = async () => {
+    const next = !autostartEnabled;
+    logger.action('SettingsPage', next ? 'enable autostart' : 'disable autostart');
+    try {
+        if (next) {
+            await enable();
+        } else {
+            await disable();
+        }
+        setAutostartEnabled(next);
+    } catch (err) {
+        logger.error('SettingsPage', 'Failed to change autostart state', err);
+        message.error(`Error: ${err}`);
+    }
+};
 
     useEffect(() => {
-        invoke<Settings>('get_settings')
-            .then(setSettings)
+        invoke<Partial<Settings>>('get_settings')
+            .then((loaded) => {
+                const next: Settings = {
+                    ...DEFAULT_SETTINGS,
+                    ...loaded,
+                    logging: {
+                        ...DEFAULT_LOGGING,
+                        ...(loaded.logging ?? {}),
+                    },
+                };
+                setSettings(next);
+            })
             .catch((err) => {
                 logger.error('SettingsPage', 'Failed to load settings', err);
             })
@@ -240,6 +293,25 @@ const SettingsPage: React.FC = () => {
                 </div>
             </div>
 
+            {/* Autostart (0.2.6 feature #23 / plan Q6) */}
+            <div>
+                <h3 style={sectionStyle}>{t('settings.autostart.title')}</h3>
+                <p style={labelStyle}>
+                    {t('settings.autostart.description')}
+                </p>
+                <div style={toggleContainerStyle}>
+                    <span style={{ color: 'var(--qs-text-secondary)', fontSize: '14px' }}>
+                        {t('settings.autostart.toggle')}
+                    </span>
+                    <button
+                        style={toggleStyle(autostartEnabled)}
+                        onClick={toggleAutostart}
+                    >
+                        <div style={toggleDotStyle(autostartEnabled)} />
+                    </button>
+                </div>
+            </div>
+
             {/* Default Actions */}
             <div>
                 <h3 style={sectionStyle}>{t('settings.default_actions.title')}</h3>
@@ -345,19 +417,168 @@ const SettingsPage: React.FC = () => {
                 <p style={labelStyle}>
                     {t('settings.logging.description')}
                 </p>
-                <select
-                    value={logLevel}
-                    onChange={(e) => {
-                        const level = e.target.value;
-                        setLogLevel(level);
-                        logger.action('SettingsPage', `log level changed → ${level}`);
-                    }}
-                    style={selectStyle}
-                >
-                    {LOG_LEVELS.map(l => (
-                        <option key={l} value={l}>{l.toUpperCase()}</option>
-                    ))}
-                </select>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                        <p style={{ ...labelStyle, marginBottom: '4px', fontSize: '13px' }}>
+                            {t('settings.logging.level')}
+                        </p>
+                        <select
+                            value={settings.logging.level}
+                            onChange={(e) => {
+                                const level = e.target.value as LogLevel;
+                                const newSettings = {
+                                    ...settings,
+                                    logging: {
+                                        ...settings.logging,
+                                        level,
+                                    },
+                                };
+                                saveSettings(newSettings);
+                                // Apply immediately so the current session's
+                                // backend logs follow the new level without
+                                // an app restart.
+                                invoke('set_log_level', { level }).catch((err) => {
+                                    logger.error('SettingsPage', 'Failed to apply log level', err);
+                                    message.error(t('settings.logging.level_error'));
+                                });
+                            }}
+                            style={selectStyle}
+                        >
+                            {LOG_LEVELS.map((l) => (
+                                <option key={l} value={l}>
+                                    {t(`settings.logging.level.${l}`)}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <p style={{ ...labelStyle, marginBottom: '4px', fontSize: '13px' }}>
+                            {t('settings.logging.format')}
+                        </p>
+                        <select
+                            value={settings.logging.format}
+                            onChange={(e) => {
+                                const newSettings = {
+                                    ...settings,
+                                    logging: {
+                                        ...settings.logging,
+                                        format: e.target.value as 'text' | 'json',
+                                    },
+                                };
+                                saveSettings(newSettings);
+                            }}
+                            style={selectStyle}
+                        >
+                            <option value="text">{t('settings.logging.format.text')}</option>
+                            <option value="json">{t('settings.logging.format.json')}</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            {/* Live log viewer — moved from the Log tab into Settings per release plan */}
+            <div>
+                <h3 style={sectionStyle}>{t('settings.logs.title')}</h3>
+                <p style={labelStyle}>
+                    {t('settings.logs.description')}
+                </p>
+                <div className="settings-logs-panel">
+                    <LogPage />
+                </div>
+            </div>
+
+            {/* Plugins — moved from the Plugins tab into Settings (0.2.6 feature #17) */}
+            <div>
+                <h3 style={sectionStyle}>{t('settings.plugins.title')}</h3>
+                <p style={labelStyle}>
+                    {t('settings.plugins.description')}
+                </p>
+                <div className="settings-plugins-panel">
+                    <PluginsPage />
+                </div>
+            </div>
+
+            {/* Backup (0.2.6 feature #20 / plan Q7) */}
+            <div>
+                <h3 style={sectionStyle}>{t('settings.backup.title')}</h3>
+                <p style={labelStyle}>
+                    {t('settings.backup.description')}
+                </p>
+                <div style={{ display: 'flex', gap: 'var(--qs-space-sm)' }}>
+                    <button
+                        onClick={async () => {
+                            logger.action('SettingsPage', 'create backup');
+                            try {
+                                const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+                                const target = await save({
+                                    title: t('settings.backup.create'),
+                                    defaultPath: `quicksort-backup-${stamp}.zip`,
+                                    filters: [{ name: 'ZIP', extensions: ['zip'] }],
+                                });
+                                if (!target) return;
+                                await invoke('backup_data', { targetPath: target });
+                                logger.info('SettingsPage', 'Backup created');
+                                message.success(t('settings.backup.created'));
+                            } catch (err) {
+                                logger.error('SettingsPage', 'Backup failed', err);
+                                message.error(`Error: ${err}`);
+                            }
+                        }}
+                        style={{
+                            flex: 1,
+                            padding: 'var(--qs-space-md)',
+                            background: 'var(--qs-accent)',
+                            border: 'none',
+                            borderRadius: 'var(--qs-radius-md)',
+                            color: 'var(--qs-bg-primary)',
+                            fontFamily: 'var(--qs-font-body)',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        {t('settings.backup.create')}
+                    </button>
+                    <button
+                        onClick={async () => {
+                            logger.action('SettingsPage', 'restore backup');
+                            try {
+                                const selected = await open({
+                                    title: t('settings.backup.restore'),
+                                    filters: [{ name: 'ZIP', extensions: ['zip'] }],
+                                    multiple: false,
+                                });
+                                if (!selected || typeof selected !== 'string') return;
+                                await invoke('restore_data', { backupPath: selected });
+                                logger.info('SettingsPage', 'Backup restored');
+                                message.success(t('settings.backup.restored'));
+                                const loaded = await invoke<Partial<Settings>>('get_settings');
+                                setSettings({
+                                    ...DEFAULT_SETTINGS,
+                                    ...loaded,
+                                    logging: { ...DEFAULT_LOGGING, ...(loaded.logging ?? {}) },
+                                });
+                            } catch (err) {
+                                logger.error('SettingsPage', 'Restore failed', err);
+                                message.error(`Error: ${err}`);
+                            }
+                        }}
+                        style={{
+                            flex: 1,
+                            padding: 'var(--qs-space-md)',
+                            background: 'var(--qs-danger-muted)',
+                            border: '1px solid transparent',
+                            borderRadius: 'var(--qs-radius-md)',
+                            color: 'var(--qs-danger)',
+                            fontFamily: 'var(--qs-font-body)',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        {t('settings.backup.restore')}
+                    </button>
+                </div>
             </div>
 
             {/* Application */}

@@ -30,6 +30,10 @@ ManifestDPIAwareness PerMonitorV2
 !include "StrFunc.nsh"
 ${StrCase}
 ${StrLoc}
+; Uninstaller variant of StrLoc: hooks.nsh uses it to poll for a running
+; explorer.exe inside the uninstaller (Call to un.StrLoc is legal in uninstall
+; sections; the plain StrLoc is not).
+${UnStrLoc}
 
 {{#if installer_hooks}}
 !include "{{installer_hooks}}"
@@ -494,11 +498,6 @@ FunctionEnd
   !include "{{this}}"
 {{/each}}
 
-; QuickSort: Override the checkbox label (declared in the generated language files)
-; so the uninstaller asks about "settings" instead of generic "application data".
-LangString deleteAppData ${LANG_RUSSIAN} "Удалить настройки"
-LangString deleteAppData ${LANG_ENGLISH} "Delete settings"
-
 Function .onInit
   ${GetOptions} $CMDLINE "/P" $PassiveMode
   ${IfNot} ${Errors}
@@ -808,9 +807,6 @@ Section Uninstall
   !ifmacrodef NSIS_HOOK_PREUNINSTALL
     !insertmacro NSIS_HOOK_PREUNINSTALL
   !endif
-
-  ; QuickSort: silent kill (app was already stopped in PREUNINSTALL), no dialog
-  !insertmacro QuickSortStopRunning "${MAINBINARYNAME}.exe" qs_un
 
   ; Delete the app directory and its content from disk
   ; Copy main executable

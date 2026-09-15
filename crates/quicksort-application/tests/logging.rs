@@ -10,6 +10,7 @@
 #[path = "mocks.rs"]
 mod mocks;
 
+use std::collections::HashMap;
 use std::fs;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -72,19 +73,39 @@ fn logs_appear_in_daily_rotated_file() {
 // Test 2: #[instrument] span on GetFoldersUseCase::get_all()
 // ===========================================================================
 
+#[derive(Default)]
+struct SpanData {
+    name: String,
+    creation_fields: HashMap<String, String>,
+    recorded_fields: HashMap<String, String>,
+}
+
 struct SpanRecorder {
-    names: Mutex<Vec<String>>,
+    spans: Mutex<HashMap<u64, SpanData>>,
 }
 
 impl SpanRecorder {
     fn new() -> Self {
         Self {
-            names: Mutex::new(Vec::new()),
+            spans: Mutex::new(HashMap::new()),
         }
     }
 
     fn has_span(&self, name: &str) -> bool {
-        self.names.lock().unwrap().iter().any(|n| n == name)
+        self.spans
+            .lock()
+            .unwrap()
+            .values()
+            .any(|span| span.name == name)
+    }
+}
+
+struct SpanVisitor(HashMap<String, String>);
+
+impl tracing::field::Visit for SpanVisitor {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0
+            .insert(field.name().to_string(), format!("{value:?}"));
     }
 }
 
@@ -96,11 +117,36 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for RecordLayer {
     fn on_new_span(
         &self,
         attrs: &tracing::span::Attributes<'_>,
-        _id: &tracing::span::Id,
+        id: &tracing::span::Id,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        let name = attrs.metadata().name().to_string();
-        self.recorder.names.lock().unwrap().push(name);
+        let mut visitor = SpanVisitor(HashMap::new());
+        attrs.values().record(&mut visitor);
+
+        let mut spans = self.recorder.spans.lock().unwrap();
+        spans.insert(
+            id.into_u64(),
+            SpanData {
+                name: attrs.metadata().name().to_string(),
+                creation_fields: visitor.0,
+                recorded_fields: HashMap::new(),
+            },
+        );
+    }
+
+    fn on_record(
+        &self,
+        id: &tracing::span::Id,
+        values: &tracing::span::Record<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut visitor = SpanVisitor(HashMap::new());
+        values.record(&mut visitor);
+
+        let mut spans = self.recorder.spans.lock().unwrap();
+        if let Some(span) = spans.get_mut(&id.into_u64()) {
+            span.recorded_fields.extend(visitor.0);
+        }
     }
 }
 
@@ -129,6 +175,97 @@ async fn get_folders_emits_tracing_span() {
         "Expected a tracing span named 'get_folders' on GetFoldersUseCase::get_all(). \
          This means #[instrument(skip_all)] is missing from the method. \
          Recorded spans: {:?}",
-        recorder.names.lock().unwrap()
+        recorder
+            .spans
+            .lock()
+            .unwrap()
+            .values()
+            .map(|s| s.name.clone())
+            .collect::<Vec<_>>()
+    );
+}
+
+// ===========================================================================
+// Test 3: #[instrument] span with fields on SearchFilesUseCase::search()
+// ===========================================================================
+
+#[tokio::test]
+async fn search_files_emits_tracing_span() {
+    let recorder = Arc::new(SpanRecorder::new());
+    let layer = RecordLayer {
+        recorder: Arc::clone(&recorder),
+    };
+
+    let subscriber = tracing_subscriber::registry()
+        .with(layer)
+        .with(tracing_subscriber::fmt::layer().with_test_writer());
+
+    let _guard = subscriber.set_default();
+
+    let mock_search = mocks::MockFileSearchPort::new();
+    mock_search.set_result(mocks::SearchResult {
+        files: vec![mocks::FileSearchResult {
+            path: "C:\\test\\file.txt".to_string(),
+            name: "file.txt".to_string(),
+            size: 128,
+            is_directory: false,
+            modified_at: Some(1_700_000_000),
+        }],
+        total_count: 1,
+        search_time_ms: 4,
+        truncated: false,
+    });
+
+    let use_case =
+        quicksort_application::use_cases::SearchFilesUseCase::new(Arc::new(mock_search.clone()));
+
+    // Bring the SearchFiles trait into scope so `search()` is callable.
+    use quicksort_application::SearchFiles;
+    let result = use_case.search("report", &["C:\\test".to_string()]).await;
+
+    assert!(result.is_ok());
+
+    assert_eq!(
+        mock_search.last_query(),
+        "report",
+        "SearchFilesUseCase should forward the query text to FileSearchPort"
+    );
+    assert_eq!(
+        mock_search.last_directories(),
+        vec!["C:\\test".to_string()],
+        "SearchFilesUseCase should forward the root directories to FileSearchPort"
+    );
+
+    let spans = recorder.spans.lock().unwrap();
+    let span = spans.values().find(|s| s.name == "search_files");
+    assert!(
+        span.is_some(),
+        "Expected a tracing span named 'search_files' on SearchFilesUseCase::search(). \
+         This means #[instrument(skip_all)] is missing from the method. \
+         Recorded spans: {:?}",
+        spans.values().map(|s| s.name.clone()).collect::<Vec<_>>()
+    );
+
+    let span = span.expect("search_files span");
+    assert_eq!(
+        span.creation_fields.get("query_text").map(String::as_str),
+        Some("report"),
+        "search_files span should carry the query_text creation field"
+    );
+    assert_eq!(
+        span.creation_fields
+            .get("directory_count")
+            .map(String::as_str),
+        Some("1"),
+        "search_files span should carry the directory_count creation field"
+    );
+    assert_eq!(
+        span.recorded_fields.get("result_count").map(String::as_str),
+        Some("1"),
+        "search_files span should record the result_count field"
+    );
+    assert!(
+        span.recorded_fields.contains_key("duration_ms"),
+        "search_files span should record the duration_ms field"
     );
 }

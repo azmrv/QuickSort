@@ -1,9 +1,15 @@
 use std::collections::VecDeque;
+use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 use tauri::Emitter;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::registry::Registry;
+use tracing_subscriber::reload;
 use tracing_subscriber::util::SubscriberInitExt;
+
+use quicksort_application::{LogFormat, LogLevel, LoggingConfig};
 
 static APP_HANDLE: OnceLock<Mutex<Option<tauri::AppHandle>>> = OnceLock::new();
 
@@ -15,6 +21,10 @@ static LOG_BUFFER: Mutex<VecDeque<serde_json::Value>> = Mutex::new(VecDeque::new
 const MAX_BUFFERED_LOGS: usize = 500;
 
 static _FILE_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> = OnceLock::new();
+
+// Runtime handle for switching the active log level without restarting the
+// app (P1-6b). Populated during `init()`; used by the `set_log_level` command.
+static RELOAD_HANDLE: OnceLock<reload::Handle<EnvFilter, Registry>> = OnceLock::new();
 
 struct FrontendLayer;
 
@@ -113,34 +123,152 @@ impl tracing::field::Visit for FieldVisitor {
     }
 }
 
+// Partial settings.json model — only the logging section is deserialized at
+// startup, before any async machinery (repositories, IPC) exists.
+#[derive(serde::Deserialize)]
+struct SettingsFile {
+    #[serde(default)]
+    logging: LoggingConfig,
+}
+
+fn load_logging_config() -> LoggingConfig {
+    let path = crate::platform::paths::settings_config_path();
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<SettingsFile>(&raw).ok())
+        .map(|settings| settings.logging)
+        .unwrap_or_default()
+}
+
+/// Maps a `LogLevel` to the `EnvFilter` directive used both as the startup
+/// fallback and for the runtime level switch in `set_log_level`.
+fn log_level_directive(level: &LogLevel) -> &'static str {
+    match level {
+        LogLevel::Trace => "trace",
+        LogLevel::Debug => "debug",
+        LogLevel::Info => "info",
+        LogLevel::Warn => "warn",
+        LogLevel::Error => "error",
+    }
+}
+
+fn level_filter(config: &LoggingConfig) -> EnvFilter {
+    EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(log_level_directive(&config.level)))
+}
+
+fn resolve_log_prefix(config: &LoggingConfig) -> String {
+    let from_env = std::env::var("LOG_FILE").ok().and_then(|name| {
+        Path::new(&name)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(str::to_string)
+    });
+    let from_config = config.file_path.as_deref().and_then(|path| {
+        Path::new(path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(str::to_string)
+    });
+    from_env
+        .or(from_config)
+        .unwrap_or_else(|| "quicksort".to_string())
+}
+
+fn resolve_format(config: &LoggingConfig) -> LogFormat {
+    match std::env::var("LOG_FORMAT").ok().as_deref() {
+        Some("text") => LogFormat::Text,
+        Some("json") => LogFormat::Json,
+        _ => config.format.clone(),
+    }
+}
+
 pub fn init() {
-    let env_filter = tracing_subscriber::filter::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::filter::EnvFilter::new("info"));
+    let config = load_logging_config();
+    let (env_filter, reload_handle) = reload::Layer::new(level_filter(&config));
+    let _ = RELOAD_HANDLE.set(reload_handle);
 
     let log_dir = crate::platform::paths::config_dir().join("logs");
     let _ = std::fs::create_dir_all(&log_dir);
 
-    let file_appender = RollingFileAppender::builder()
+    let prefix = resolve_log_prefix(&config);
+    let format = resolve_format(&config);
+
+    let mut builder = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)
-        .filename_prefix("quicksort")
+        .filename_prefix(&prefix);
+    if let Some(max_files) = config.max_files {
+        builder = builder.max_log_files(max_files as usize);
+    }
+
+    let file_appender = builder
         .build(&log_dir)
         .expect("create rolling file appender");
 
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
     let _ = _FILE_GUARD.set(guard);
 
-    let file_layer = tracing_subscriber::fmt::layer()
-        .with_writer(non_blocking)
-        .with_ansi(false);
+    let stdout_layer = tracing_subscriber::fmt::layer();
+    match format {
+        LogFormat::Json => {
+            let file_layer = tracing_subscriber::fmt::layer()
+                .json()
+                .with_writer(non_blocking)
+                .with_ansi(false);
+            tracing_subscriber::registry()
+                .with(env_filter)
+                .with(stdout_layer)
+                .with(file_layer)
+                .with(FrontendLayer)
+                .init();
+        }
+        LogFormat::Text => {
+            let file_layer = tracing_subscriber::fmt::layer()
+                .with_writer(non_blocking)
+                .with_ansi(false);
+            tracing_subscriber::registry()
+                .with(env_filter)
+                .with(stdout_layer)
+                .with(file_layer)
+                .with(FrontendLayer)
+                .init();
+        }
+    }
+}
 
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(tracing_subscriber::fmt::layer())
-        .with(file_layer)
-        .with(FrontendLayer)
-        .init();
+/// Applies a new log level immediately, without an app restart. For the rest
+/// of the session it overrides the `RUST_LOG`-based filter.
+pub fn set_log_level(level: LogLevel) -> Result<(), String> {
+    let handle = RELOAD_HANDLE
+        .get()
+        .ok_or_else(|| "logging not initialized".to_string())?;
+    handle
+        .reload(EnvFilter::new(log_level_directive(&level)))
+        .map_err(|e| e.to_string())
 }
 
 pub fn set_app_handle(handle: tauri::AppHandle) {
     let _ = APP_HANDLE.set(Mutex::new(Some(handle)));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quicksort_application::LogLevel;
+
+    #[test]
+    fn log_level_directive_maps_each_level() {
+        assert_eq!(log_level_directive(&LogLevel::Trace), "trace");
+        assert_eq!(log_level_directive(&LogLevel::Debug), "debug");
+        assert_eq!(log_level_directive(&LogLevel::Info), "info");
+        assert_eq!(log_level_directive(&LogLevel::Warn), "warn");
+        assert_eq!(log_level_directive(&LogLevel::Error), "error");
+    }
+
+    #[test]
+    fn set_log_level_fails_before_init() {
+        // The reload handle is only populated by `init()`, which never runs in
+        // the test binary, so this exercises the "not initialized" path.
+        assert!(set_log_level(LogLevel::Debug).is_err());
+    }
 }

@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use quicksort_application::{
     AbsolutePath, ApplicationFacadeImpl, DefaultOverwritePolicy, DuplicateCheckMode,
-    ExecuteOperation, FolderId, GetFolders, LoadSettings, OperationCommand,
+    ExecuteOperation, FolderId, GetFolders, LoadSettings, OperationCommand, OperationSource,
     OperationType as DomainOpType, OverwritePolicy as AppOverwritePolicy,
 };
 use quicksort_ipc_contract::{
@@ -113,6 +113,11 @@ fn convert_execute_data(data: ExecuteOperationData) -> Option<OperationCommand> 
             Some(IpcDuplicateCheckMode::Size) => DuplicateCheckMode::Size,
             Some(IpcDuplicateCheckMode::Content) => DuplicateCheckMode::Content,
         },
+        // The pipe channel is only used by the Explorer context menu, so the
+        // source is a constant of the channel, not a variant (spec #15).
+        source: OperationSource::ContextMenu,
+        // A fresh trace id per invocation; the DLL does not send one.
+        correlation_id: uuid::Uuid::new_v4(),
     })
 }
 
@@ -352,7 +357,9 @@ fn process_command(
             if data.duplicate_check_mode.is_none() {
                 data.duplicate_check_mode = Some(resolve_default_duplicate_check_mode(facade, rt));
             }
-            match queue.enqueue(data) {
+            // Pipe channel ⇒ Explorer context menu: fixed origin, no incoming
+            // correlation_id (the worker generates one) (spec #15).
+            match queue.enqueue(data, OperationSource::ContextMenu, None) {
                 Ok(job_id) => ResponseMessage {
                     status: ResponseStatus::Ok,
                     message: "Operation queued".to_string(),

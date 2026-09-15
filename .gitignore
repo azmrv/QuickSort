@@ -69,5 +69,6 @@ docs/*
 # Documentation (all excluded — docs has its own git repo)
 *.md
 !README.md
+!CHANGELOG.md
 !docs/translation/
 !docs/translation/**

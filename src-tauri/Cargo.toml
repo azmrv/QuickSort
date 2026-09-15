@@ -4,6 +4,7 @@ version = "0.2.5"
 description = "QuickSort – быстрая сортировка файлов"
 authors = ["pr0math3us"]
 edition = "2021"
+publish = false # Workspace-internal crate, never published to crates.io
 
 # ---------------------------------------------------------------------------
 # Build dependencies – only needed during compilation
@@ -37,6 +38,9 @@ tauri-plugin-opener = "2"
 # Tauri plugin for single-instance enforcement (forwards args to running instance)
 tauri-plugin-single-instance = "2"
 
+# Tauri plugin for OS-level autostart (Windows registry, macOS login items)
+tauri-plugin-autostart = "2"
+
 # ========== Serialization ==========
 
 # JSON serialization / deserialization (used for IPC messages and config files)
@@ -62,11 +66,17 @@ uuid = { version = "1", features = ["v4", "serde"] }
 
 # Structured logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
+
+# ZIP archives for settings/folders backup (0.2.6 feature #20 / plan Q7)
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 # Efficient mutex for shared state
 parking_lot = "0.12"
+
+# System information (CPU, memory, disk, network) for the Dashboard
+sysinfo = "0.39"
 
 # Async trait support (needed for ProgressReporter implementation)
 async-trait = "0.1"

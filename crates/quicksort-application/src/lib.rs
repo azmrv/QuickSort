@@ -46,10 +46,12 @@ pub mod use_cases;
 // ---------------------------------------------------------------------------
 
 // Error type – all Use Case operations return this error.
-pub use errors::UseCaseError;
+// The undo/repeat DTO and its kind are re-exported because adapters
+// (Tauri commands) route failures to the UI using `kind` (P1-5).
+pub use errors::{OperationErrorDto, UndoErrorKind, UseCaseError};
 
 // DTOs – used by adapters to send commands and receive results.
-pub use dtos::{OperationCommand, OperationResult, OverwritePolicy};
+pub use dtos::{FolderMetadata, OperationCommand, OperationResult, OverwritePolicy};
 
 // Inbound ports – the contracts that adapters call.
 pub use ports::inbound::{
@@ -68,8 +70,9 @@ pub use use_cases::SearchFiles;
 // which depends on Domain).
 pub use quicksort_domain::{
     AbsolutePath, DefaultOperation, DefaultOverwritePolicy, DuplicateCheckConfig,
-    DuplicateCheckMode, Folder, FolderId, Locale, Operation, OperationId, OperationType,
-    PluginConfig, SearchQuery, Settings, ThemeMode, WindowsPath,
+    DuplicateCheckMode, Folder, FolderId, Locale, LogFormat, LogLevel, LoggingConfig, Operation,
+    OperationId, OperationSource, OperationType, PluginConfig, SearchQuery, Settings, ThemeMode,
+    WindowsPath,
 };
 
 // Pipeline is intentionally NOT re-exported – it is an internal mechanism

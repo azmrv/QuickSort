@@ -56,11 +56,21 @@ impl DuplicateChecker for ContentChecker {
             });
         }
 
-        // Check if both files exist
-        let source_exists = tokio::fs::metadata(source.to_path_buf()).await.is_ok();
-        let dest_exists = tokio::fs::metadata(destination.to_path_buf()).await.is_ok();
+        // Check if both files exist and keep their metadata for the size gate.
+        let source_metadata = tokio::fs::metadata(source.to_path_buf()).await;
+        let dest_metadata = tokio::fs::metadata(destination.to_path_buf()).await;
 
-        if !source_exists || !dest_exists {
+        let (Ok(source_metadata), Ok(dest_metadata)) = (source_metadata, dest_metadata) else {
+            return Ok(DuplicateCheckResult {
+                source: source.clone(),
+                destination: destination.clone(),
+                exists: false,
+                mode: mode.clone(),
+            });
+        };
+
+        // Files of different sizes cannot be identical; skip hashing entirely.
+        if source_metadata.len() != dest_metadata.len() {
             return Ok(DuplicateCheckResult {
                 source: source.clone(),
                 destination: destination.clone(),
@@ -138,6 +148,29 @@ mod tests {
             .await
             .unwrap();
         tokio::fs::write(dest.to_path_buf(), "world").await.unwrap();
+
+        let checker = ContentChecker;
+        let result = checker
+            .check(&source, &dest, &DuplicateCheckMode::Content)
+            .await
+            .unwrap();
+
+        assert!(!result.exists);
+    }
+
+    #[tokio::test]
+    async fn test_no_duplicate_when_different_size() {
+        let dir = tempdir().unwrap();
+        let source = AbsolutePath::new(dir.path().join("source.txt").to_str().unwrap()).unwrap();
+        let dest = AbsolutePath::new(dir.path().join("dest.txt").to_str().unwrap()).unwrap();
+
+        // Different byte lengths short-circuit before hashing.
+        tokio::fs::write(source.to_path_buf(), "hello")
+            .await
+            .unwrap();
+        tokio::fs::write(dest.to_path_buf(), "hello!")
+            .await
+            .unwrap();
 
         let checker = ContentChecker;
         let result = checker

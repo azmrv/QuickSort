@@ -14,6 +14,7 @@
 mod conflicts;
 mod copy;
 mod delete;
+mod disk_space;
 mod errors;
 mod r#move;
 mod rename;

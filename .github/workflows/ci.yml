@@ -40,3 +40,11 @@ jobs:
 
       - name: Run tests
         run: cargo test --workspace --exclude context-menu-dll
+
+      - name: Run cargo-deny (supply-chain policy)
+        # Pinned to the version validated against deny.toml (0.20 removed the
+        # legacy `unlicensed` key); bump deliberately after config validation.
+        uses: embarkstudios/cargo-deny-action@v2
+        with:
+          command: check
+          version: "0.20.2"

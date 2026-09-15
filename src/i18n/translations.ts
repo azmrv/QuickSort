@@ -10,6 +10,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'tab.queue': 'Queue',
         'tab.settings': 'Settings',
         'tab.about': 'About',
+        // 0.2.6 navigation (Q2): Search / Folders / Operations / Settings / Help / About
+        'tab.search': 'Search',
+        'tab.operations': 'Operations',
+        'tab.help': 'Help',
 
         // Settings - Appearance
         'settings.appearance.title': 'Appearance',
@@ -50,16 +54,66 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         // Settings - Logging
         'settings.logging.title': 'Logging',
-        'settings.logging.description': 'Minimum log level sent from the backend to the journal.',
+        'settings.logging.description': 'Configure the logging level and output format.',
+        'settings.logging.level': 'Level',
+        'settings.logging.level.trace': 'Trace',
+        'settings.logging.level.debug': 'Debug',
+        'settings.logging.level.info': 'Info',
+        'settings.logging.level.warn': 'Warn',
+        'settings.logging.level.error': 'Error',
+        'settings.logging.format': 'Format',
+        'settings.logging.format.text': 'Text',
+        'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': 'Failed to apply log level',
+
+        // Settings - Logs panel
+        'settings.logs.title': 'Logs',
+        'settings.logs.description': 'Live event journal from the backend and frontend.',
+
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': 'Plugins',
+        'settings.plugins.description': 'Manage installed Total Commander plugins.',
 
         // Settings - Application
         'settings.application.title': 'Application',
         'settings.application.quit': 'Quit Application',
 
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': 'Backup',
+        'settings.backup.description': 'Create a ZIP archive of your settings and folders, or restore them from a previous backup.',
+        'settings.backup.create': 'Create Backup',
+        'settings.backup.restore': 'Restore',
+        'settings.backup.created': 'Backup created',
+        'settings.backup.restored': 'Settings and folders restored',
+
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': 'Startup',
+        'settings.autostart.description': 'Launch QuickSort automatically when you sign in to Windows.',
+        'settings.autostart.toggle': 'Launch at startup',
+
         // Settings - Common
         'settings.loading': 'Loading...',
         'settings.saved': 'Settings saved',
         'settings.save_error': 'Failed to save settings',
+
+        // Help (0.2.6)
+        'help.title': 'Help',
+        'help.intro': 'QuickSort is a file manager that integrates into the Windows Explorer context menu and moves or copies files to your favorite folders at a single click.',
+        'help.section.overview': 'Overview',
+        'help.overview.body': 'Select files in Explorer, right-click and pick Stop-queue action to gather files, then choose a folder. The operation runs in the background without opening a window.',
+        'help.section.search': 'Search',
+        'help.search.body': 'Search tab (Ctrl+Shift+Space opens the command palette) searches files across tracked folders. While the query is empty, the dashboard is shown.',
+        'help.section.folders': 'Folders',
+        'help.folders.body': 'Manage your favorite folders: add, rename, delete, toggle favorite and assign a color. Folders are shown in the Explorer context menu and in the selector window.',
+        'help.section.operations': 'Operations',
+        'help.operations.body': 'History and queue are unified in a single Operations table. Recent operations can be undone or repeated; active jobs report progress in real time.',
+        'help.section.settings': 'Settings',
+        'help.settings.body': 'Configure the theme, language, default operation, duplicate handling and logging. Register the COM server to enable the Explorer context menu, manage plugins and create backups.',
+        'help.section.hotkeys': 'Keyboard shortcuts',
+        'help.hotkey.palette': 'Ctrl+Shift+Space — command palette',
+        'help.hotkey.selector': 'Right-click with Shift — select files through the queue',
+        'help.section.context_menu': 'Explorer context menu',
+        'help.context_menu.body': 'Files picked from the context menu are stored in the pending list. The selector window lets you choose the target folder; the actual move/copy is processed by the application queue.',
 
         // Selector
 'selector.title.move_one': 'Queue file for moving:',
@@ -96,6 +150,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': 'Error updating favorite',
     'editor.color_error': 'Error saving color',
     'editor.remove_error': 'Remove error:',
+        'editor.drop_hint': 'Drop folders here',
+        'editor.drop_added': 'Added: {added}',
+        'editor.drop_skipped': 'Skipped: {skipped}',
+        'editor.drop_error': 'Drop error:',
 
         // History
         'history.title': 'Operation History',
@@ -106,6 +164,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'history.repeat': 'Repeat',
         'history.undo_success': 'Operation undone',
         'history.undo_error': 'Undo error:',
+        'history.undo_retry': 'File is busy, please retry',
         'history.repeat_success': 'Operation repeated',
         'history.repeat_error': 'Repeat error:',
         'history.action_unavailable': 'Action is not available because the files no longer exist',
@@ -166,6 +225,40 @@ export const translations: Record<Locale, Record<string, string>> = {
         'queue.operation.delete': 'Delete',
         'queue.operation.rename': 'Rename',
 
+        // Operations (0.2.6 feature 4c)
+        'operations.title': 'Operations',
+        'operations.empty': 'No operations yet',
+        'operations.loading': 'Loading…',
+        'operations.refresh': 'Refresh',
+        'operations.clear': 'Clear history',
+        'operations.clear_confirm': 'Clear all history? This cannot be undone.',
+        'operations.delete_confirm': 'Delete {{count}} operation(s)? This cannot be undone.',
+        'operations.col.status': 'Status',
+        'operations.col.type': 'Type',
+        'operations.col.source': 'Source',
+        'operations.col.objects': 'Objects',
+        'operations.col.files': 'Files',
+        'operations.col.size': 'Size',
+        'operations.col.date': 'Date',
+        'operations.source.search': 'Search',
+        'operations.source.selector': 'Selector',
+        'operations.source.context_menu': 'Context menu',
+        'operations.source.api': 'API',
+        'operations.undo': 'Undo',
+        'operations.repeat': 'Repeat',
+        'operations.delete': 'Delete',
+        'operations.cancel': 'Cancel',
+        'operations.details.title': 'Operation details',
+        'operations.details.files': 'Objects',
+        'operations.details.target': 'Target',
+        'operations.details.error': 'Error',
+        'operations.details.progress': 'Progress',
+        'operations.details.close': 'Close',
+        'operations.selected_count': '{{count}} selected',
+        'operations.batch.success': '{{count}} done',
+        'operations.batch.partial': '{{success}} ok, {{failed}} errors',
+        'operations.undo_retry': 'File is busy, please retry',
+
         // About
         'about.loading': 'Loading...',
         'about.link_copied': 'Link copied',
@@ -193,6 +286,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': 'Copied {count} entries',
         'log.all_levels': 'All levels',
         'log.copy_all': 'Copy all',
+        'log.search': 'Search log...',
+        'log.search_no_results': 'No entries match the search',
         'log.empty': 'No entries',
         'log.col.time': 'Time',
         'log.col.level': 'Level',
@@ -229,6 +324,39 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         // Add Folder Button
         'add_folder_button': 'Add folder',
+
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': 'List',
+        'editor.view.tree': 'Tree',
+        'folder_tree.col.name': 'Name',
+        'folder_tree.col.path': 'Path',
+        'folder_tree.col.last_used': 'Last used',
+        'folder_tree.col.order': 'Order',
+        'folder_tree.col.color': 'Color',
+        'folder_tree.last_used_never': 'Never',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': 'Add folder',
+        'add_folder.parent': 'Parent folder',
+        'add_folder.parent_none': 'None (root)',
+        'add_folder.confirm': 'Add',
+        'add_folder.cancel': 'Cancel',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': 'System',
+        'dashboard.cpu': 'CPU',
+        'dashboard.ram': 'RAM',
+        'dashboard.disk': 'Disk',
+        'dashboard.network': 'Network',
+        'dashboard.status.ok': 'Healthy',
+        'dashboard.status.warn': 'Elevated',
+        'dashboard.status.critical': 'Critical',
+        'dashboard.cores': 'cores',
+        'dashboard.temp': 'temp',
+        'dashboard.read': 'read',
+        'dashboard.write': 'write',
+        'dashboard.rx': 'in',
+        'dashboard.tx': 'out',
     },
 
     ru: {
@@ -240,6 +368,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'tab.queue': 'Очередь',
         'tab.settings': 'Настройки',
         'tab.about': 'О программе',
+        // 0.2.6 navigation (Q2): Search / Folders / Operations / Settings / Help / About
+        'tab.search': 'Поиск',
+        'tab.operations': 'Операции',
+        'tab.help': 'Помощь',
 
         // Settings - Appearance
         'settings.appearance.title': 'Внешний вид',
@@ -280,16 +412,66 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         // Settings - Logging
         'settings.logging.title': 'Логирование',
-        'settings.logging.description': 'Минимальный уровень логов, отправляемых из бэкенда в журнал.',
+        'settings.logging.description': 'Настройка уровня логирования и формата вывода.',
+        'settings.logging.level': 'Уровень',
+        'settings.logging.level.trace': 'Трассировка',
+        'settings.logging.level.debug': 'Отладка',
+        'settings.logging.level.info': 'Инфо',
+        'settings.logging.level.warn': 'Предупреждения',
+        'settings.logging.level.error': 'Ошибки',
+        'settings.logging.format': 'Формат',
+        'settings.logging.format.text': 'Текст',
+        'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': 'Не удалось применить уровень логирования',
+
+        // Settings - Logs panel
+        'settings.logs.title': 'Журнал логов',
+        'settings.logs.description': 'Живой журнал событий из бэкенда и фронтенда.',
+
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': 'Плагины',
+        'settings.plugins.description': 'Управление установленными плагинами Total Commander.',
 
         // Settings - Application
         'settings.application.title': 'Приложение',
         'settings.application.quit': 'Выход из приложения',
 
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': 'Резервная копия',
+        'settings.backup.description': 'Создайте ZIP-архив настроек и папок или восстановите их из ранее созданной копии.',
+        'settings.backup.create': 'Создать копию',
+        'settings.backup.restore': 'Восстановить',
+        'settings.backup.created': 'Копия создана',
+        'settings.backup.restored': 'Настройки и папки восстановлены',
+
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': 'Автозагрузка',
+        'settings.autostart.description': 'Запускать QuickSort автоматически при входе в Windows.',
+        'settings.autostart.toggle': 'Запуск при старте системы',
+
         // Settings - Common
         'settings.loading': 'Загрузка...',
         'settings.saved': 'Настройки сохранены',
         'settings.save_error': 'Ошибка сохранения настроек',
+
+        // Help (0.2.6)
+        'help.title': 'Справка',
+        'help.intro': 'QuickSort — файловый менеджер, интегрируемый в контекстное меню Проводника Windows, перемещающий и копирующий файлы в избранные папки в один клик.',
+        'help.section.overview': 'Обзор',
+        'help.overview.body': 'Выберите файлы в Проводнике, нажмите правую кнопку мыши и выберите действие Stop-queue, чтобы собрать файлы, затем выберите папку. Операция выполняется в фоне без открытия окна.',
+        'help.section.search': 'Поиск',
+        'help.search.body': 'Вкладка Поиск (Ctrl+Shift+Space открывает командную палитру) ищет файлы по отслеживаемым папкам. Пока запрос пуст — отображается панель Dashboard.',
+        'help.section.folders': 'Папки',
+        'help.folders.body': 'Управление избранными папками: добавление, переименование, удаление, переключение избранного и назначение цвета. Папки отображаются в контекстном меню Проводника и в окне выбора.',
+        'help.section.operations': 'Операции',
+        'help.operations.body': 'История и очередь объединены в единую таблицу Operations. Завершённые операции можно отменить или повторить; активные задачи показывают прогресс в реальном времени.',
+        'help.section.settings': 'Настройки',
+        'help.settings.body': 'Настройка темы, языка, операции по умолчанию, обработки дубликатов и логирования. Регистрация COM-сервера включает контекстное меню Проводника; здесь же управление плагинами и создание резервных копий.',
+        'help.section.hotkeys': 'Горячие клавиши',
+        'help.hotkey.palette': 'Ctrl+Shift+Space — командная палитра',
+        'help.hotkey.selector': 'Правый клик с Shift — выбор файлов через очередь',
+        'help.section.context_menu': 'Контекстное меню Проводника',
+        'help.context_menu.body': 'Файлы, выбранные из контекстного меню, попадают в список ожидающих. Окно выбора позволяет указать целевую папку; само перемещение/копирование выполняет очередь приложения.',
 
         // Selector
 'selector.title.move_one': 'Поставить файл в очередь на перемещение:',
@@ -326,6 +508,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': 'Ошибка обновления избранного',
     'editor.color_error': 'Ошибка сохранения цвета',
     'editor.remove_error': 'Ошибка удаления:',
+        'editor.drop_hint': 'Перетащите папки сюда',
+        'editor.drop_added': 'Добавлено: {added}',
+        'editor.drop_skipped': 'Пропущено: {skipped}',
+        'editor.drop_error': 'Ошибка добавления:',
 
         // History
         'history.title': 'История операций',
@@ -336,6 +522,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'history.repeat': 'Повторить',
         'history.undo_success': 'Операция отменена',
         'history.undo_error': 'Ошибка отмены:',
+        'history.undo_retry': 'Файл занят, повторите попытку',
         'history.repeat_success': 'Операция повторена',
         'history.repeat_error': 'Ошибка повтора:',
         'history.action_unavailable': 'Действие недоступно, так как файлов больше не существует',
@@ -396,6 +583,40 @@ export const translations: Record<Locale, Record<string, string>> = {
         'queue.operation.delete': 'Удаление',
         'queue.operation.rename': 'Переименование',
 
+        // Operations (0.2.6 feature 4c)
+        'operations.title': 'Операции',
+        'operations.empty': 'Операций пока нет',
+        'operations.loading': 'Загрузка…',
+        'operations.refresh': 'Обновить',
+        'operations.clear': 'Очистить историю',
+        'operations.clear_confirm': 'Очистить всю историю? Это действие необратимо.',
+        'operations.delete_confirm': 'Удалить {{count}} операции? Это действие необратимо.',
+        'operations.col.status': 'Статус',
+        'operations.col.type': 'Тип',
+        'operations.col.source': 'Источник',
+        'operations.col.objects': 'Объектов',
+        'operations.col.files': 'Файлы',
+        'operations.col.size': 'Размер',
+        'operations.col.date': 'Дата',
+        'operations.source.search': 'Поиск',
+        'operations.source.selector': 'Окно выбора',
+        'operations.source.context_menu': 'Контекстное меню',
+        'operations.source.api': 'API',
+        'operations.undo': 'Отменить',
+        'operations.repeat': 'Повторить',
+        'operations.delete': 'Удалить',
+        'operations.cancel': 'Отмена',
+        'operations.details.title': 'Детали операции',
+        'operations.details.files': 'Объекты',
+        'operations.details.target': 'Цель',
+        'operations.details.error': 'Ошибка',
+        'operations.details.progress': 'Прогресс',
+        'operations.details.close': 'Закрыть',
+        'operations.selected_count': 'Выбрано: {{count}}',
+        'operations.batch.success': 'Выполнено: {{count}}',
+        'operations.batch.partial': 'Успешно: {{success}}, ошибок: {{failed}}',
+        'operations.undo_retry': 'Файл занят, повторите попытку',
+
         // About
         'about.loading': 'Загрузка...',
         'about.link_copied': 'Ссылка скопирована',
@@ -423,6 +644,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': 'Скопировано {count} записей',
         'log.all_levels': 'Все уровни',
         'log.copy_all': 'Копировать всё',
+        'log.search': 'Поиск по журналу...',
+        'log.search_no_results': 'Нет записей, соответствующих поиску',
         'log.empty': 'Нет записей',
         'log.col.time': 'Время',
         'log.col.level': 'Уровень',
@@ -459,6 +682,39 @@ export const translations: Record<Locale, Record<string, string>> = {
 
         // Add Folder Button
         'add_folder_button': 'Добавить папку',
+
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': 'Список',
+        'editor.view.tree': 'Дерево',
+        'folder_tree.col.name': 'Имя',
+        'folder_tree.col.path': 'Путь',
+        'folder_tree.col.last_used': 'Последнее использование',
+        'folder_tree.col.order': 'Порядок',
+        'folder_tree.col.color': 'Цвет',
+        'folder_tree.last_used_never': 'Никогда',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': 'Добавить папку',
+        'add_folder.parent': 'Родительская папка',
+        'add_folder.parent_none': 'Нет (корневая)',
+        'add_folder.confirm': 'Добавить',
+        'add_folder.cancel': 'Отмена',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': 'Система',
+        'dashboard.cpu': 'ЦП',
+        'dashboard.ram': 'ОЗУ',
+        'dashboard.disk': 'Диск',
+        'dashboard.network': 'Сеть',
+        'dashboard.status.ok': 'Норма',
+        'dashboard.status.warn': 'Повышена',
+        'dashboard.status.critical': 'Критично',
+        'dashboard.cores': 'ядер',
+        'dashboard.temp': 'темп',
+        'dashboard.read': 'чтение',
+        'dashboard.write': 'запись',
+        'dashboard.rx': 'приём',
+        'dashboard.tx': 'передача',
     },
 
     de: {
@@ -469,6 +725,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'tab.queue': 'Warteschlange',
         'tab.settings': 'Einstellungen',
         'tab.about': 'Über',
+        // 0.2.6 navigation (Q2): Search / Folders / Operations / Settings / Help / About
+        'tab.search': 'Suche',
+        'tab.operations': 'Operationen',
+        'tab.help': 'Hilfe',
 
         'settings.appearance.title': 'Erscheinungsbild',
         'settings.appearance.description': 'Wählen Sie Ihr bevorzugtes Thema und Ihre Sprache.',
@@ -503,14 +763,64 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.duplicate_check.deep': 'Tief (SHA-256-Hash)',
 
         'settings.logging.title': 'Protokollierung',
-        'settings.logging.description': 'Minimales Protokollniveau, das vom Backend gesendet wird.',
+        'settings.logging.description': 'Protokollierungsstufe und Ausgabeformat konfigurieren.',
+        'settings.logging.level': 'Stufe',
+        'settings.logging.level.trace': 'Trace',
+        'settings.logging.level.debug': 'Debug',
+        'settings.logging.level.info': 'Info',
+        'settings.logging.level.warn': 'Warnung',
+        'settings.logging.level.error': 'Fehler',
+        'settings.logging.format': 'Format',
+        'settings.logging.format.text': 'Text',
+        'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': 'Protokollebene konnte nicht angewendet werden',
+
+        // Settings - Logs panel
+        'settings.logs.title': 'Protokoll',
+        'settings.logs.description': 'Live-Ereignisprotokoll vom Backend und Frontend.',
+
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': 'Plugins',
+        'settings.plugins.description': 'Installierte Total-Commander-Plugins verwalten.',
 
         'settings.application.title': 'Anwendung',
         'settings.application.quit': 'Anwendung beenden',
 
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': 'Backup',
+        'settings.backup.description': 'Erstellen Sie ein ZIP-Archiv Ihres Settings und Ihrer Ordner oder stellen Sie sie aus einem früheren Backup wieder her.',
+        'settings.backup.create': 'Backup erstellen',
+        'settings.backup.restore': 'Wiederherstellen',
+        'settings.backup.created': 'Backup erstellt',
+        'settings.backup.restored': 'Settings und Ordner wiederhergestellt',
+
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': 'Autostart',
+        'settings.autostart.description': 'QuickSort beim Windows-Anmelden automatisch starten.',
+        'settings.autostart.toggle': 'Beim Start ausführen',
+
         'settings.loading': 'Laden...',
         'settings.saved': 'Einstellungen gespeichert',
         'settings.save_error': 'Fehler beim Speichern der Einstellungen',
+
+        // Help (0.2.6)
+        'help.title': 'Hilfe',
+        'help.intro': 'QuickSort ist ein Dateimanager, der sich in das Windows-Kontextmenü integriert und Dateien mit einem Klick in Ihre Lieblingsordner verschiebt oder kopiert.',
+        'help.section.overview': 'Übersicht',
+        'help.overview.body': 'Wählen Sie Dateien im Explorer aus, klicken Sie mit der rechten Maustaste und wählen Sie die Stop-Queue-Aktion, um Dateien zu sammeln, dann wählen Sie einen Ordner. Die Operation läuft im Hintergrund ohne Fensteröffnung.',
+        'help.section.search': 'Suche',
+        'help.search.body': 'Der Tab Suche (Ctrl+Shift+Leertaste öffnet die Befehlspalette) durchsucht Dateien über alle verfolgten Ordner. Bei leerer Abfrage wird das Dashboard angezeigt.',
+        'help.section.folders': 'Ordner',
+        'help.folders.body': 'Verwalten Sie Ihre Lieblingsordner: hinzufügen, umbenennen, löschen, Favorit umschalten und Farbe zuweisen. Ordner erscheinen im Explorer-Kontextmenü und im Auswahlfenster.',
+        'help.section.operations': 'Operationen',
+        'help.operations.body': 'Verlauf und Warteschlange sind in einer einzigen Operations-Tabelle vereint. Abgeschlossene Operationen können rückgängig gemacht oder wiederholt werden; aktive Aufträge melden Fortschritt in Echtzeit.',
+        'help.section.settings': 'Einstellungen',
+        'help.settings.body': 'Konfigurieren Sie Thema, Sprache, Standardoperation, Duplikatbehandlung und Protokollierung. Die COM-Server-Registrierung aktiviert das Explorer-Kontextmenü; hier verwalten Sie auch Plugins und Backups.',
+        'help.section.hotkeys': 'Tastaturkürzel',
+        'help.hotkey.palette': 'Ctrl+Shift+Leertaste — Befehlspalette',
+        'help.hotkey.selector': 'Rechtsklick mit Shift — Dateien über die Warteschlange auswählen',
+        'help.section.context_menu': 'Explorer-Kontextmenü',
+        'help.context_menu.body': 'Aus dem Kontextmenü gewählte Dateien landen in der Warteliste. Das Auswahlfenster zeigt den Zielordner an; der eigentliche Verschiebe-/Kopiervorgang läuft über die Anwendungswarteschlange.',
 
 'selector.title.move_one': 'Datei zum Verschieben einreihen:',
     'selector.title.move_many': 'Dateien zum Verschieben einreihen:',
@@ -545,6 +855,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': 'Fehler beim Aktualisieren der Favoriten',
     'editor.color_error': 'Fehler beim Speichern der Farbe',
     'editor.remove_error': 'Entfernungsfehler:',
+        'editor.drop_hint': 'Ordner hierher ziehen',
+        'editor.drop_added': 'Hinzugefügt: {added}',
+        'editor.drop_skipped': 'Übersprungen: {skipped}',
+        'editor.drop_error': 'Hinzufügen fehlgeschlagen:',
 
         'history.title': 'Operationsverlauf',
         'history.loading': 'Laden...',
@@ -554,6 +868,7 @@ export const translations: Record<Locale, Record<string, string>> = {
         'history.repeat': 'Wiederholen',
         'history.undo_success': 'Operation rückgängig gemacht',
         'history.undo_error': 'Fehler beim Rückgängig:',
+        'history.undo_retry': 'Datei ist belegt, bitte erneut versuchen',
         'history.repeat_success': 'Operation wiederholt',
         'history.repeat_error': 'Fehler beim Wiederholen:',
         'history.action_unavailable': 'Aktion nicht verfügbar, da die Dateien nicht mehr existieren',
@@ -613,6 +928,40 @@ export const translations: Record<Locale, Record<string, string>> = {
         'queue.operation.delete': 'Löschen',
         'queue.operation.rename': 'Umbenennen',
 
+        // Operations (0.2.6 feature 4c)
+        'operations.title': 'Operationen',
+        'operations.empty': 'Noch keine Operationen',
+        'operations.loading': 'Laden…',
+        'operations.refresh': 'Aktualisieren',
+        'operations.clear': 'Verlauf leeren',
+        'operations.clear_confirm': 'Gesamten Verlauf löschen? Das kann nicht rückgängig gemacht werden.',
+        'operations.delete_confirm': '{{count}} Operation(en) löschen? Das kann nicht rückgängig gemacht werden.',
+        'operations.col.status': 'Status',
+        'operations.col.type': 'Typ',
+        'operations.col.source': 'Quelle',
+        'operations.col.objects': 'Objekte',
+        'operations.col.files': 'Dateien',
+        'operations.col.size': 'Größe',
+        'operations.col.date': 'Datum',
+        'operations.source.search': 'Suche',
+        'operations.source.selector': 'Auswahlfenster',
+        'operations.source.context_menu': 'Kontextmenü',
+        'operations.source.api': 'API',
+        'operations.undo': 'Rückgängig',
+        'operations.repeat': 'Wiederholen',
+        'operations.delete': 'Löschen',
+        'operations.cancel': 'Abbrechen',
+        'operations.details.title': 'Operationsdetails',
+        'operations.details.files': 'Objekte',
+        'operations.details.target': 'Ziel',
+        'operations.details.error': 'Fehler',
+        'operations.details.progress': 'Fortschritt',
+        'operations.details.close': 'Schließen',
+        'operations.selected_count': '{{count}} ausgewählt',
+        'operations.batch.success': '{{count}} erledigt',
+        'operations.batch.partial': '{{success}} ok, {{failed}} Fehler',
+        'operations.undo_retry': 'Datei ist belegt, bitte erneut versuchen',
+
         'about.loading': 'Laden...',
         'about.link_copied': 'Link kopiert',
         'about.repository': 'Repository',
@@ -638,6 +987,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': '{count} Einträge kopiert',
         'log.all_levels': 'Alle Level',
         'log.copy_all': 'Alles kopieren',
+        'log.search': 'Protokoll durchsuchen...',
+        'log.search_no_results': 'Keine Einträge entsprechen der Suche',
         'log.empty': 'Keine Einträge',
         'log.col.time': 'Zeit',
         'log.col.level': 'Stufe',
@@ -670,6 +1021,39 @@ export const translations: Record<Locale, Record<string, string>> = {
         'folder_list.delete': 'Löschen',
 
         'add_folder_button': 'Ordner hinzufügen',
+
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': 'Liste',
+        'editor.view.tree': 'Baumansicht',
+        'folder_tree.col.name': 'Name',
+        'folder_tree.col.path': 'Pfad',
+        'folder_tree.col.last_used': 'Zuletzt benutzt',
+        'folder_tree.col.order': 'Reihenfolge',
+        'folder_tree.col.color': 'Farbe',
+        'folder_tree.last_used_never': 'Nie',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': 'Ordner hinzufügen',
+        'add_folder.parent': 'Übergeordneter Ordner',
+        'add_folder.parent_none': 'Keine (Stamm)',
+        'add_folder.confirm': 'Hinzufügen',
+        'add_folder.cancel': 'Abbrechen',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': 'System',
+        'dashboard.cpu': 'CPU',
+        'dashboard.ram': 'RAM',
+        'dashboard.disk': 'Festplatte',
+        'dashboard.network': 'Netzwerk',
+        'dashboard.status.ok': 'Normal',
+        'dashboard.status.warn': 'Erhöht',
+        'dashboard.status.critical': 'Kritisch',
+        'dashboard.cores': 'Kerne',
+        'dashboard.temp': 'Temp',
+        'dashboard.read': 'Lesen',
+        'dashboard.write': 'Schreiben',
+        'dashboard.rx': 'Eingang',
+        'dashboard.tx': 'Ausgang',
     },
 
     es: {
@@ -680,6 +1064,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'tab.queue': 'Cola',
         'tab.settings': 'Configuración',
         'tab.about': 'Acerca de',
+        // 0.2.6 navigation (Q2): Search / Folders / Operations / Settings / Help / About
+        'tab.search': 'Búsqueda',
+        'tab.operations': 'Operaciones',
+        'tab.help': 'Ayuda',
 
         'settings.appearance.title': 'Apariencia',
         'settings.appearance.description': 'Elija su tema e idioma preferidos.',
@@ -714,14 +1102,64 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.duplicate_check.deep': 'Profundo (SHA-256 hash)',
 
         'settings.logging.title': 'Registro',
-        'settings.logging.description': 'Nivel mínimo de registro enviado desde el backend.',
+        'settings.logging.description': 'Configurar el nivel de registro y el formato de salida.',
+        'settings.logging.level': 'Nivel',
+        'settings.logging.level.trace': 'Traza',
+        'settings.logging.level.debug': 'Depuración',
+        'settings.logging.level.info': 'Info',
+        'settings.logging.level.warn': 'Advertencia',
+        'settings.logging.level.error': 'Error',
+        'settings.logging.format': 'Formato',
+        'settings.logging.format.text': 'Texto',
+        'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': 'No se pudo aplicar el nivel de registro',
+
+        // Settings - Logs panel
+        'settings.logs.title': 'Registro',
+        'settings.logs.description': 'Registro de eventos en vivo desde el backend y el frontend.',
+
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': 'Plugins',
+        'settings.plugins.description': 'Administrar los plugins de Total Commander instalados.',
 
         'settings.application.title': 'Aplicación',
         'settings.application.quit': 'Salir de la aplicación',
 
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': 'Copia de seguridad',
+        'settings.backup.description': 'Cree un archivo ZIP de sus ajustes y carpetas, o restáurelos desde una copia anterior.',
+        'settings.backup.create': 'Crear copia',
+        'settings.backup.restore': 'Restaurar',
+        'settings.backup.created': 'Copia creada',
+        'settings.backup.restored': 'Ajustes y carpetas restaurados',
+
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': 'Inicio automático',
+        'settings.autostart.description': 'Iniciar QuickSort automáticamente al iniciar sesión en Windows.',
+        'settings.autostart.toggle': 'Iniciar al arrancar',
+
         'settings.loading': 'Cargando...',
         'settings.saved': 'Configuración guardada',
         'settings.save_error': 'Error al guardar la configuración',
+
+        // Help (0.2.6)
+        'help.title': 'Ayuda',
+        'help.intro': 'QuickSort es un administrador de archivos que se integra en el menú contextual de Windows Explorer y mueve o copia archivos a tus carpetas favoritas con un clic.',
+        'help.section.overview': 'Resumen',
+        'help.overview.body': 'Selecciona archivos en el Explorador, haz clic derecho y elige la acción Stop-queue para recopilar archivos, luego elige una carpeta. La operación se ejecuta en segundo plano sin abrir una ventana.',
+        'help.section.search': 'Búsqueda',
+        'help.search.body': 'La pestaña Búsqueda (Ctrl+Shift+Espacio abre la paleta de comandos) busca archivos en las carpetas rastreadas. Con la consulta vacía se muestra el panel dashboard.',
+        'help.section.folders': 'Carpetas',
+        'help.folders.body': 'Administra tus carpetas favoritas: añadir, renombrar, eliminar, alternar favorito y asignar color. Las carpetas aparecen en el menú contextual del Explorador y en la ventana de selección.',
+        'help.section.operations': 'Operaciones',
+        'help.operations.body': 'Historial y cola están unificados en una sola tabla de Operaciones. Las operaciones completadas se pueden deshacer o repetir; los trabajos activos muestran progreso en tiempo real.',
+        'help.section.settings': 'Configuración',
+        'help.settings.body': 'Configura tema, idioma, operación predeterminada, manejo de duplicados y registro. El registro del servidor COM activa el menú contextual del Explorador; aquí también se gestionan plugins y copias de seguridad.',
+        'help.section.hotkeys': 'Atajos de teclado',
+        'help.hotkey.palette': 'Ctrl+Shift+Espacio — paleta de comandos',
+        'help.hotkey.selector': 'Clic derecho con Shift — seleccionar archivos mediante la cola',
+        'help.section.context_menu': 'Menú contextual del Explorador',
+        'help.context_menu.body': 'Los archivos elegidos desde el menú contextual se almacenan en la lista pendiente. La ventana de selección permite escoger la carpeta de destino; el movimiento/copia real lo procesa la cola de la aplicación.',
 
 'selector.title.move_one': 'Poner archivo en cola para mover:',
     'selector.title.move_many': 'Poner archivos en cola para mover:',
@@ -756,6 +1194,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': 'Error al actualizar favorito',
     'editor.color_error': 'Error al guardar color',
     'editor.remove_error': 'Error al eliminar:',
+        'editor.drop_hint': 'Suelta las carpetas aquí',
+        'editor.drop_added': 'Agregadas: {added}',
+        'editor.drop_skipped': 'Omitidas: {skipped}',
+        'editor.drop_error': 'Error al agregar:',
 
         'history.title': 'Historial de operaciones',
         'history.loading': 'Cargando...',
@@ -824,6 +1266,39 @@ export const translations: Record<Locale, Record<string, string>> = {
         'queue.operation.delete': 'Eliminar',
         'queue.operation.rename': 'Renombrar',
 
+        // Operations (0.2.6 feature 4c)
+        'operations.title': 'Operaciones',
+        'operations.empty': 'Aún no hay operaciones',
+        'operations.loading': 'Cargando…',
+        'operations.refresh': 'Actualizar',
+        'operations.clear': 'Limpiar historial',
+        'operations.clear_confirm': '¿Borrar todo el historial? Esta acción no se puede deshacer.',
+        'operations.delete_confirm': '¿Eliminar {{count}} operaciones? Esta acción no se puede deshacer.',
+        'operations.col.status': 'Estado',
+        'operations.col.type': 'Tipo',
+        'operations.col.source': 'Origen',
+        'operations.col.objects': 'Objetos',
+        'operations.col.files': 'Archivos',
+        'operations.col.size': 'Tamaño',
+        'operations.col.date': 'Fecha',
+        'operations.source.search': 'Búsqueda',
+        'operations.source.selector': 'Selector',
+        'operations.source.context_menu': 'Menú contextual',
+        'operations.source.api': 'API',
+        'operations.undo': 'Deshacer',
+        'operations.repeat': 'Repetir',
+        'operations.delete': 'Eliminar',
+        'operations.cancel': 'Cancelar',
+        'operations.details.title': 'Detalles de la operación',
+        'operations.details.files': 'Objetos',
+        'operations.details.target': 'Destino',
+        'operations.details.error': 'Error',
+        'operations.details.progress': 'Progreso',
+        'operations.details.close': 'Cerrar',
+        'operations.selected_count': '{{count}} seleccionados',
+        'operations.batch.success': '{{count}} hechas',
+        'operations.batch.partial': '{{success}} correctas, {{failed}} errores',
+
         'about.loading': 'Cargando...',
         'about.link_copied': 'Enlace copiado',
         'about.repository': 'Repositorio',
@@ -849,6 +1324,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': '{count} entradas copiadas',
         'log.all_levels': 'Todos los niveles',
         'log.copy_all': 'Copiar todo',
+        'log.search': 'Buscar en el registro...',
+        'log.search_no_results': 'No hay entradas que coincidan con la búsqueda',
         'log.empty': 'No hay entradas',
         'log.col.time': 'Hora',
         'log.col.level': 'Nivel',
@@ -881,6 +1358,39 @@ export const translations: Record<Locale, Record<string, string>> = {
         'folder_list.delete': 'Eliminar',
 
         'add_folder_button': 'Agregar carpeta',
+
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': 'Lista',
+        'editor.view.tree': 'Árbol',
+        'folder_tree.col.name': 'Nombre',
+        'folder_tree.col.path': 'Ruta',
+        'folder_tree.col.last_used': 'Último uso',
+        'folder_tree.col.order': 'Orden',
+        'folder_tree.col.color': 'Color',
+        'folder_tree.last_used_never': 'Nunca',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': 'Agregar carpeta',
+        'add_folder.parent': 'Carpeta principal',
+        'add_folder.parent_none': 'Ninguna (raíz)',
+        'add_folder.confirm': 'Agregar',
+        'add_folder.cancel': 'Cancelar',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': 'Sistema',
+        'dashboard.cpu': 'CPU',
+        'dashboard.ram': 'RAM',
+        'dashboard.disk': 'Disco',
+        'dashboard.network': 'Red',
+        'dashboard.status.ok': 'Normal',
+        'dashboard.status.warn': 'Elevado',
+        'dashboard.status.critical': 'Crítico',
+        'dashboard.cores': 'núcleos',
+        'dashboard.temp': 'temp',
+        'dashboard.read': 'lectura',
+        'dashboard.write': 'escritura',
+        'dashboard.rx': 'entrada',
+        'dashboard.tx': 'salida',
     },
 
     zh: {
@@ -891,6 +1401,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'tab.queue': '队列',
         'tab.settings': '设置',
         'tab.about': '关于',
+        // 0.2.6 navigation (Q2): Search / Folders / Operations / Settings / Help / About
+        'tab.search': '搜索',
+        'tab.operations': '操作',
+        'tab.help': '帮助',
 
         'settings.appearance.title': '外观',
         'settings.appearance.description': '选择您喜欢的主题和语言。',
@@ -925,14 +1439,64 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.duplicate_check.deep': '深度（SHA-256 哈希）',
 
         'settings.logging.title': '日志',
-        'settings.logging.description': '从后端发送到日志的最低日志级别。',
+        'settings.logging.description': '配置日志级别和输出格式。',
+        'settings.logging.level': '级别',
+        'settings.logging.level.trace': '追踪',
+        'settings.logging.level.debug': '调试',
+        'settings.logging.level.info': '信息',
+        'settings.logging.level.warn': '警告',
+        'settings.logging.level.error': '错误',
+        'settings.logging.format': '格式',
+        'settings.logging.format.text': '文本',
+        'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': '无法应用日志级别',
+
+        // Settings - Logs panel
+        'settings.logs.title': '日志',
+        'settings.logs.description': '来自后端和前端的实时事件日志。',
+
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': '插件',
+        'settings.plugins.description': '管理已安装的 Total Commander 插件。',
 
         'settings.application.title': '应用程序',
         'settings.application.quit': '退出应用',
 
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': '备份',
+        'settings.backup.description': '将设置和文件夹创建为 ZIP 压缩包，或从之前的备份中恢复。',
+        'settings.backup.create': '创建备份',
+        'settings.backup.restore': '恢复',
+        'settings.backup.created': '备份已创建',
+        'settings.backup.restored': '设置和文件夹已恢复',
+
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': '开机启动',
+        'settings.autostart.description': '登录 Windows 时自动启动 QuickSort。',
+        'settings.autostart.toggle': '开机时启动',
+
         'settings.loading': '加载中...',
         'settings.saved': '设置已保存',
         'settings.save_error': '保存设置失败',
+
+        // Help (0.2.6)
+        'help.title': '帮助',
+        'help.intro': 'QuickSort 是一款文件管理器，可集成到 Windows 资源管理器右键菜单中，一键将文件移动或复制到您的收藏文件夹。',
+        'help.section.overview': '概览',
+        'help.overview.body': '在资源管理器中选择文件，右键点击并选择 Stop-queue 操作来收集文件，然后选择一个文件夹。操作在后台运行，无需打开窗口。',
+        'help.section.search': '搜索',
+        'help.search.body': '“搜索”选项卡（Ctrl+Shift+空格打开命令面板）在受跟踪的文件夹中搜索文件。查询为空时显示仪表板。',
+        'help.section.folders': '文件夹',
+        'help.folders.body': '管理收藏文件夹：添加、重命名、删除、切换收藏并分配颜色。文件夹会显示在资源管理器右键菜单和选择窗口中。',
+        'help.section.operations': '操作',
+        'help.operations.body': '历史和队列统一为单一操作表。已完成的操作可以撤销或重做；活动任务实时报告进度。',
+        'help.section.settings': '设置',
+        'help.settings.body': '配置主题、语言、默认操作、重复项处理和日志。注册 COM 服务器可启用资源管理器右键菜单；这里还可管理插件和创建备份。',
+        'help.section.hotkeys': '键盘快捷键',
+        'help.hotkey.palette': 'Ctrl+Shift+空格 — 命令面板',
+        'help.hotkey.selector': 'Shift+右键 — 通过队列选择文件',
+        'help.section.context_menu': '资源管理器右键菜单',
+        'help.context_menu.body': '从右键菜单选择的文件会存入待处理列表。选择窗口让您指定目标文件夹；实际的移动/复制由应用程序队列处理。',
 
 'selector.title.move_one': '将文件加入移动队列：',
     'selector.title.move_many': '将多个文件加入移动队列：',
@@ -967,6 +1531,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': '更新收藏失败',
     'editor.color_error': '保存颜色失败',
     'editor.remove_error': '删除错误：',
+        'editor.drop_hint': '将文件夹拖放到此处',
+        'editor.drop_added': '已添加：{added}',
+        'editor.drop_skipped': '已跳过：{skipped}',
+        'editor.drop_error': '添加错误：',
 
         'history.title': '操作历史',
         'history.loading': '加载中...',
@@ -1035,6 +1603,39 @@ export const translations: Record<Locale, Record<string, string>> = {
         'queue.operation.delete': '删除',
         'queue.operation.rename': '重命名',
 
+        // Operations (0.2.6 feature 4c)
+        'operations.title': '操作',
+        'operations.empty': '暂无操作',
+        'operations.loading': '加载中…',
+        'operations.refresh': '刷新',
+        'operations.clear': '清空历史',
+        'operations.clear_confirm': '清空全部历史？此操作无法撤销。',
+        'operations.delete_confirm': '删除 {{count}} 项操作？此操作无法撤销。',
+        'operations.col.status': '状态',
+        'operations.col.type': '类型',
+        'operations.col.source': '来源',
+        'operations.col.objects': '对象数',
+        'operations.col.files': '文件',
+        'operations.col.size': '大小',
+        'operations.col.date': '日期',
+        'operations.source.search': '搜索',
+        'operations.source.selector': '选择器',
+        'operations.source.context_menu': '上下文菜单',
+        'operations.source.api': 'API',
+        'operations.undo': '撤销',
+        'operations.repeat': '重试',
+        'operations.delete': '删除',
+        'operations.cancel': '取消',
+        'operations.details.title': '操作详情',
+        'operations.details.files': '对象',
+        'operations.details.target': '目标',
+        'operations.details.error': '错误',
+        'operations.details.progress': '进度',
+        'operations.details.close': '关闭',
+        'operations.selected_count': '已选择 {{count}} 项',
+        'operations.batch.success': '已完成 {{count}} 项',
+        'operations.batch.partial': '成功 {{success}} 项，失败 {{failed}} 项',
+
         'about.loading': '加载中...',
         'about.link_copied': '链接已复制',
         'about.repository': '仓库',
@@ -1060,6 +1661,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': '已复制 {count} 条记录',
         'log.all_levels': '所有级别',
         'log.copy_all': '复制全部',
+        'log.search': '搜索日志...',
+        'log.search_no_results': '没有与搜索匹配的记录',
         'log.empty': '无记录',
         'log.col.time': '时间',
         'log.col.level': '级别',
@@ -1092,6 +1695,39 @@ export const translations: Record<Locale, Record<string, string>> = {
         'folder_list.delete': '删除',
 
         'add_folder_button': '添加文件夹',
+
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': '列表',
+        'editor.view.tree': '树形',
+        'folder_tree.col.name': '名称',
+        'folder_tree.col.path': '路径',
+        'folder_tree.col.last_used': '最近使用',
+        'folder_tree.col.order': '排序',
+        'folder_tree.col.color': '颜色',
+        'folder_tree.last_used_never': '从未使用',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': '添加文件夹',
+        'add_folder.parent': '父文件夹',
+        'add_folder.parent_none': '无（根目录）',
+        'add_folder.confirm': '添加',
+        'add_folder.cancel': '取消',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': '系统',
+        'dashboard.cpu': 'CPU',
+        'dashboard.ram': '内存',
+        'dashboard.disk': '磁盘',
+        'dashboard.network': '网络',
+        'dashboard.status.ok': '正常',
+        'dashboard.status.warn': '偏高',
+        'dashboard.status.critical': '严重',
+        'dashboard.cores': '核心',
+        'dashboard.temp': '温度',
+        'dashboard.read': '读取',
+        'dashboard.write': '写入',
+        'dashboard.rx': '下行',
+        'dashboard.tx': '上行',
     },
 
     ja: {
@@ -1102,6 +1738,10 @@ export const translations: Record<Locale, Record<string, string>> = {
         'tab.queue': 'キュー',
         'tab.settings': '設定',
         'tab.about': 'バージョン情報',
+        // 0.2.6 navigation (Q2): Search / Folders / Operations / Settings / Help / About
+        'tab.search': '検索',
+        'tab.operations': '操作',
+        'tab.help': 'ヘルプ',
 
         'settings.appearance.title': '外観',
         'settings.appearance.description': 'お気に入りのテーマと言語を選択してください。',
@@ -1136,14 +1776,64 @@ export const translations: Record<Locale, Record<string, string>> = {
         'settings.duplicate_check.deep': '深度（SHA-256ハッシュ）',
 
         'settings.logging.title': 'ログ',
-        'settings.logging.description': 'バックエンドから送信される最小ログレベル。',
+        'settings.logging.description': 'ログレベルと出力形式を設定します。',
+        'settings.logging.level': 'レベル',
+        'settings.logging.level.trace': 'トレース',
+        'settings.logging.level.debug': 'デバッグ',
+        'settings.logging.level.info': '情報',
+        'settings.logging.level.warn': '警告',
+        'settings.logging.level.error': 'エラー',
+        'settings.logging.format': '形式',
+        'settings.logging.format.text': 'テキスト',
+        'settings.logging.format.json': 'JSON',
+        'settings.logging.level_error': 'ログレベルを適用できませんでした',
+
+        // Settings - Logs panel
+        'settings.logs.title': 'ログ',
+        'settings.logs.description': 'バックエンドとフロントエンドからのライブイベントログ。',
+
+        // Settings - Plugins panel (0.2.6: moved here from the header nav)
+        'settings.plugins.title': 'プラグイン',
+        'settings.plugins.description': 'インストール済みの Total Commander プラグインを管理します。',
 
         'settings.application.title': 'アプリケーション',
         'settings.application.quit': 'アプリを終了',
 
+        // Settings - Backup (0.2.6 feature #20 / plan Q7)
+        'settings.backup.title': 'バックアップ',
+        'settings.backup.description': '設定とフォルダーの ZIP アーカイブを作成するか、以前のバックアップから復元します。',
+        'settings.backup.create': 'バックアップを作成',
+        'settings.backup.restore': '復元',
+        'settings.backup.created': 'バックアップを作成しました',
+        'settings.backup.restored': '設定とフォルダーを復元しました',
+
+        // Settings - Autostart (0.2.6 feature #23 / plan Q6)
+        'settings.autostart.title': '自動起動',
+        'settings.autostart.description': 'Windows サインイン時に QuickSort を自動的に起動します。',
+        'settings.autostart.toggle': '起動時に実行',
+
         'settings.loading': '読み込み中...',
         'settings.saved': '設定を保存しました',
         'settings.save_error': '設定の保存に失敗しました',
+
+        // Help (0.2.6)
+        'help.title': 'ヘルプ',
+        'help.intro': 'QuickSort は Windows エクスプローラーのコンテキストメニューに統合され、お気に入りフォルダーへのファイルの移動・コピーをワンクリックで行うファイルマネージャーです。',
+        'help.section.overview': '概要',
+        'help.overview.body': 'エクスプローラーでファイルを選択し、右クリックから Stop-queue 操作を選んでファイルを集め、フォルダーを選択します。操作はウィンドウを開かずバックグラウンドで実行されます。',
+        'help.section.search': '検索',
+        'help.search.body': '「検索」タブ（Ctrl+Shift+Space でコマンドパレット）は追跡中のフォルダーを横断してファイルを検索します。クエリが空の間はダッシュボードが表示されます。',
+        'help.section.folders': 'フォルダー',
+        'help.folders.body': 'お気に入りフォルダーを管理：追加、名前変更、削除、お気に入りの切り替え、色の割り当て。フォルダーはエクスプローラーのコンテキストメニューと選択ウィンドウに表示されます。',
+        'help.section.operations': '操作',
+        'help.operations.body': '履歴とキューは単一の「操作」テーブルに統合されています。完了した操作は取り消し・再実行でき、アクティブなジョブはリアルタイムで進捗を報告します。',
+        'help.section.settings': '設定',
+        'help.settings.body': 'テーマ、言語、デフォルト操作、重複処理、ログを設定します。COMサーバーの登録でエクスプローラーのコンテキストメニューが有効になり、プラグイン管理とバックアップもここで行います。',
+        'help.section.hotkeys': 'キーボードショートカット',
+        'help.hotkey.palette': 'Ctrl+Shift+Space — コマンドパレット',
+        'help.hotkey.selector': 'Shift+右クリック — キュー経由でファイルを選択',
+        'help.section.context_menu': 'エクスプローラーのコンテキストメニュー',
+        'help.context_menu.body': 'コンテキストメニューから選択したファイルは保留リストに保存されます。選択ウィンドウでターゲットフォルダーを指定し、実際の移動・コピーはアプリケーションキューが処理します。',
 
 'selector.title.move_one': 'ファイルを移動キューに追加：',
     'selector.title.move_many': '複数のファイルを移動キューに追加：',
@@ -1178,6 +1868,10 @@ export const translations: Record<Locale, Record<string, string>> = {
 'editor.favorite_error': 'お気に入りの更新に失敗しました',
     'editor.color_error': '色の保存に失敗しました',
     'editor.remove_error': '削除エラー：',
+        'editor.drop_hint': 'フォルダーをここにドロップ',
+        'editor.drop_added': '追加済み：{added}',
+        'editor.drop_skipped': 'スキップ：{skipped}',
+        'editor.drop_error': '追加エラー：',
 
         'history.title': '操作履歴',
         'history.loading': '読み込み中...',
@@ -1246,6 +1940,39 @@ export const translations: Record<Locale, Record<string, string>> = {
         'queue.operation.delete': '削除',
         'queue.operation.rename': '名前変更',
 
+        // Operations (0.2.6 feature 4c)
+        'operations.title': '操作',
+        'operations.empty': 'まだ操作はありません',
+        'operations.loading': '読み込み中…',
+        'operations.refresh': '更新',
+        'operations.clear': '履歴を削除',
+        'operations.clear_confirm': 'すべての履歴を削除しますか？この操作は元に戻せません。',
+        'operations.delete_confirm': '{{count}} 件の操作を削除しますか？元に戻すことはできません。',
+        'operations.col.status': 'ステータス',
+        'operations.col.type': '種類',
+        'operations.col.source': 'ソース',
+        'operations.col.objects': 'オブジェクト数',
+        'operations.col.files': 'ファイル',
+        'operations.col.size': 'サイズ',
+        'operations.col.date': '日付',
+        'operations.source.search': '検索',
+        'operations.source.selector': 'セレクター',
+        'operations.source.context_menu': 'コンテキストメニュー',
+        'operations.source.api': 'API',
+        'operations.undo': '元に戻す',
+        'operations.repeat': '繰り返す',
+        'operations.delete': '削除',
+        'operations.cancel': 'キャンセル',
+        'operations.details.title': '操作の詳細',
+        'operations.details.files': 'オブジェクト',
+        'operations.details.target': 'ターゲット',
+        'operations.details.error': 'エラー',
+        'operations.details.progress': '進捗',
+        'operations.details.close': '閉じる',
+        'operations.selected_count': '{{count}} 件選択中',
+        'operations.batch.success': '{{count}} 件完了',
+        'operations.batch.partial': '成功 {{success}} 件、失敗 {{failed}} 件',
+
         'about.loading': '読み込み中...',
         'about.link_copied': 'リンクをコピーしました',
         'about.repository': 'リポジトリ',
@@ -1271,6 +1998,8 @@ export const translations: Record<Locale, Record<string, string>> = {
         'log.copy_success': '{count} 件のエントリをコピーしました',
         'log.all_levels': 'すべてのレベル',
         'log.copy_all': 'すべてコピー',
+        'log.search': 'ログを検索...',
+        'log.search_no_results': '検索に一致するエントリがありません',
         'log.empty': 'エントリなし',
         'log.col.time': '時刻',
         'log.col.level': 'レベル',
@@ -1303,6 +2032,39 @@ export const translations: Record<Locale, Record<string, string>> = {
         'folder_list.delete': '削除',
 
         'add_folder_button': 'フォルダを追加',
+
+        // Folder Tree view (0.2.6 feature 4f, Q5)
+        'editor.view.list': 'リスト',
+        'editor.view.tree': 'ツリー',
+        'folder_tree.col.name': '名前',
+        'folder_tree.col.path': 'パス',
+        'folder_tree.col.last_used': '最終使用',
+        'folder_tree.col.order': '並び順',
+        'folder_tree.col.color': '色',
+        'folder_tree.last_used_never': '未使用',
+
+        // Add Folder dialog (0.2.6 feature 4f, Q5)
+        'add_folder.title': 'フォルダを追加',
+        'add_folder.parent': '親フォルダ',
+        'add_folder.parent_none': 'なし（ルート）',
+        'add_folder.confirm': '追加',
+        'add_folder.cancel': 'キャンセル',
+
+        // Dashboard (0.2.6 feature #19 / plan Q4)
+        'dashboard.title': 'システム',
+        'dashboard.cpu': 'CPU',
+        'dashboard.ram': 'メモリ',
+        'dashboard.disk': 'ディスク',
+        'dashboard.network': 'ネットワーク',
+        'dashboard.status.ok': '正常',
+        'dashboard.status.warn': '高め',
+        'dashboard.status.critical': '重大',
+        'dashboard.cores': 'コア',
+        'dashboard.temp': '温度',
+        'dashboard.read': '読み取り',
+        'dashboard.write': '書き込み',
+        'dashboard.rx': '受信',
+        'dashboard.tx': '送信',
     },
 };
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '../lib/invoke';
 import { logger } from '../lib/logger';
 import { SearchResult, FileSearchResult } from '../types';
+import DashboardPanel from '../components/DashboardPanel';
 
 export default function SearchPage() {
     const [query, setQuery] = useState('');
@@ -60,9 +61,18 @@ export default function SearchPage() {
         });
     };
 
-    const handleSelect = (item: FileSearchResult) => {
+    const handleSelect = async (item: FileSearchResult) => {
         logger.action('SearchPage', `selected: ${item.path}`);
-        // TODO: open file / reveal in explorer
+        const correlationId = crypto.randomUUID();
+        try {
+            await invoke<string>('log_user_select', {
+                source: 'Search',
+                paths: [item.path],
+                correlation_id: correlationId,
+            });
+        } catch (e) {
+            logger.error('SearchPage', `intent logging failed: ${e}`);
+        }
     };
 
     return (
@@ -203,20 +213,7 @@ export default function SearchPage() {
             )}
 
             {!query && (
-                <div style={{
-                    textAlign: 'center',
-                    padding: 'var(--qs-space-2xl)',
-                    color: 'var(--qs-text-muted)',
-                    fontSize: '13px',
-                }}>
-                    Введите запрос для поиска файлов по отслеживаемым папкам.
-                    <br />
-                    <span style={{ fontFamily: 'var(--qs-font-mono)', fontSize: '12px', marginTop: '8px', display: 'block' }}>
-                        Примеры: <code style={{ color: 'var(--qs-accent)' }}>ext:pdf</code>{' '}
-                        <code style={{ color: 'var(--qs-accent)' }}>size:&gt;10mb</code>{' '}
-                        <code style={{ color: 'var(--qs-accent)' }}>folders:</code>
-                    </span>
-                </div>
+                <DashboardPanel />
             )}
         </div>
     );

@@ -22,6 +22,7 @@
 //! - **Internal errors** (`Internal`) signal programmer mistakes or
 //!   unrecoverable states and should be logged with high priority.
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Unified error type for the Application layer.
@@ -92,6 +93,12 @@ pub enum UseCaseError {
     #[error("File system error: {0}")]
     FileSystemError(String),
 
+    /// The destination volume does not have enough space for the operation.
+    /// `need` is the total size of the sources that must be written,
+    /// `available` is the free space on the target volume at check time.
+    #[error("Not enough disk space on target: {need} bytes needed, {available} bytes available")]
+    InsufficientDiskSpace { need: u64, available: u64 },
+
     // ---- Internal errors ----
     // These errors indicate unexpected states that should never occur
     // under normal operation.
@@ -101,4 +108,119 @@ pub enum UseCaseError {
     // English-only comment as per project standards
     #[error("Internal Use Case error: {0}")]
     Internal(String),
+
+    /// An undo/repeat operation failed after the pre-flight checks
+    /// passed. Carries a pre-classified [`OperationErrorDto`] so the
+    /// adapter (Tauri command) can route the failure to the UI without
+    /// re-mapping the underlying cause.
+    #[error("undo failed: {0:?}")]
+    UndoFailed(OperationErrorDto),
+}
+
+/// Classification of an undo/repeat failure for UI routing.
+///
+/// The kind is the authoritative discriminator: the frontend decides how
+/// to treat the failure based on this value and never parses the
+/// human-readable `message` text. Serialized lowercase to mirror the
+/// TypeScript union `'transient' | 'permanent' | 'unknown'`.
+///
+/// - `Transient` — retrying may succeed (e.g. a file was momentarily
+///   locked by another process). The action button stays enabled.
+/// - `Permanent` — retrying cannot succeed until the user changes the
+///   external state (operation gone, source file missing). The action
+///   button is disabled in the UI.
+/// - `Unknown` — the cause could not be determined reliably; fall back to
+///   a generic toast and keep the action enabled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UndoErrorKind {
+    Transient,
+    Permanent,
+    Unknown,
+}
+
+/// Wire-format error returned by undo/repeat commands to the frontend.
+///
+/// `kind` drives UI routing (button state, toast type); `message` is for
+/// display only and must never be re-parsed by the UI.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OperationErrorDto {
+    pub kind: UndoErrorKind,
+    pub message: String,
+}
+
+impl UseCaseError {
+    /// Maps this error to the wire-format DTO consumed by undo/repeat
+    /// commands.
+    ///
+    /// Classification follows the P1-5 table:
+    /// - `UndoFailed` passes its pre-classified DTO through unchanged.
+    /// - `UndoNotPossible` is `Permanent` (retrying cannot succeed).
+    /// - Everything else is `Unknown` — without `io::ErrorKind` the cause
+    ///   cannot be determined reliably (e.g. an `exists()` probe failure
+    ///   may be transient or permanent depending on the reason).
+    pub fn to_operation_error(&self) -> OperationErrorDto {
+        match self {
+            UseCaseError::UndoFailed(dto) => dto.clone(),
+            UseCaseError::UndoNotPossible(_) => OperationErrorDto {
+                kind: UndoErrorKind::Permanent,
+                message: self.to_string(),
+            },
+            _ => OperationErrorDto {
+                kind: UndoErrorKind::Unknown,
+                message: self.to_string(),
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repository_error_maps_to_unknown() {
+        let err = UseCaseError::RepositoryError("repo down".to_string());
+        let dto = err.to_operation_error();
+        assert_eq!(dto.kind, UndoErrorKind::Unknown);
+        assert_eq!(dto.message, "Repository error: repo down");
+    }
+
+    #[test]
+    fn file_system_error_maps_to_unknown() {
+        // A bare FileSystemError (e.g. an exists() probe failure) cannot be
+        // classified without io::ErrorKind, so the UI must fall back to a
+        // generic toast (P1-5).
+        let err = UseCaseError::FileSystemError("probe failed".to_string());
+        let dto = err.to_operation_error();
+        assert_eq!(dto.kind, UndoErrorKind::Unknown);
+    }
+
+    #[test]
+    fn undo_not_possible_maps_to_permanent() {
+        let err = UseCaseError::UndoNotPossible("already undone".to_string());
+        let dto = err.to_operation_error();
+        assert_eq!(dto.kind, UndoErrorKind::Permanent);
+        assert_eq!(dto.message, "Operation not undoable: already undone");
+    }
+
+    #[test]
+    fn undo_failed_passes_dto_through_unchanged() {
+        let dto = OperationErrorDto {
+            kind: UndoErrorKind::Transient,
+            message: "File system error: access denied".to_string(),
+        };
+        let mapped = UseCaseError::UndoFailed(dto.clone()).to_operation_error();
+        assert_eq!(mapped, dto);
+    }
+
+    #[test]
+    fn dto_serializes_kind_as_lowercase() {
+        let dto = OperationErrorDto {
+            kind: UndoErrorKind::Transient,
+            message: "x".to_string(),
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        assert!(json.contains("\"kind\":\"transient\""));
+    }
 }

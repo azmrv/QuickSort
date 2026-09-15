@@ -71,6 +71,7 @@ async fn rename_single_file() {
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: Some(vec![new_path.clone()]),
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     // ---- When ----
@@ -132,6 +133,7 @@ async fn rename_mismatched_counts() {
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: Some(vec![new_path.clone()]),
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     // ---- When ----

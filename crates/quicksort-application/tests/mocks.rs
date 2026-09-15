@@ -18,6 +18,7 @@
 //! single-threaded or use `tokio::task::spawn_blocking`, this is safe.
 
 use async_trait::async_trait;
+use quicksort_application::FolderMetadata;
 use quicksort_application::UseCaseError;
 use quicksort_domain::errors::DomainError;
 use quicksort_domain::{
@@ -29,8 +30,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 pub use quicksort_application::ports::outbound::{
-    Clock, ConfigurationRepository, DuplicateDetectionPort, FileSystem, IdGenerator,
-    OperationRepository,
+    Clock, ConfigurationRepository, DuplicateDetectionPort, FileSearchPort, FileSearchResult,
+    FileSystem, IdGenerator, OperationRepository, ProgressCallback, SearchResult,
 };
 
 // ============================================================================
@@ -201,6 +202,10 @@ impl OperationRepository for MockOperationRepository {
 pub struct MockFileSystem {
     /// Simulated file system state: (exists, size_in_bytes)
     files: Arc<Mutex<HashMap<PathBuf, (bool, u64)>>>,
+    /// Override for `available_space`; `None` means "unlimited".
+    available_space: Arc<Mutex<Option<u64>>>,
+    /// Override for `is_same_volume`; `None` means "same volume".
+    is_same_volume: Arc<Mutex<Option<bool>>>,
 }
 
 impl MockFileSystem {
@@ -208,7 +213,19 @@ impl MockFileSystem {
     pub fn new() -> Self {
         Self {
             files: Arc::new(Mutex::new(HashMap::new())),
+            available_space: Arc::new(Mutex::new(None)),
+            is_same_volume: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Sets the value returned by `available_space` for pre-flight checks.
+    pub fn set_available_space(&self, bytes: u64) {
+        *self.available_space.lock().unwrap() = Some(bytes);
+    }
+
+    /// Sets the value returned by `is_same_volume` for pre-flight checks.
+    pub fn set_same_volume(&self, same: bool) {
+        *self.is_same_volume.lock().unwrap() = Some(same);
     }
 
     /// Pre-populates a file entry (used by tests to set up source files).
@@ -247,7 +264,12 @@ impl FileSystem for MockFileSystem {
         }
     }
 
-    async fn move_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
+    async fn move_file(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        _on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
         let from_path = Self::to_pathbuf(from);
         let to_path = Self::to_pathbuf(to);
         let mut files = self.files.lock().unwrap();
@@ -268,7 +290,12 @@ impl FileSystem for MockFileSystem {
         Ok(size)
     }
 
-    async fn copy_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
+    async fn copy_file(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        _on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
         let from_path = Self::to_pathbuf(from);
         let to_path = Self::to_pathbuf(to);
         let mut files = self.files.lock().unwrap();
@@ -294,12 +321,22 @@ impl FileSystem for MockFileSystem {
         Ok(false)
     }
 
-    async fn copy_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
-        self.copy_file(from, to).await
+    async fn copy_tree(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
+        self.copy_file(from, to, on_progress).await
     }
 
-    async fn move_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError> {
-        self.move_file(from, to).await
+    async fn move_tree(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError> {
+        self.move_file(from, to, on_progress).await
     }
 
     async fn delete_file(&self, path: &AbsolutePath) -> Result<(), UseCaseError> {
@@ -338,6 +375,79 @@ impl FileSystem for MockFileSystem {
         files.insert(to_path, (true, size));
 
         Ok(())
+    }
+
+    async fn generate_unique_path(
+        &self,
+        path: &AbsolutePath,
+    ) -> Result<AbsolutePath, UseCaseError> {
+        if !self.exists(path).await? {
+            return Ok(path.clone());
+        }
+
+        let base = Self::to_pathbuf(path);
+        let parent = base
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_default();
+        let file_name = base
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let stem = base
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| file_name.clone());
+        let ext = base.extension().map(|e| e.to_string_lossy().into_owned());
+
+        const MAX_ATTEMPTS: u32 = 1000;
+        for n in 1..=MAX_ATTEMPTS {
+            let candidate_name = match &ext {
+                Some(ext) => format!("{stem} ({n}).{ext}"),
+                None => format!("{stem} ({n})"),
+            };
+            let candidate = AbsolutePath::from(parent.join(candidate_name));
+            if !self.exists(&candidate).await? {
+                return Ok(candidate);
+            }
+        }
+
+        Err(UseCaseError::Conflict(format!(
+            "could not generate a unique path for {} after {} attempts",
+            path, MAX_ATTEMPTS
+        )))
+    }
+
+    async fn folder_metadata(&self, path: &AbsolutePath) -> Result<FolderMetadata, UseCaseError> {
+        let path = Self::to_pathbuf(path);
+        let files = self.files.lock().unwrap();
+        match files.get(&path) {
+            Some((true, size)) => Ok(FolderMetadata {
+                exists: true,
+                is_dir: false,
+                total_size: *size,
+                item_count: 1,
+            }),
+            _ => Ok(FolderMetadata {
+                exists: false,
+                is_dir: false,
+                total_size: 0,
+                item_count: 0,
+            }),
+        }
+    }
+
+    async fn available_space(&self, _path: &AbsolutePath) -> Result<u64, UseCaseError> {
+        Ok(self.available_space.lock().unwrap().unwrap_or(u64::MAX))
+    }
+
+    async fn is_same_volume(
+        &self,
+        _a: &AbsolutePath,
+        _b: &AbsolutePath,
+    ) -> Result<bool, UseCaseError> {
+        Ok(self.is_same_volume.lock().unwrap().unwrap_or(true))
     }
 }
 
@@ -433,5 +543,71 @@ impl DuplicateDetectionPort for MockDuplicateDetector {
             exists: false,
             mode: mode.clone(),
         })
+    }
+}
+
+// ============================================================================
+// Mock FileSearchPort
+// ============================================================================
+
+/// A controllable file search port for testing.
+///
+/// The search result is set up-front by the test; the mock records the
+/// arguments of the latest search call for verification.
+#[derive(Clone, Default)]
+pub struct MockFileSearchPort {
+    result: Arc<Mutex<Option<SearchResult>>>,
+    last_directories: Arc<Mutex<Vec<String>>>,
+    last_query: Arc<Mutex<String>>,
+}
+
+impl MockFileSearchPort {
+    /// Creates a new mock that returns an empty result set.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Pre-loads the result returned by the next `search` call.
+    pub fn set_result(&self, result: SearchResult) {
+        *self.result.lock().unwrap() = Some(result);
+    }
+
+    /// Returns the directories of the most recent search call.
+    pub fn last_directories(&self) -> Vec<String> {
+        self.last_directories.lock().unwrap().clone()
+    }
+
+    /// Returns the query text of the most recent search call.
+    pub fn last_query(&self) -> String {
+        self.last_query.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl FileSearchPort for MockFileSearchPort {
+    async fn search(
+        &self,
+        directories: &[String],
+        query_text: &str,
+        _max_results: usize,
+    ) -> Result<SearchResult, UseCaseError> {
+        *self.last_directories.lock().unwrap() = directories.to_vec();
+        *self.last_query.lock().unwrap() = query_text.to_string();
+        Ok(self
+            .result
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(empty_search_result))
+    }
+}
+
+/// Builds an empty, non-truncated search result (used by default).
+fn empty_search_result() -> SearchResult {
+    SearchResult {
+        files: Vec::new(),
+        total_count: 0,
+        search_time_ms: 0,
+        truncated: false,
     }
 }

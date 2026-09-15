@@ -2,6 +2,7 @@
 name = "quicksort-ipc-contract"
 version = "0.1.0"
 edition = "2021"
+publish = false # Workspace-internal crate, never published to crates.io
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }

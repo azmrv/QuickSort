@@ -75,6 +75,7 @@ async fn move_with_conflict_auto_rename() {
         overwrite_policy: OverwritePolicy::AutoRename,
         target_paths: None,
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     // ---- When ----
@@ -137,6 +138,7 @@ async fn move_with_conflict_skip() {
         overwrite_policy: OverwritePolicy::Skip,
         target_paths: None,
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     // ---- When ----
@@ -189,6 +191,7 @@ async fn move_with_conflict_overwrite() {
         overwrite_policy: OverwritePolicy::Overwrite,
         target_paths: None,
         duplicate_check_mode: DuplicateCheckMode::default(),
+        ..OperationCommand::default()
     };
 
     // ---- When ----

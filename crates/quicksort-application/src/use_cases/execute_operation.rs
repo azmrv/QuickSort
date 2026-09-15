@@ -3,10 +3,21 @@ use crate::errors::UseCaseError;
 use crate::ports::inbound::ExecuteOperation;
 use crate::ports::outbound::{
     Clock, ConfigurationRepository, DuplicateDetectionPort, FileSystem, IdGenerator,
-    OperationRepository, ProgressInfo, ProgressReporter,
+    OperationRepository, ProgressCallback, ProgressInfo, ProgressReporter,
 };
 use async_trait::async_trait;
 use quicksort_domain::{AbsolutePath, Operation, OperationState, OperationType};
+
+/// Result of the pre-flight disk-space check plus the byte weights used to
+/// build the progress scale (re-QA 12.09.2026, item 3.5).
+///
+/// `copies` mirrors `source_paths`: `true` marks a source that is actually
+/// copied during the operation (Copy sources and cross-volume Move sources).
+/// Same-volume moves, renames and deletes do not copy and report no progress.
+struct SpaceCheck {
+    total_bytes: u64,
+    copies: Vec<bool>,
+}
 
 pub struct ExecuteOperationUseCase {
     operation_repository: Box<dyn OperationRepository>,
@@ -43,16 +54,14 @@ impl ExecuteOperationUseCase {
         self
     }
 
-    async fn report_progress(&self, current: u32, total: u32, phase: &str, detail: Option<String>) {
+    fn report_progress(&self, current: u64, total: u64, phase: &str, detail: Option<String>) {
         if let Some(ref reporter) = self.progress_reporter {
-            reporter
-                .report(ProgressInfo {
-                    current,
-                    total,
-                    phase: phase.to_string(),
-                    detail,
-                })
-                .await;
+            reporter.report(ProgressInfo {
+                current,
+                total,
+                phase: phase.to_string(),
+                detail,
+            });
         }
     }
 }
@@ -75,23 +84,86 @@ impl ExecuteOperation for ExecuteOperationUseCase {
             now,
         );
 
+        // Propagate the operation origin and its trace id from the command so
+        // the Operations UI and audit logs can link intent to execution
+        // (spec #15, release 0.2.6).
+        operation.source = command.source;
+        operation.correlation_id = command.correlation_id;
+
         operation
             .start()
             .map_err(|e| UseCaseError::Domain(e.to_string()))?;
 
-        let total = command.source_paths.len() as u32;
         let mut total_files: u32 = 0;
-        let mut total_bytes: u64 = 0;
+        let mut history_bytes: u64 = 0;
+        let mut progress_current: u64 = 0;
         let mut last_error: Option<UseCaseError> = None;
 
-        for (idx, source) in command.source_paths.iter().enumerate() {
-            self.report_progress(idx as u32, total, "processing", Some(source.to_string()))
-                .await;
+        // Pre-flight check: fail BEFORE moving/copying starts when the target
+        // volume lacks the space an operation needs (re-QA 12.09.2026 D3).
+        let space = match self.check_disk_space(&command, &target_folder).await {
+            Ok(s) => s,
+            Err(e) => {
+                operation
+                    .fail(e.to_string())
+                    .map_err(|err| UseCaseError::Domain(err.to_string()))?;
+                self.operation_repository
+                    .save(&operation)
+                    .await
+                    .map_err(|err| UseCaseError::RepositoryError(err.to_string()))?;
+                return Err(e);
+            }
+        };
 
-            match self.execute_single(source, &command, &target_folder).await {
+        // Byte-based progress scale when the operation moves real bytes;
+        // fall back to a per-source scale for deletes, renames and
+        // same-volume moves (re-QA 12.09.2026, item 3.5).
+        let byte_mode = space.total_bytes > 0;
+        let total_scale = if byte_mode {
+            space.total_bytes
+        } else {
+            command.source_paths.len() as u64
+        };
+
+        for (idx, source) in command.source_paths.iter().enumerate() {
+            if !byte_mode {
+                self.report_progress(
+                    idx as u64,
+                    total_scale,
+                    "processing",
+                    Some(source.to_string()),
+                );
+            }
+
+            // Snapshot of the bytes already accounted by earlier sources. The
+            // FileSystem callback reports its per-file ticks relative to this
+            // base, keeping the progress bar monotonic across sources.
+            let base = progress_current;
+            let cb = move |copied: u64, name: &str| {
+                self.report_progress(
+                    base + copied,
+                    total_scale,
+                    "copying",
+                    Some(name.to_string()),
+                );
+            };
+            let on_progress: Option<&(dyn Fn(u64, &str) + Send + Sync)> =
+                if byte_mode && space.copies[idx] {
+                    Some(&cb as &(dyn Fn(u64, &str) + Send + Sync))
+                } else {
+                    None
+                };
+
+            match self
+                .execute_single(source, &command, &target_folder, on_progress)
+                .await
+            {
                 Ok(bytes) => {
                     total_files += 1;
-                    total_bytes += bytes;
+                    history_bytes += bytes;
+                    if space.copies[idx] {
+                        progress_current += bytes;
+                    }
                 }
                 Err(e) => {
                     // Keep processing the remaining items so a single
@@ -103,11 +175,11 @@ impl ExecuteOperation for ExecuteOperationUseCase {
             }
         }
 
-        self.report_progress(total, total, "complete", None).await;
+        self.report_progress(total_scale, total_scale, "complete", None);
 
         if let Some(error) = last_error {
             let reason = error.to_string();
-            operation.record_progress(total_files, total_bytes);
+            operation.record_progress(total_files, history_bytes);
             operation
                 .fail(reason.clone())
                 .map_err(|e| UseCaseError::Domain(e.to_string()))?;
@@ -119,7 +191,7 @@ impl ExecuteOperation for ExecuteOperationUseCase {
         }
 
         operation
-            .complete(total_files, total_bytes)
+            .complete(total_files, history_bytes)
             .map_err(|e| UseCaseError::Domain(e.to_string()))?;
         self.operation_repository
             .save(&operation)
@@ -130,10 +202,10 @@ impl ExecuteOperation for ExecuteOperationUseCase {
             operation_id,
             state: OperationState::Completed {
                 processed_files: total_files,
-                bytes_processed: total_bytes,
+                bytes_processed: history_bytes,
             },
             processed_files: total_files,
-            bytes_moved: total_bytes,
+            bytes_moved: history_bytes,
         })
     }
 }
@@ -144,6 +216,7 @@ impl ExecuteOperationUseCase {
         source: &AbsolutePath,
         command: &OperationCommand,
         target_folder: &Option<AbsolutePath>,
+        on_progress: ProgressCallback<'_>,
     ) -> Result<u64, UseCaseError> {
         match command.operation_type {
             OperationType::Move | OperationType::Copy => {
@@ -212,8 +285,12 @@ impl ExecuteOperationUseCase {
                         OverwritePolicy::AutoRename => {
                             let resolved = self.unique_name(&dest).await?;
                             return match command.operation_type {
-                                OperationType::Move => self.perform_move(source, &resolved).await,
-                                OperationType::Copy => self.perform_copy(source, &resolved).await,
+                                OperationType::Move => {
+                                    self.perform_move(source, &resolved, on_progress).await
+                                }
+                                OperationType::Copy => {
+                                    self.perform_copy(source, &resolved, on_progress).await
+                                }
                                 _ => unreachable!(),
                             };
                         }
@@ -221,8 +298,12 @@ impl ExecuteOperationUseCase {
                             // In non-interactive mode (IPC from DLL), fall back to AutoRename
                             let resolved = self.unique_name(&dest).await?;
                             return match command.operation_type {
-                                OperationType::Move => self.perform_move(source, &resolved).await,
-                                OperationType::Copy => self.perform_copy(source, &resolved).await,
+                                OperationType::Move => {
+                                    self.perform_move(source, &resolved, on_progress).await
+                                }
+                                OperationType::Copy => {
+                                    self.perform_copy(source, &resolved, on_progress).await
+                                }
                                 _ => unreachable!(),
                             };
                         }
@@ -231,8 +312,8 @@ impl ExecuteOperationUseCase {
 
                 // No destination conflict (or Overwrite policy) — proceed
                 match command.operation_type {
-                    OperationType::Move => self.perform_move(source, &dest).await,
-                    OperationType::Copy => self.perform_copy(source, &dest).await,
+                    OperationType::Move => self.perform_move(source, &dest, on_progress).await,
+                    OperationType::Copy => self.perform_copy(source, &dest, on_progress).await,
                     _ => unreachable!(),
                 }
             }
@@ -250,6 +331,80 @@ impl ExecuteOperationUseCase {
                     .await
                     .map(|_| 0u64)
             }
+        }
+    }
+
+    async fn check_disk_space(
+        &self,
+        command: &OperationCommand,
+        target_folder: &Option<AbsolutePath>,
+    ) -> Result<SpaceCheck, UseCaseError> {
+        let target = match target_folder {
+            Some(t) => t,
+            None => {
+                return Ok(SpaceCheck {
+                    total_bytes: 0,
+                    copies: vec![false; command.source_paths.len()],
+                });
+            }
+        };
+
+        let mut needed: u64 = 0;
+        let mut total_bytes: u64 = 0;
+        let mut copies = Vec::with_capacity(command.source_paths.len());
+
+        for source in &command.source_paths {
+            match command.operation_type {
+                OperationType::Copy => {
+                    let size = self.source_size(source).await?;
+                    copies.push(true);
+                    total_bytes += size;
+                    needed += size;
+                }
+                OperationType::Move => {
+                    // Cross-volume moves copy first, so they need space for
+                    // the copy; same-volume moves are renames and need none.
+                    let cross_volume = !self.file_system.is_same_volume(source, target).await?;
+                    copies.push(cross_volume);
+                    let size = self.source_size(source).await?;
+                    total_bytes += size;
+                    if cross_volume {
+                        needed += size;
+                    }
+                }
+                OperationType::Delete | OperationType::Rename => {
+                    copies.push(false);
+                }
+            }
+        }
+
+        if needed > 0 {
+            let available = self.file_system.available_space(target).await?;
+            if needed > available {
+                return Err(UseCaseError::InsufficientDiskSpace {
+                    need: needed,
+                    available,
+                });
+            }
+        }
+
+        Ok(SpaceCheck {
+            total_bytes,
+            copies,
+        })
+    }
+
+    async fn source_size(&self, source: &AbsolutePath) -> Result<u64, UseCaseError> {
+        // A source that vanished since the operation was queued weighs zero:
+        // execute_single reports the missing-file error with its specific
+        // message instead of failing the whole pre-flight.
+        if !self.file_system.exists(source).await? {
+            return Ok(0);
+        }
+        if self.file_system.is_dir(source).await? {
+            Ok(self.file_system.folder_metadata(source).await?.total_size)
+        } else {
+            self.file_system.get_file_size(source).await
         }
     }
 
@@ -271,11 +426,12 @@ impl ExecuteOperationUseCase {
         &self,
         from: &AbsolutePath,
         to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
     ) -> Result<u64, UseCaseError> {
         if self.file_system.is_dir(from).await? {
-            self.file_system.move_tree(from, to).await
+            self.file_system.move_tree(from, to, on_progress).await
         } else {
-            self.file_system.move_file(from, to).await
+            self.file_system.move_file(from, to, on_progress).await
         }
     }
 
@@ -283,11 +439,12 @@ impl ExecuteOperationUseCase {
         &self,
         from: &AbsolutePath,
         to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
     ) -> Result<u64, UseCaseError> {
         if self.file_system.is_dir(from).await? {
-            self.file_system.copy_tree(from, to).await
+            self.file_system.copy_tree(from, to, on_progress).await
         } else {
-            self.file_system.copy_file(from, to).await
+            self.file_system.copy_file(from, to, on_progress).await
         }
     }
 

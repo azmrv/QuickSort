@@ -95,6 +95,12 @@
 /* ================================
    Header Right — Search + Theme
    ================================ */
+.header-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+}
+
 .header-right {
     display: flex;
     align-items: center;
@@ -432,8 +438,46 @@
 }
 
 /* ================================
+   Folder Drop Overlay
+   ================================ */
+.folder-drop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--qs-bg-primary) 75%, transparent);
+    pointer-events: none;
+}
+
+.folder-drop-hint {
+    padding: var(--qs-space-lg) var(--qs-space-xl);
+    background: var(--qs-bg-secondary);
+    border: 2px dashed var(--qs-accent);
+    border-radius: var(--qs-radius-lg);
+    color: var(--qs-accent);
+    font-family: var(--qs-font-body);
+    font-size: 16px;
+    font-weight: 600;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* ================================
    Add Folder Button
    ================================ */
+.editor-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--qs-space-md);
+    margin-bottom: var(--qs-space-lg);
+}
+
+.editor-toolbar .add-folder-btn {
+    margin-bottom: 0;
+}
+
 .add-folder-btn {
     display: flex;
     align-items: center;
@@ -647,6 +691,17 @@
     gap: var(--qs-space-md);
 }
 
+/* Embedded log viewer inside Settings — fixed height since the
+   settings form itself scrolls and .log-page needs a bounded parent. */
+.settings-logs-panel {
+    height: 420px;
+}
+
+/* Embedded plugins panel inside Settings (0.2.6 feature #17). */
+.settings-plugins-panel {
+    min-height: 160px;
+}
+
 .log-toolbar {
     display: flex;
     gap: var(--qs-space-sm);
@@ -668,6 +723,22 @@
 }
 
 .log-toolbar select:focus {
+    border-color: var(--qs-accent);
+}
+
+.log-toolbar input[type="text"] {
+    padding: 6px 12px;
+    background: var(--qs-bg-tertiary);
+    border: 1px solid var(--qs-border);
+    border-radius: var(--qs-radius-sm);
+    color: var(--qs-text-primary);
+    font-family: var(--qs-font-body);
+    font-size: 13px;
+    outline: none;
+    width: 220px;
+}
+
+.log-toolbar input[type="text"]:focus {
     border-color: var(--qs-accent);
 }
 
@@ -790,4 +861,37 @@
 
 .log-list::-webkit-scrollbar-thumb:hover {
     background: var(--qs-border-hover);
+}
+
+/* ================================
+   Operations table (4c) — react-data-grid overrides
+   ================================ */
+.operations-grid-wrapper {
+    border: 1px solid var(--qs-border);
+    border-radius: var(--qs-radius-md);
+    overflow: hidden;
+    margin: var(--qs-space-lg) 0;
+}
+
+.operations-grid {
+    --rdg-font-size: 12px;
+    --rdg-background-color: var(--qs-bg-secondary);
+    --rdg-color: var(--qs-text-primary);
+    --rdg-border-color: var(--qs-border);
+    --rdg-border-width: 1px;
+    --rdg-header-background-color: var(--qs-bg-tertiary);
+    --rdg-row-hover-background-color: var(--qs-bg-tertiary);
+    --rdg-row-selected-background-color: var(--qs-accent);
+    --rdg-row-selected-hover-background-color: var(--qs-accent);
+    --rdg-selection-color: var(--qs-accent);
+    max-height: 45vh;
+}
+
+.operations-grid .rdg-cell {
+    padding: 0 8px;
+    overflow: hidden;
+}
+
+.operations-grid .rdg-cell > span {
+    min-width: 0;
 }

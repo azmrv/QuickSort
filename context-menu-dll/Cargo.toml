@@ -2,6 +2,7 @@
 name = "context-menu-dll"
 version = "0.1.0"
 edition = "2021"
+publish = false # Workspace-internal crate, never published to crates.io
 
 [lib]
 crate-type = ["cdylib"]

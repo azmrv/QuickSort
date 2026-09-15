@@ -5,9 +5,12 @@
 ;                The COM handler is registered by the application itself on
 ;                first launch (see src-tauri main.rs), never by the installer.
 ; PREUNINSTALL - remove COM registry keys before the uninstaller deletes files,
-;                then restart Explorer so the shell-extension DLL is unloaded
-;                from memory and can be deleted. The relaunch waits until the
-;                old shell has fully exited (polling, not a blind sleep).
+;                then kill Explorer so the shell-extension DLL is unloaded from
+;                memory and can be deleted. The macro waits a fixed 500 ms (no
+;                poll loop: it reads as a hang - QA 07.09.2026) and then
+;                relaunches explorer.exe ONCE only if the shell did NOT
+;                auto-restart (auto-restart is NOT guaranteed - QA 12.09.2026;
+;                see the macro body for the full QA history).
 ; POSTUNINSTALL - delete per-user application settings when the checkbox is
 ;                ticked, plus the publisher-named parent folder and legacy
 ;                per-user install leftovers.
@@ -28,29 +31,32 @@
 ;   _uniq       - unique label prefix per insertion site (Tauri pattern, since
 ;                 NSIS macro labels must not collide when inserted twice).
 !macro QuickSortStopRunning BINARY_NAME _uniq
-  DetailPrint "Stopping a running QuickSort, if any..."
+  DetailPrint "Closing a running QuickSort, if any..."
   StrCpy $3 0 ; attempt counter
 ${_uniq}_retry:
   IntOp $3 $3 + 1
   ${If} $3 > 3
-    DetailPrint "Warning: QuickSort is still running after 3 attempts; continuing anyway"
+    DetailPrint "QuickSort: no process confirmed stopped after 3 attempts; proceeding"
     Goto ${_uniq}_done
   ${EndIf}
-  ; taskkill /im is case-insensitive, one call covers every binary-name casing.
-  ; Macro parameters are referenced with ${...} (NSIS), NOT $... like variables.
+  ; taskkill /im is case-insensitive (one call covers every binary-name casing)
+  ; and synchronous: it returns only after the process has terminated. Its exit
+  ; code is the only locale-independent "is it running" signal: 0 = a process
+  ; was terminated, 128 = no process matched. Parsing the output text is
+  ; fragile: taskkill prints a localized "not found" message on stderr, and
+  ; tasklist's CSV output prints a localized "INFO: No tasks are running..."
+  ; line to STDOUT when nothing matches — so both the empty-string check and
+  ; any text match break on localized Windows.
   nsExec::ExecToStack 'taskkill /f /im "${BINARY_NAME}"'
   Pop $1 ; exit code
   Pop $2 ; console output
-  Sleep 500
-  ; CSV no-header mode prints an EMPTY line when no process matches, so an
-  ; empty output means the app is gone and we can proceed.
-  nsExec::ExecToStack 'tasklist /fi "imagename eq ${BINARY_NAME}" /fo csv /nh'
-  Pop $1 ; exit code
-  Pop $2 ; console output
-  ${If} $2 == ""
+  ${If} $1 == 0
+    ; Killed. Give the process a moment to release locks on its exe and on the
+    ; shell-extension DLL next to it.
+    Sleep 500
     Goto ${_uniq}_done
   ${EndIf}
-  DetailPrint "QuickSort is still running, retrying (attempt $3/3)..."
+  Sleep 500
   Goto ${_uniq}_retry
 ${_uniq}_done:
 !macroend
@@ -79,48 +85,46 @@ ${_uniq}_done:
 
   ; 3) Restart Explorer so it unloads the mapped shell extension DLL before the
   ; uninstaller deletes it. The uninstaller is a 32-bit NSIS process running
-  ; under WOW64, so any "explorer.exe" path under System32 is redirected to
-  ; SysWOW64 (the WOW64 stub, which opens a folder window and never restores the
-  ; shell). The real 64-bit shell lives in the Windows root and is NOT subject
-  ; to WOW64 redirection, so it must be launched via "$WINDIR\explorer.exe".
-  ; The previous "$WINDIR\Sysnative\explorer.exe" silently failed on Windows
-  ; 10/11: Sysnative maps to System32, and System32 contains NO explorer.exe
-  ; (it only lives in the Windows root), leaving the taskbar/Start button
-  ; missing after uninstall (QA reports 06.09.2026, line 84 and 07.09.2026,
-  ; lines 70-72).
-  ;
-  ; The relaunch must wait until the old shell has fully exited: spawning the
-  ; new explorer.exe while the old one is still shutting down is what leaves the
-  ; taskbar/Start button missing after uninstall (QA report 06.09.2026, line 84).
-  ; Poll the PROCESS list with tasklist CSV (locale-independent: CSV mode with
-  ; no header prints an EMPTY line when no task matches), not the taskbar
-  ; window - Shell_TrayWnd can disappear before the process has fully exited.
-  ; Mirrors restart_explorer() in src-tauri src/com.rs.
+  ; under WOW64, so Explorer must be relaunched via "$WINDIR\explorer.exe" (the
+  ; real 64-bit shell) — never System32\explorer.exe or Sysnative: WOW64
+  ; redirects them to a stub, and System32 contains no explorer.exe at all.
+  ; Full background of the Sysnative failure: wiki error-history.md
+  ; (QA 06.09.2026, line 84; 07.09.2026, lines 70-72).
   DetailPrint "Restarting Windows Explorer to unload the shell extension..."
   nsExec::Exec 'taskkill /f /im explorer.exe'
 
-  ; Wait for the old shell process to fully exit (up to 5 s, 200 ms steps).
-  DetailPrint "Waiting for Windows Explorer to fully exit..."
-  StrCpy $0 0
-qs_explorer_poll:
-  IntOp $0 $0 + 1
-  ${If} $0 > 25
-    Goto qs_explorer_relaunch
-  ${EndIf}
-  Sleep 200
+  ; Wait for the old shell to release the mapped context_menu_dll.dll, then
+  ; probe whether it actually came back. Since Windows 10, killing explorer.exe
+  ; via taskkill USUALLY triggers an automatic restart within ~200 ms, so a
+  ; poll loop would see the process never absent and burn up to 5 s — reads as
+  ; a hang inside an uninstaller (QA 07.09.2026); keep the fixed 500 ms wait
+  ; from that fix. BUT the auto-restart is NOT guaranteed: QA 12.09.2026 showed
+  ; the shell staying dead after uninstall (user had to start it manually), so
+  ; probe the process list ONCE and relaunch the 64-bit shell only when
+  ; explorer.exe is absent. Launching it while the shell is already up would
+  ; pop a spurious File Explorer window on top of the restored desktop — the
+  ; probe guards against that (mirrors the fixed-sleep design of
+  ; restart_explorer() in src-tauri src/com.rs).
+  Sleep 500
+  ; Same locale pitfall as QuickSortStopRunning: tasklist prints a localized
+  ; "INFO: ..." line to STDOUT when nothing matches, so detect the running
+  ; shell by SEARCHING the output for the image name ("explorer.exe" appears
+  ; in every process row), not by emptiness or text equality. This block runs
+  ; in the uninstaller only, so the un.-variant of the StrFunc function is
+  ; legal here (Call to un.StrLoc inside uninstall sections is allowed).
+  ; Case-insensitive search ("<"); $3 must not clobber any live register.
   nsExec::ExecToStack 'tasklist /fi "imagename eq explorer.exe" /fo csv /nh'
   Pop $1 ; exit code
-  Pop $2 ; output
-  ${If} $2 == ""
-    Goto qs_explorer_relaunch
+  Pop $2 ; console output
+  ${UnStrLoc} $3 "$2" "explorer.exe" "<"
+  ${If} $3 == ""
+    ; Real 64-bit shell. nsExec::Exec does not wait for the never-exiting shell
+    ; process and shows no "Running: ..." popup (unlike Exec).
+    nsExec::Exec '"$WINDIR\explorer.exe"'
+    DetailPrint "QuickSort uninstall: Explorer did not auto-restart, relaunched"
+  ${Else}
+    DetailPrint "QuickSort uninstall: Explorer alive (Windows restarted it)"
   ${EndIf}
-  Goto qs_explorer_poll
-qs_explorer_relaunch:
-  ; Real 64-bit shell, not the WOW64 stub. "Exec" (unlike nsExec::Exec) does
-  ; not wait for the launched program, so the installer is not blocked by the
-  ; never-exiting shell process.
-  Exec '"$WINDIR\explorer.exe"'
-  DetailPrint "QuickSort uninstall: Explorer relaunched"
 !macroend
 
 ; Runs after files, registry keys, and shortcuts have been removed.

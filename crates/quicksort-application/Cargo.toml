@@ -2,6 +2,7 @@
 name = "quicksort-application"
 version = "0.1.0"
 edition = "2021"
+publish = false # Workspace-internal crate, never published to crates.io
 
 # ---------------------------------------------------------------------------
 # Dependencies – follow the Dependency Rule:
@@ -27,6 +28,9 @@ quicksort-domain = { path = "../quicksort-domain" }
 # Serialization for DTOs (OperationCommand, OperationResult, etc.)
 serde = { version = "1", features = ["derive"] }
 
+# Traceability ids (correlation_id) in OperationCommand (#15, release 0.2.6)
+uuid = { version = "1", features = ["v4", "serde"] }
+
 # ---------------------------------------------------------------------------
 # Dev-dependencies – only needed for tests
 # ---------------------------------------------------------------------------
@@ -48,3 +52,6 @@ anyhow = "1.0"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender = "0.2"
 tempfile = "3"
+
+# JSON round-trip assertions for the DTO serialization contract (P1-5)
+serde_json = "1"

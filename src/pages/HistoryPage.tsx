@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { DataGrid, type Column, type SortColumn } from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
 import { invoke } from '../lib/invoke';
+import { classifyUndoError, getOperationErrorMessage } from '../lib/operationErrors';
 import { logger } from '../lib/logger';
 import { useTranslation } from '../i18n/useTranslation';
 
@@ -51,12 +52,6 @@ const HistoryPage = () => {
     // 0 the OK/Cancel buttons appear and only OK actually clears the history.
     const [clearSeconds, setClearSeconds] = useState<number | null>(null);
     const { message, modal } = App.useApp();
-
-    // The backend reports an impossible action as `UndoNotPossible`, whose
-    // Display message starts with this prefix. Match on it to treat the failure
-    // as "action not available" rather than a transient error.
-    const isUnavailableError = (err: unknown): boolean =>
-        String(err).includes('Operation not undoable');
 
     const loadOperations = () => {
         setLoading(true);
@@ -119,11 +114,16 @@ const HistoryPage = () => {
             message.success(t('history.undo_success'));
             loadOperations();
         } catch (err) {
-            if (isUnavailableError(err)) {
-                setUnavailable(prev => new Set(prev).add(operationId));
-                message.info(t('history.action_unavailable'));
-            } else {
-                message.error(`${t('history.undo_error')} ${err}`);
+            switch (classifyUndoError(err)) {
+                case 'permanent':
+                    setUnavailable(prev => new Set(prev).add(operationId));
+                    message.info(t('history.action_unavailable'));
+                    break;
+                case 'transient':
+                    message.warning(t('history.undo_retry'));
+                    break;
+                default:
+                    message.error(`${t('history.undo_error')} ${getOperationErrorMessage(err)}`);
             }
         }
     };
@@ -134,11 +134,16 @@ const HistoryPage = () => {
             message.success(t('history.repeat_success'));
             loadOperations();
         } catch (err) {
-            if (isUnavailableError(err)) {
-                setUnavailable(prev => new Set(prev).add(operationId));
-                message.info(t('history.action_unavailable'));
-            } else {
-                message.error(`${t('history.repeat_error')} ${err}`);
+            switch (classifyUndoError(err)) {
+                case 'permanent':
+                    setUnavailable(prev => new Set(prev).add(operationId));
+                    message.info(t('history.action_unavailable'));
+                    break;
+                case 'transient':
+                    message.warning(t('history.undo_retry'));
+                    break;
+                default:
+                    message.error(`${t('history.repeat_error')} ${getOperationErrorMessage(err)}`);
             }
         }
     };

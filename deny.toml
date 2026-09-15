@@ -1,0 +1,43 @@
+# cargo-deny policy (https://embarkstudios.github.io/cargo-deny/)
+# Validated with cargo-deny 0.20.2 - bump deliberately after re-validating config.
+
+[advisories]
+yanked = "deny"
+# "unmaintained" advisories for transitive dependencies with NO upstream fix available:
+#   - RUSTSEC-2024-0370 proc-macro-error 1.0.4 - Linux build-time path (glib-macros -> glib)
+#   - RUSTSEC-2025-0075/0080/0081/0098/0100 unic-* crates - URL pattern matching
+#     (unic-char-property, unic-char-range, unic-common, unic-ucd-ident, unic-ucd-version
+#      -> urlpattern -> tauri-utils)
+# None of them are vulnerability advisories (no severity) and none of them have releases
+# to upgrade to. Tracked upstream; re-evaluate on every dependency bump.
+ignore = [
+  "RUSTSEC-2024-0370",
+  "RUSTSEC-2025-0075",
+  "RUSTSEC-2025-0080",
+  "RUSTSEC-2025-0081",
+  "RUSTSEC-2025-0098",
+  "RUSTSEC-2025-0100",
+]
+
+[licenses]
+# First-party workspace crates ship under the project's custom "QuickSort License (No-Sell)"
+# which has no SPDX identifier - excluded from license matching.
+private = { ignore = true }
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-3-Clause",
+  "ISC",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Zlib",
+  "0BSD",
+]
+confidence-threshold = 0.8
+# README and translations were aligned with the actual No-Sell LICENSE (2026-09-09).
+
+[bans]
+multiple-versions = "warn"
+skip = []
+skip-tree = []

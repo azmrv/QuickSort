@@ -166,6 +166,15 @@ impl ManageFolders for ApplicationFacadeImpl {
     ) -> Result<(), UseCaseError> {
         self.manage_folders.set_folder_color(id, color).await
     }
+
+    /// Delegates to `ManageFoldersUseCase::set_folder_parent`.
+    async fn set_folder_parent(
+        &self,
+        id: FolderId,
+        parent_id: Option<FolderId>,
+    ) -> Result<(), UseCaseError> {
+        self.manage_folders.set_folder_parent(id, parent_id).await
+    }
 }
 
 #[async_trait]

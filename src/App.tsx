@@ -4,16 +4,16 @@ import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewW
 import { invoke } from './lib/invoke';
 import { logger } from './lib/logger';
 import { ConfigProvider, theme, App as AntApp } from 'antd';
+import { MantineProvider } from '@mantine/core';
 import { LanguageProvider, useTranslation } from './i18n/LanguageContext';
 import { LOCALE_LABELS, type Locale } from './i18n/translations';
 import EditorPage from './pages/EditorPage';
 import SelectorPage from './pages/SelectorPage';
-import LogPage from './pages/LogPage';
-import HistoryPage from './pages/HistoryPage';
-import QueuePage from './pages/QueuePage';
+import SearchPage from './pages/SearchPage';
+import OperationsPage from './pages/OperationsPage';
 import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
-import PluginsPage from './pages/PluginsPage';
+import HelpPage from './pages/HelpPage';
 import CommandPalette from './components/CommandPalette';
 import HeaderStatus from './components/HeaderStatus';
 import './styles/App.css';
@@ -53,13 +53,17 @@ function AppContent() {
         }
         return true;
     });
-    const [activeTab, setActiveTab] = useState('folders');
+    const [activeTab, setActiveTab] = useState('search');
     const [paletteOpen, setPaletteOpen] = useState(false);
+    // Full settings snapshot loaded at startup; persistSettings merges into it
+    // so header saves (theme/locale) never drop other settings fields.
+    const [fullSettings, setFullSettings] = useState<Settings | null>(null);
 
     // Load settings and apply theme on startup
     useEffect(() => {
         logger.info('App', 'startup');
         invoke<Settings>('get_settings').then((settings) => {
+            setFullSettings(settings);
             setThemeMode(settings.theme_mode || 'system');
             const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
             setIsDark(deriveIsDark(settings.theme_mode || 'system', systemDark));
@@ -152,25 +156,28 @@ function AppContent() {
         document.body.style.color = isDark ? '#e8e8ec' : '#1a1a1d';
     }, [isDark]);
 
+    // 0.2.6 navigation (plan Q2): Search / Folders / Operations / Settings / Help / About.
+    // Log and Plugins left the header and live as sections inside Settings.
     const TABS = [
+        { key: 'search', label: t('tab.search'), content: <SearchPage /> },
         { key: 'folders', label: t('tab.folders'), content: <EditorPage /> },
-        { key: 'history', label: t('tab.history'), content: <HistoryPage /> },
-        { key: 'queue', label: t('tab.queue'), content: <QueuePage /> },
-        { key: 'plugins', label: t('tab.plugins'), content: <PluginsPage /> },
-        { key: 'log', label: t('tab.log'), content: <LogPage /> },
+        { key: 'operations', label: t('tab.operations'), content: <OperationsPage /> },
         { key: 'settings', label: t('tab.settings'), content: <SettingsPage /> },
+        { key: 'help', label: t('tab.help'), content: <HelpPage /> },
         { key: 'about', label: t('tab.about'), content: <AboutPage /> },
     ];
 
     const persistSettings = async (patch: Partial<Settings>) => {
         const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
         const next: Settings = {
+            ...(fullSettings ?? {}),
             theme_mode: themeMode,
             locale: locale,
             ...patch,
         };
         try {
             await invoke('save_settings', { settings: next });
+            setFullSettings(next);
             await emit('settings-changed', next);
             if (patch.theme_mode) {
                 setThemeMode(patch.theme_mode);
@@ -193,6 +200,7 @@ function AppContent() {
     };
 
     return (
+        <MantineProvider forceColorScheme={isDark ? 'dark' : 'light'}>
         <ConfigProvider
             theme={{
                 algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
@@ -218,8 +226,10 @@ function AppContent() {
                                 <div className="app-logo-icon">Q</div>
                                 <span className="app-logo-text">QuickSort</span>
                             </div>
-                            <div className="header-right">
+                            <div className="header-center">
                                 <HeaderStatus />
+                            </div>
+                            <div className="header-right">
                                 <button className="theme-toggle" onClick={toggleTheme}>
                                     <span className="theme-toggle-icon">{isDark ? '☀️' : '🌙'}</span>
                                 </button>
@@ -264,6 +274,7 @@ function AppContent() {
                 )}
             </AntApp>
         </ConfigProvider>
+        </MantineProvider>
     );
 }
 

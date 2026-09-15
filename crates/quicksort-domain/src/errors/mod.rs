@@ -50,6 +50,14 @@ pub enum DomainError {
     #[error("Folder not found")]
     FolderNotFound,
 
+    // A folder cannot be its own parent (self-cycle).
+    #[error("Folder parent forms a cycle")]
+    FolderCycle,
+
+    // The folder nesting depth exceeds the allowed maximum (10 levels).
+    #[error("Folder nesting depth exceeds maximum")]
+    FolderDepthExceeded,
+
     //  A business-level conflict occurred (e.g., duplicate folder name).
     #[error("Conflict: {0}")]
     Conflict(String),

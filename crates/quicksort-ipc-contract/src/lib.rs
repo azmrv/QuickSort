@@ -97,8 +97,8 @@ pub enum JobStatusDto {
 /// Progress counters reported for a running or completed job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobProgressDto {
-    pub current: u32,
-    pub total: u32,
+    pub current: u64,
+    pub total: u64,
 }
 
 /// Serialized view of a queue job, shared over the IPC boundary.

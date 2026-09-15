@@ -9,9 +9,17 @@
 //! to ensure that only validated domain paths are accepted. This prevents
 //! malformed or unsafe paths from reaching the file system adapter.
 
+use crate::dtos::FolderMetadata;
 use crate::errors::UseCaseError;
 use async_trait::async_trait;
 use quicksort_domain::AbsolutePath;
+
+/// Optional progress callback invoked right after a file has been copied.
+///
+/// Arguments are `(byte_count, file_name)`. The callback is synchronous and
+/// must be cheap; it is invoked outside any filesystem lock. Pass `None` to
+/// disable reporting (e.g. for same-volume renames inside a Move).
+pub type ProgressCallback<'a> = Option<&'a (dyn Fn(u64, &str) + Send + Sync)>;
 
 /// Port for performing file operations on the local file system.
 ///
@@ -42,6 +50,10 @@ pub trait FileSystem: Send + Sync {
     /// # Returns
     /// The size of the moved file in bytes.
     ///
+    /// # Progress
+    /// Invokes `on_progress(byte_count, file_name)` only when the move falls
+    /// back to a cross-volume copy; a same-volume rename reports nothing.
+    ///
     /// # Implementation Notes
     /// For cross-volume moves (EXDEV error), the implementation should
     /// fall back to copy + delete. This is handled by the infrastructure
@@ -52,17 +64,31 @@ pub trait FileSystem: Send + Sync {
     /// Returns `PermissionDenied` if access is restricted.
     /// Returns `Conflict` if the destination exists and the operation
     /// is not configured to overwrite.
-    async fn move_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
+    async fn move_file(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError>;
 
     /// Copies a file from `from` to `to`, returning the file size in bytes.
     ///
     /// # Returns
     /// The size of the copied file in bytes.
     ///
+    /// # Progress
+    /// Invokes `on_progress(byte_count, file_name)` once after the copy
+    /// finishes.
+    ///
     /// # Errors
     /// Returns `FileNotFound` if the source does not exist.
     /// Returns `FileSystemError` on I/O failure (disk full, etc.).
-    async fn copy_file(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
+    async fn copy_file(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError>;
 
     /// Deletes a file at the given path.
     ///
@@ -102,10 +128,19 @@ pub trait FileSystem: Send + Sync {
     /// # Returns
     /// The total size in bytes of all copied files.
     ///
+    /// # Progress
+    /// Invokes `on_progress(byte_count, file_name)` after every individual
+    /// file copied inside the tree.
+    ///
     /// # Errors
     /// Returns `FileNotFound` if the source does not exist.
     /// Returns `FileSystemError` on I/O failure (access denied, disk full).
-    async fn copy_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
+    async fn copy_tree(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError>;
 
     /// Moves a directory tree from `from` to `to`.
     ///
@@ -118,10 +153,19 @@ pub trait FileSystem: Send + Sync {
     /// The total size in bytes of the moved contents (measured before the
     /// move, for history accounting).
     ///
+    /// # Progress
+    /// Reports through `on_progress` only when the move falls back to
+    /// copying (cross-volume); a same-volume rename is silent.
+    ///
     /// # Errors
     /// Returns `FileNotFound` if the source does not exist.
     /// Returns `FileSystemError` on I/O failure.
-    async fn move_tree(&self, from: &AbsolutePath, to: &AbsolutePath) -> Result<u64, UseCaseError>;
+    async fn move_tree(
+        &self,
+        from: &AbsolutePath,
+        to: &AbsolutePath,
+        on_progress: ProgressCallback<'_>,
+    ) -> Result<u64, UseCaseError>;
 
     /// Renames a file or directory from `from` to `to`.
     ///
@@ -135,4 +179,55 @@ pub trait FileSystem: Send + Sync {
     /// Returns `PermissionDenied` if access is restricted.
     async fn rename_file(&self, from: &AbsolutePath, to: &AbsolutePath)
         -> Result<(), UseCaseError>;
+
+    /// Generates a path that does not collide with an existing item.
+    ///
+    /// If `path` is free, it is returned unchanged. Otherwise candidates are
+    /// produced by inserting a numbered suffix before the extension
+    /// (`file (1).txt`, `file (2).txt`, ...).
+    ///
+    /// # Errors
+    /// Returns `Conflict` if no free candidate is found within the attempt
+    /// budget. Returns `FileSystemError` if existence checks fail.
+    async fn generate_unique_path(&self, path: &AbsolutePath)
+        -> Result<AbsolutePath, UseCaseError>;
+
+    /// Collects metadata about a folder (or single item) for the UI.
+    ///
+    /// A missing path yields `exists=false` with zeroed counters instead of
+    /// an error, so the UI can render a folder as "not available" without
+    /// special-casing error types.
+    ///
+    /// # Errors
+    /// Returns `FileSystemError` if metadata retrieval fails for a reason
+    /// other than the path not existing (e.g. permission denied).
+    async fn folder_metadata(&self, path: &AbsolutePath) -> Result<FolderMetadata, UseCaseError>;
+
+    /// Returns the free space (in bytes) available on the volume containing
+    /// `path`.
+    ///
+    /// Used as a pre-flight check so an operation fails with a clear message
+    /// BEFORE copying starts instead of hitting ENOSPC halfway through (QA
+    /// 12.09.2026, D3: a 2.6 GB Move failed with "Недостаточно места на
+    /// диске" mid-operation).
+    ///
+    /// # Errors
+    /// Returns `FileSystemError` if the volume query fails (e.g. the path
+    /// does not exist on any mounted volume).
+    async fn available_space(&self, path: &AbsolutePath) -> Result<u64, UseCaseError>;
+
+    /// Reports whether two paths reside on the same volume.
+    ///
+    /// A Move between two paths on the same volume is a metadata rename and
+    /// consumes no additional disk space, so the pre-flight space check can
+    /// be skipped; a cross-volume Move copies first (and needs space for the
+    /// copy). The comparison is case-insensitive on Windows.
+    ///
+    /// # Errors
+    /// Returns `FileSystemError` if the volumes cannot be determined.
+    async fn is_same_volume(
+        &self,
+        a: &AbsolutePath,
+        b: &AbsolutePath,
+    ) -> Result<bool, UseCaseError>;
 }

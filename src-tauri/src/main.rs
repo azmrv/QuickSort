@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod backup;
 #[cfg(target_os = "windows")]
 mod com;
 mod commands;
@@ -295,6 +296,8 @@ fn start_tauri() {
     let app_state = AppState {
         facade,
         queue: job_queue,
+        fs: Arc::new(quicksort_infrastructure::StdFileSystem::new()),
+        system_sample: parking_lot::Mutex::new(crate::state::SystemInfoSample::default()),
     };
 
     tauri::Builder::default()
@@ -332,21 +335,30 @@ fn start_tauri() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::execute_operation_v2,
+            commands::log_user_select,
             commands::undo_operation_v2,
             commands::repeat_operation_v2,
             commands::get_folders_v2,
+            commands::get_folders_with_metadata,
             commands::add_folder_v2,
+            commands::add_folders_from_paths,
             commands::remove_folder_v2,
             commands::toggle_favorite_v2,
             commands::set_folder_color_v2,
+            commands::set_folder_parent_v2,
             commands::get_mode,
             commands::get_pending_file,
             commands::get_pending_files,
             commands::check_menu_status,
             commands::get_logs,
+            commands::set_log_level,
             commands::register_com_server,
             commands::unregister_com_server,
             commands::get_app_version,
@@ -370,6 +382,10 @@ fn start_tauri() {
             commands::enqueue_operation_v2,
             commands::get_jobs,
             commands::cancel_job,
+            commands::get_system_info,
+            commands::backup_data,
+            commands::restore_data,
+            commands::auto_backup_now,
         ])
         .setup(|app| {
             logging::set_app_handle(app.handle().clone());
